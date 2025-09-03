@@ -1,43 +1,110 @@
+// src/controllers/auth.controller.ts
 import { Request, Response } from "express";
-import { AuthService } from "../services/auth.service.js";
+import AuthService from "../services/auth.service.ts";
+import { createResponse } from "../middleware/responseHandler.ts";
 
-export const AuthController = {
-  requestOtp: async (req: Request, res: Response) => {
+export default class AuthController {
+  static async sendOtp(req: Request, res: Response) {
     try {
-      await AuthService.requestOtp(req.body.phone_number);
-      res.json({ message: "OTP sent" });
-    } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      const { phone_number } = req.body;
+      if (!phone_number)
+        return createResponse(res, {
+          status: 400,
+          message: "Phone number required",
+          response: null,
+        });
+
+      await AuthService.generateOtp(phone_number);
+
+      return createResponse(res, {
+        status: 200,
+        message: "OTP sent successfully",
+        response: null,
+      });
+    } catch (error: any) {
+      return createResponse(res, {
+        status: 500,
+        message: error.message,
+        response: null,
+      });
     }
-  },
+  }
 
-  verifyOtp: async (req: Request, res: Response) => {
+  static async verifyOtp(req: Request, res: Response) {
     try {
-      const { accessToken, refreshToken, user } = await AuthService.verifyOtp(
-        req.body.phone_number,
-        req.body.otp
+      const { phone_number, otp } = req.body;
+      if (!phone_number || !otp)
+        return createResponse(res, {
+          status: 400,
+          message: "Phone number & OTP required",
+          response: null,
+        });
+
+      const deviceInfo = req.headers["user-agent"] || "unknown";
+      const ip = req.ip;
+
+      const { user, accessToken, refreshToken } = await AuthService.verifyOtp(
+        phone_number,
+        otp,
+        deviceInfo,
+        ip
       );
-      res.json({ accessToken, refreshToken, user });
-    } catch (err: any) {
-      res.status(400).json({ error: err.message });
-    }
-  },
 
-  refreshToken: async (req: Request, res: Response) => {
-    try {
-      const { accessToken } = await AuthService.refreshToken(req.body.refreshToken);
-      res.json({ accessToken });
-    } catch (err: any) {
-      res.status(401).json({ error: err.message });
+      return createResponse(res, {
+        status: 200,
+        message: "Login successful",
+        response: { user, accessToken, refreshToken },
+      });
+    } catch (error: any) {
+      return createResponse(res, {
+        status: 400,
+        message: error.message,
+        response: null,
+      });
     }
-  },
+  }
 
-  logout: async (req: Request, res: Response) => {
+  static async refreshToken(req: Request, res: Response) {
     try {
-      await AuthService.logout(req.body.refreshToken);
-      res.json({ message: "Logged out" });
-    } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      const { refreshToken } = req.body;
+      if (!refreshToken)
+        return createResponse(res, {
+          status: 400,
+          message: "Refresh token required",
+          response: null,
+        });
+
+      const tokens = await AuthService.refreshToken(refreshToken);
+      return createResponse(res, {
+        status: 200,
+        message: "Token refreshed",
+        response: tokens,
+      });
+    } catch (error: any) {
+      return createResponse(res, {
+        status: 401,
+        message: error.message,
+        response: null,
+      });
     }
-  },
-};
+  }
+
+  static async logout(req: Request, res: Response) {
+    try {
+      const { refreshToken } = req.body;
+      await AuthService.revokeRefreshToken(refreshToken);
+
+      return createResponse(res, {
+        status: 200,
+        message: "Logged out successfully",
+        response: null,
+      });
+    } catch (error: any) {
+      return createResponse(res, {
+        status: 500,
+        message: error.message,
+        response: null,
+      });
+    }
+  }
+}

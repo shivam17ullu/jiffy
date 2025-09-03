@@ -1,28 +1,16 @@
-import { Sequelize } from "sequelize";
-import UserModel from "../models/user.js";
-import RoleModel from "../models/role.js";
-import UserRoleModel from "../models/userRole.js";
-import OtpLoginModel from "../models/otpLogin.js";
-import RefreshTokenModel from "../models/refreshToken.js";
+import Sequelize from 'sequelize';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const sequelize = new Sequelize("jiffy", "root", "shivam", {
-  host: "localhost",
-  dialect: "mysql",
-  logging: false,
+export const jiffy = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
+    host:  process.env.DB_HOST,
+    dialect: 'mysql',
+    pool: {
+        max: 50,
+        min: 0,
+        acquire: 60000, // Increase the acquire timeout (in milliseconds)
+        idle: 10000
+    }
 });
-
-
-const models = {
-  User: UserModel(sequelize),
-  Role: RoleModel(sequelize),
-  UserRole: UserRoleModel(sequelize),
-  OtpLogin: OtpLoginModel(sequelize),
-  RefreshToken: RefreshTokenModel(sequelize),
-};
-
-Object.values(models).forEach((model) => {
-  if (model.associate) model.associate(models);
-});
-
-export { sequelize };
-export default models;
+jiffy.dialect.supports.schemas = true;
+3

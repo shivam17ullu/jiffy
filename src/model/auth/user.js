@@ -1,20 +1,17 @@
-// models/user.js
-import { DataTypes, Model } from "sequelize";
+import { DataTypes } from "sequelize";
+import { sequelize } from "../configs/sequelize.js";
 
-export default (sequelize) => {
-  class User extends Model {
-    static associate(models) {
-      User.belongsToMany(models.Role, { through: models.UserRole, foreignKey: "user_id" });
-      User.hasMany(models.RefreshToken, { foreignKey: "user_id" });
-    }
-  }
+const User = sequelize.define("User", {
+  id: { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true },
+  phone_number: { type: DataTypes.STRING(15), allowNull: false, unique: true },
+  email: { type: DataTypes.STRING, unique: true },
+  name: { type: DataTypes.STRING },
+  is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
+  created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+  updated_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+}, {
+  tableName: "users",
+  timestamps: false,
+});
 
-  User.init({
-    phone_number: { type: DataTypes.STRING(15), allowNull: false, unique: true },
-    email: { type: DataTypes.STRING, unique: true },
-    name: { type: DataTypes.STRING },
-    is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
-  }, { sequelize, modelName: "User", tableName: "users", timestamps: true, underscored: true });
-
-  return User;
-};
+export default User;

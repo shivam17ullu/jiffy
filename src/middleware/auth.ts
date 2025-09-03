@@ -1,16 +1,31 @@
+// src/middlewares/auth.middleware.ts
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET = "supersecret";
+import { User, Role } from "../model/relations";
 
 export const authenticate = (req: Request, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "No token provided" });
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "Unauthorized" });
 
   try {
-    (req as any).user = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: number };
+    (req as any).userId = payload.userId;
     next();
-  } catch {
-    return res.status(403).json({ error: "Invalid token" });
+  } catch (err) {
+    return res.status(403).json({ message: "Invalid token" });
   }
+};
+
+export const authorize = (roles: string[]) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const userId = (req as any).userId;
+    const user = await User.findByPk(userId, { include: [Role] });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const hasRole = (user as any).Roles.some((r: any) => roles.includes(r.name));
+    if (!hasRole) return res.status(403).json({ message: "Forbidden" });
+
+    next();
+  };
 };
