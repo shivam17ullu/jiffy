@@ -1,14 +1,28 @@
 import jwt from "jsonwebtoken";
-const JWT_SECRET = "supersecret";
+import { User, Role } from "../model/relations";
 export const authenticate = (req, res, next) => {
-    const token = req.headers.authorization?.split(" ")[1];
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
     if (!token)
-        return res.status(401).json({ error: "No token provided" });
+        return res.status(401).json({ message: "Unauthorized" });
     try {
-        req.user = jwt.verify(token, JWT_SECRET);
+        const payload = jwt.verify(token, process.env.JWT_SECRET);
+        req.userId = payload.userId;
         next();
     }
-    catch {
-        return res.status(403).json({ error: "Invalid token" });
+    catch (err) {
+        return res.status(403).json({ message: "Invalid token" });
     }
+};
+export const authorize = (roles) => {
+    return async (req, res, next) => {
+        const userId = req.userId;
+        const user = await User.findByPk(userId, { include: [Role] });
+        if (!user)
+            return res.status(404).json({ message: "User not found" });
+        const hasRole = user.Roles.some((r) => roles.includes(r.name));
+        if (!hasRole)
+            return res.status(403).json({ message: "Forbidden" });
+        next();
+    };
 };

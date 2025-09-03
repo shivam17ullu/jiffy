@@ -1,7 +1,7 @@
 // src/controllers/auth.controller.ts
 import { Request, Response } from "express";
-import AuthService from "../services/auth.service.ts";
-import { createResponse } from "../middleware/responseHandler.ts";
+import AuthService from "../services/auth.service";
+import { createResponse } from "../middleware/responseHandler";
 
 export default class AuthController {
   static async sendOtp(req: Request, res: Response) {

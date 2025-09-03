@@ -1,63 +1,88 @@
+// src/services/auth.service.ts
+import { OtpLogin, User, RefreshToken, Role } from "../model/relations";
+import otpGenerator from "otp-generator";
 import jwt from "jsonwebtoken";
-import models from "../config/db.js";
-import { Op } from "sequelize";
-const JWT_SECRET = "supersecret";
-const JWT_REFRESH_SECRET = "superrefresh";
-const JWT_EXPIRY = "15m";
-const REFRESH_EXPIRY_DAYS = 30;
-export const AuthService = {
-    async requestOtp(phone_number) {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        await models.OtpLogin.create({
-            phone_number,
-            otp,
-            expires_at: new Date(Date.now() + 5 * 60000),
+import { addMinutes, isBefore } from "date-fns";
+import { sendOtpFast2SMS } from "../utils/fast2sms";
+const ACCESS_TOKEN_EXP = "15m";
+const REFRESH_TOKEN_EXP_MIN = 60 * 24 * 7; // 7 days
+export default class AuthService {
+    static async generateOtp(phone_number) {
+        const otp = otpGenerator.generate(6, {
+            digits: true,
+            lowerCaseAlphabets: false,
+            upperCaseAlphabets: false,
+            specialChars: false,
         });
-        console.log(`OTP for ${phone_number}: ${otp}`);
-        return true;
-    },
-    async verifyOtp(phone_number, otp) {
-        const otpEntry = await models.OtpLogin.findOne({
-            where: {
-                phone_number,
-                otp,
-                is_used: false,
-                expires_at: { [Op.gt]: new Date() },
-            },
+        const expires_at = addMinutes(new Date(), 5);
+        await OtpLogin.create({ phone_number, otp, expires_at });
+        // Send via Fast2SMS
+        await sendOtpFast2SMS(phone_number, otp);
+        return otp;
+    }
+    static async verifyOtp(phone_number, otp, deviceInfo, ip) {
+        const otpRecord = await OtpLogin.findOne({
+            where: { phone_number, otp, is_used: false },
+            order: [["created_at", "DESC"]],
         });
-        if (!otpEntry)
-            throw new Error("Invalid or expired OTP");
-        otpEntry.is_used = true;
-        await otpEntry.save();
-        let user = await models.User.findOne({ where: { phone_number } });
-        if (!user)
-            user = await models.User.create({ phone_number });
-        const accessToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
-        const refreshToken = jwt.sign({ id: user.id }, JWT_REFRESH_SECRET, { expiresIn: `${REFRESH_EXPIRY_DAYS}d` });
-        await models.RefreshToken.create({
-            user_id: user.id,
-            token: refreshToken,
-            expires_at: new Date(Date.now() + REFRESH_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
-        });
-        return { accessToken, refreshToken, user };
-    },
-    async refreshToken(token) {
-        try {
-            const payload = jwt.verify(token, JWT_REFRESH_SECRET);
-            const dbToken = await models.RefreshToken.findOne({
-                where: { user_id: payload.id, token, is_revoked: false },
-            });
-            if (!dbToken)
-                throw new Error("Invalid refresh token");
-            const newAccessToken = jwt.sign({ id: payload.id }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
-            return { accessToken: newAccessToken };
+        if (!otpRecord)
+            throw new Error("Invalid OTP");
+        if (isBefore(otpRecord.expires_at, new Date()))
+            throw new Error("OTP expired");
+        // mark OTP as used
+        otpRecord.is_used = true;
+        await otpRecord.save();
+        // find or create user
+        let user = await User.findOne({ where: { phone_number } });
+        if (!user) {
+            user = await User.create({ phone_number });
+            // Assign default "buyer" role
+            const buyerRole = await Role.findOne({ where: { name: "buyer" } });
+            if (buyerRole)
+                await user.addRole(buyerRole);
         }
-        catch {
-            throw new Error("Refresh token expired or invalid");
+        // issue tokens
+        const accessToken = this.generateAccessToken(user.id);
+        const refreshToken = await this.generateRefreshToken(user.id, deviceInfo, ip);
+        return { user, accessToken, refreshToken };
+    }
+    static generateAccessToken(userId) {
+        return jwt.sign({ userId }, process.env.JWT_SECRET, {
+            expiresIn: ACCESS_TOKEN_EXP,
+        });
+    }
+    static async generateRefreshToken(userId, deviceInfo, ip) {
+        const token = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, {
+            expiresIn: `${REFRESH_TOKEN_EXP_MIN}m`,
+        });
+        const expires_at = addMinutes(new Date(), REFRESH_TOKEN_EXP_MIN);
+        await RefreshToken.create({
+            user_id: userId,
+            token,
+            device_info: deviceInfo,
+            ip_address: ip,
+            expires_at,
+        });
+        return token;
+    }
+    static async refreshToken(oldToken) {
+        const stored = await RefreshToken.findOne({
+            where: { token: oldToken, is_revoked: false },
+        });
+        if (!stored)
+            throw new Error("Invalid refresh token");
+        if (isBefore(stored.expires_at, new Date()))
+            throw new Error("Refresh token expired");
+        const payload = jwt.verify(oldToken, process.env.JWT_REFRESH_SECRET);
+        const accessToken = this.generateAccessToken(payload.userId);
+        return { accessToken };
+    }
+    static async revokeRefreshToken(token) {
+        const stored = await RefreshToken.findOne({ where: { token } });
+        if (stored) {
+            stored.is_revoked = true;
+            await stored.save();
         }
-    },
-    async logout(token) {
-        await models.RefreshToken.update({ is_revoked: true }, { where: { token } });
         return true;
-    },
-};
+    }
+}
