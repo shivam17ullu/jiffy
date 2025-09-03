@@ -67,7 +67,7 @@ export default class AuthService {
   }
 
   static generateAccessToken(userId: number) {
-    return jwt.sign({ userId }, process.env.JWT_SECRET as string, {
+    return jwt.sign({ userId }, process.env.TOKEN as string, {
       expiresIn: ACCESS_TOKEN_EXP,
     });
   }
@@ -79,7 +79,7 @@ export default class AuthService {
   ) {
     const token = jwt.sign(
       { userId },
-      process.env.JWT_REFRESH_SECRET as string,
+      process.env.TOKEN as string,
       {
         expiresIn: `${REFRESH_TOKEN_EXP_MIN}m`,
       }

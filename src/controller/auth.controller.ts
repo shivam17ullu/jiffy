@@ -56,6 +56,7 @@ export default class AuthController {
         response: { user, accessToken, refreshToken },
       });
     } catch (error: any) {
+      console.log(error)
       return createResponse(res, {
         status: 400,
         message: error.message,
