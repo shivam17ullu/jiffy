@@ -1,5 +1,5 @@
-import AuthService from "../services/auth.service";
-import { createResponse } from "../middleware/responseHandler";
+import AuthService from "../services/auth.service.js";
+import { createResponse } from "../middleware/responseHandler.js";
 export default class AuthController {
     static async sendOtp(req, res) {
         try {

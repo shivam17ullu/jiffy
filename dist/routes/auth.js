@@ -1,6 +1,6 @@
 // src/routes/auth.routes.ts
 import { Router } from "express";
-import AuthController from "../controller/auth.controller";
+import AuthController from "../controller/auth.controller.js";
 const authRouter = Router();
 authRouter.post("/send-otp", AuthController.sendOtp);
 authRouter.post("/verify-otp", AuthController.verifyOtp);

@@ -1,9 +1,9 @@
 // src/services/auth.service.ts
-import { OtpLogin, User, RefreshToken, Role } from "../model/relations";
+import { OtpLogin, User, RefreshToken, Role } from "../model/relations.js";
 import otpGenerator from "otp-generator";
 import jwt from "jsonwebtoken";
 import { addMinutes, isBefore } from "date-fns";
-import { sendOtpFast2SMS } from "../utils/fast2sms";
+import { sendOtpFast2SMS } from "../utils/fast2sms.js";
 const ACCESS_TOKEN_EXP = "15m";
 const REFRESH_TOKEN_EXP_MIN = 60 * 24 * 7; // 7 days
 export default class AuthService {

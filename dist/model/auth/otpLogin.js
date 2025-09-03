@@ -1,5 +1,5 @@
 import { DataTypes, Model } from "sequelize";
-import { jiffy } from "../../config/sequelize";
+import { jiffy } from "../../config/sequelize.js";
 class OtpLogin extends Model {
 }
 OtpLogin.init({
