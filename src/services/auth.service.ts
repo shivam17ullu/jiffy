@@ -1,9 +1,9 @@
 // src/services/auth.service.ts
-import { OtpLogin, User, RefreshToken, Role } from "../model/relations";
+import { OtpLogin, User, RefreshToken, Role } from "../model/relations.js";
 import otpGenerator from "otp-generator";
 import jwt from "jsonwebtoken";
 import { addMinutes, isBefore } from "date-fns";
-import { sendOtpFast2SMS } from "../utils/fast2sms";
+import { sendOtpFast2SMS } from "../utils/fast2sms.js";
 
 const ACCESS_TOKEN_EXP = "15m";
 const REFRESH_TOKEN_EXP_MIN = 60 * 24 * 7; // 7 days
@@ -102,27 +102,32 @@ export default class AuthService {
     const stored = await RefreshToken.findOne({
       where: { token: oldToken, is_revoked: false },
     });
+  
     if (!stored) throw new Error("Invalid refresh token");
-
-    if (isBefore(stored.expires_at, new Date()))
+  
+    if (isBefore((stored as RefreshToken).expires_at, new Date()))
       throw new Error("Refresh token expired");
-
+  
     const payload = jwt.verify(
       oldToken,
       process.env.JWT_REFRESH_SECRET as string
     ) as { userId: number };
-
+  
     const accessToken = this.generateAccessToken(payload.userId);
-
+  
     return { accessToken };
   }
+  
 
   static async revokeRefreshToken(token: string) {
     const stored = await RefreshToken.findOne({ where: { token } });
+  
     if (stored) {
-      stored.is_revoked = true;
+      (stored as RefreshToken).is_revoked = true;
       await stored.save();
     }
+  
     return true;
   }
+  
 }

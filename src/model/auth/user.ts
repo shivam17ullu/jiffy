@@ -1,5 +1,5 @@
 import { DataTypes, Model, Optional } from "sequelize";
-import { jiffy } from "../../config/sequelize";
+import { jiffy } from "../../config/sequelize.js";
 
 interface UserAttributes {
   id: number;
