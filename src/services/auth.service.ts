@@ -110,7 +110,7 @@ export default class AuthService {
   
     const payload = jwt.verify(
       oldToken,
-      process.env.JWT_REFRESH_SECRET as string
+      process.env.TOKEN as string
     ) as { userId: number };
   
     const accessToken = this.generateAccessToken(payload.userId);
