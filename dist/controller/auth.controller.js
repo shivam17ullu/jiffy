@@ -44,6 +44,7 @@ export default class AuthController {
             });
         }
         catch (error) {
+            console.log(error);
             return createResponse(res, {
                 status: 400,
                 message: error.message,

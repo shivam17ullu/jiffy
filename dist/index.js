@@ -7,12 +7,14 @@ import { jiffy } from './config/sequelize.js';
 import authRouter from './routes/auth.js';
 import swaggerUi from "swagger-ui-express";
 import swaggerFile from "./config/swagger-output.json" assert { type: "json" };
+import profileRouter from "./routes/profile.js";
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cors());
 dotenv.config();
 app.use('/api/auth', authRouter);
+app.use("/api/profile", profileRouter);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 const startServer = async () => {
     try {

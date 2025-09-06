@@ -47,12 +47,12 @@ export default class AuthService {
         return { user, accessToken, refreshToken };
     }
     static generateAccessToken(userId) {
-        return jwt.sign({ userId }, process.env.JWT_SECRET, {
+        return jwt.sign({ userId }, process.env.TOKEN, {
             expiresIn: ACCESS_TOKEN_EXP,
         });
     }
     static async generateRefreshToken(userId, deviceInfo, ip) {
-        const token = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, {
+        const token = jwt.sign({ userId }, process.env.TOKEN, {
             expiresIn: `${REFRESH_TOKEN_EXP_MIN}m`,
         });
         const expires_at = addMinutes(new Date(), REFRESH_TOKEN_EXP_MIN);
@@ -73,7 +73,7 @@ export default class AuthService {
             throw new Error("Invalid refresh token");
         if (isBefore(stored.expires_at, new Date()))
             throw new Error("Refresh token expired");
-        const payload = jwt.verify(oldToken, process.env.JWT_REFRESH_SECRET);
+        const payload = jwt.verify(oldToken, process.env.TOKEN);
         const accessToken = this.generateAccessToken(payload.userId);
         return { accessToken };
     }
