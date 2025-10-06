@@ -1,22 +1,18 @@
 // src/services/auth.service.ts
 import { OtpLogin, User, RefreshToken, Role } from "../model/relations.js";
-import otpGenerator from "otp-generator";
 import jwt from "jsonwebtoken";
 import { addMinutes, isBefore } from "date-fns";
 import { sendOtpFast2SMS } from "../utils/fast2sms.js";
+import { generateOtp } from "../utils/generateOtp.js";
+import { SellerFirstStepBody } from "../types/auth.js";
+import bcrypt from 'bcrypt';
 
 const ACCESS_TOKEN_EXP = "15m";
 const REFRESH_TOKEN_EXP_MIN = 60 * 24 * 7; // 7 days
 
 export default class AuthService {
   static async generateOtp(phone_number: string) {
-    const otp = otpGenerator.generate(6, {
-      digits: true,
-      lowerCaseAlphabets: false,
-      upperCaseAlphabets: false,
-      specialChars: false,
-    });
-
+    const otp = await generateOtp();
     const expires_at = addMinutes(new Date(), 5);
 
     await OtpLogin.create({ phone_number, otp, expires_at });
@@ -77,13 +73,9 @@ export default class AuthService {
     deviceInfo?: string,
     ip?: string
   ) {
-    const token = jwt.sign(
-      { userId },
-      process.env.TOKEN as string,
-      {
-        expiresIn: `${REFRESH_TOKEN_EXP_MIN}m`,
-      }
-    );
+    const token = jwt.sign({ userId }, process.env.TOKEN as string, {
+      expiresIn: `${REFRESH_TOKEN_EXP_MIN}m`,
+    });
 
     const expires_at = addMinutes(new Date(), REFRESH_TOKEN_EXP_MIN);
 
@@ -102,32 +94,48 @@ export default class AuthService {
     const stored = await RefreshToken.findOne({
       where: { token: oldToken, is_revoked: false },
     });
-  
+
     if (!stored) throw new Error("Invalid refresh token");
-  
+
     if (isBefore((stored as RefreshToken).expires_at, new Date()))
       throw new Error("Refresh token expired");
-  
-    const payload = jwt.verify(
-      oldToken,
-      process.env.TOKEN as string
-    ) as { userId: number };
-  
+
+    const payload = jwt.verify(oldToken, process.env.TOKEN as string) as {
+      userId: number;
+    };
+
     const accessToken = this.generateAccessToken(payload.userId);
-  
+
     return { accessToken };
   }
-  
 
   static async revokeRefreshToken(token: string) {
     const stored = await RefreshToken.findOne({ where: { token } });
-  
+
     if (stored) {
       (stored as RefreshToken).is_revoked = true;
       await stored.save();
     }
-  
+
     return true;
   }
-  
+
+  static async registerSeller(payload: SellerFirstStepBody) {
+    const { phone_number, email, password } = payload;
+    const otp = await generateOtp();
+    const expires_at = addMinutes(new Date(), 5);
+
+    await OtpLogin.create({ phone_number, otp, expires_at });
+    await User.create({
+      phone_number: phone_number,
+      email: email,
+      password: await bcrypt.hash(password, 12),
+      is_active: false
+    })
+
+    // Send via Fast2SMS
+    await sendOtpFast2SMS(phone_number, otp);
+
+    return otp;
+  }
 }

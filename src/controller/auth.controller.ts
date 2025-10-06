@@ -108,4 +108,30 @@ export default class AuthController {
       });
     }
   }
+
+  static async registerSeller(req: Request, res: Response) {
+    try {
+      const { phone_number, email, password } = req.body;
+      if (!phone_number || !email || !password)
+        return createResponse(res, {
+          status: 400,
+          message: "Phone number, Email and Password required",
+          response: null,
+        });
+
+      await AuthService.registerSeller(req.body);
+
+      return createResponse(res, {
+        status: 200,
+        message: "OTP sent successfully",
+        response: null,
+      });
+    } catch (error: any) {
+      return createResponse(res, {
+        status: 500,
+        message: error.message,
+        response: null,
+      });
+    }
+  }
 }
