@@ -1,19 +1,16 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { jiffy } from "../../config/sequelize.js";
+import { DocumentAttributes } from "../../types/auth.js";
 
-interface DocumentAttributes {
-  id: number;
-  sellerId: number;
-  aadhaarUrl?: string;
-  panUrl?: string;
-  gstUrl?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
+type DocumentCreationAttributes = Optional<
+  DocumentAttributes,
+  "id" | "aadhaarUrl" | "panUrl" | "gstUrl" | "createdAt" | "updatedAt"
+>;
 
-type DocumentCreationAttributes = Optional<DocumentAttributes, "id" | "aadhaarUrl" | "panUrl" | "gstUrl" | "createdAt" | "updatedAt">;
-
-class Document extends Model<DocumentAttributes, DocumentCreationAttributes> implements DocumentAttributes {
+class Document
+  extends Model<DocumentAttributes, DocumentCreationAttributes>
+  implements DocumentAttributes
+{
   public id!: number;
   public sellerId!: number;
   public aadhaarUrl?: string;

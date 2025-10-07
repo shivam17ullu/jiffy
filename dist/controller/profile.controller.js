@@ -1,24 +1,25 @@
 import ProfileService from "../services/profile.service.js";
+import { createResponse } from "../middleware/responseHandler.js";
 export default class BuyerProfileController {
     static async createOrUpdate(req, res) {
         try {
             const profile = await ProfileService.createOrUpdateProfile(req.body);
-            res.json({ success: true, data: profile });
+            createResponse(res, { status: 200, message: 'Success', response: profile });
         }
         catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            createResponse(res, { status: 500, message: error.message });
         }
     }
     static async getProfile(req, res) {
         try {
-            const profile = await ProfileService.getProfile(Number(req.params.userId));
+            const profile = await ProfileService.getProfile(Number(req.params.id));
             if (!profile) {
-                return res.status(404).json({ success: false, message: "Profile not found" });
+                return createResponse(res, { status: 404, message: 'Profile not found' });
             }
-            res.json({ success: true, data: profile });
+            createResponse(res, { status: 200, message: 'success', response: profile });
         }
         catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            createResponse(res, { status: 500, message: error.message });
         }
     }
 }

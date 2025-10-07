@@ -1,15 +1,8 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { jiffy } from "../../config/sequelize.js";
+import { StoreAttributes } from "../../types/auth.js";
 
-interface StoreAttributes {
-  id: number;
-  sellerId: number;
-  storeName: string;
-  storeAddress: string;
-  pincode: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
+
 
 type StoreCreationAttributes = Optional<StoreAttributes, "id" | "createdAt" | "updatedAt">;
 

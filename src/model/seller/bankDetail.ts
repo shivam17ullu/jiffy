@@ -1,16 +1,8 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { jiffy } from "../../config/sequelize.js";
+import { BankDetailAttributes } from "../../types/auth.js";
 
-interface BankDetailAttributes {
-  id: number;
-  sellerId: number;
-  accountHolderName: string;
-  accountNumber: string;
-  ifscCode: string;
-  termsAccepted: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
+
 
 type BankDetailCreationAttributes = Optional<BankDetailAttributes, "id" | "termsAccepted" | "createdAt" | "updatedAt">;
 

@@ -13,6 +13,12 @@ User.init({
         allowNull: false,
         unique: true,
     },
+    email: {
+        type: DataTypes.STRING(50),
+    },
+    password: {
+        type: DataTypes.STRING(100),
+    },
     is_active: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,

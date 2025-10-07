@@ -9,6 +9,7 @@ import authRouter from './routes/auth.js';
 import swaggerUi from "swagger-ui-express";
 import swaggerFile from "./config/swagger-output.json" assert { type: "json" };
 import profileRouter from "./routes/profile.js";
+import storeRouter from './routes/store.js';
 
 
 
@@ -19,6 +20,7 @@ app.use(cors());
 dotenv.config();
 app.use('/api/auth', authRouter);
 app.use("/api/profile", profileRouter);
+app.use("/api/stores", storeRouter);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 
 const startServer = async () => {

@@ -1,11 +1,23 @@
 // src/services/auth.service.ts
-import { OtpLogin, User, RefreshToken, Role } from "../model/relations.js";
+import {
+  OtpLogin,
+  User,
+  RefreshToken,
+  Role,
+  Store,
+  BankDetail,
+  SellerProfile,
+  Document,
+  UserRole,
+} from "../model/relations.js";
 import jwt from "jsonwebtoken";
 import { addMinutes, isBefore } from "date-fns";
 import { sendOtpFast2SMS } from "../utils/fast2sms.js";
 import { generateOtp } from "../utils/generateOtp.js";
-import { SellerFirstStepBody } from "../types/auth.js";
-import bcrypt from 'bcrypt';
+import { SellerFirstStepBody, SellerOnboardingBody } from "../types/auth.js";
+import bcrypt from "bcrypt";
+import { jiffy } from "../config/sequelize.js";
+import { Transaction } from "sequelize";
 
 const ACCESS_TOKEN_EXP = "15m";
 const REFRESH_TOKEN_EXP_MIN = 60 * 24 * 7; // 7 days
@@ -122,20 +134,111 @@ export default class AuthService {
 
   static async registerSeller(payload: SellerFirstStepBody) {
     const { phone_number, email, password } = payload;
+    const existingUser = await OtpLogin.findOne({
+      where: { phone_number: phone_number },
+    });
+    if (existingUser) throw new Error("User already Exists");
     const otp = await generateOtp();
     const expires_at = addMinutes(new Date(), 5);
 
     await OtpLogin.create({ phone_number, otp, expires_at });
-    await User.create({
+    const user = await User.create({
       phone_number: phone_number,
       email: email,
       password: await bcrypt.hash(password, 12),
-      is_active: false
-    })
+      is_active: false,
+    });
 
     // Send via Fast2SMS
     await sendOtpFast2SMS(phone_number, otp);
+    const sellerRole = await Role.findOne({ where: { name: "seller" } });
+    if (sellerRole) {
+      await UserRole.create({user_id: user.id, role_id: sellerRole.id});
+    } else {
+      throw new Error("Error Occurred.");
+    }
 
-    return otp;
+    return { user, otp };
+  }
+
+  static async verifySellerOtp(
+    phone_number: string,
+    otp: string,
+    deviceInfo?: string,
+    ip?: string
+  ) {
+    const otpRecord = await OtpLogin.findOne({
+      where: { phone_number, otp, is_used: false },
+      order: [["created_at", "DESC"]],
+    });
+
+    if (!otpRecord) throw new Error("Invalid OTP");
+    if (isBefore(otpRecord.expires_at, new Date()))
+      throw new Error("OTP expired");
+
+    // mark OTP as used
+    otpRecord.is_used = true;
+    await otpRecord.save();
+  }
+
+  static async onboardSeller(payload: SellerOnboardingBody) {
+    const transaction: Transaction = await jiffy.transaction();
+    try {
+      const seller = await SellerProfile.create(
+        {
+          userId: Number(payload.userId),
+          businessName: payload.store.storeName,
+          phone: payload.store.phone,
+          zipCode: payload.store.pincode,
+          address: payload.store.storeAddress,
+        },
+        { transaction }
+      );
+      const store = await Store.create(
+        {
+          sellerId: seller.id,
+          storeName: payload.store.storeName,
+          storeAddress: payload.store.storeAddress,
+          pincode: payload.store.pincode,
+        },
+        { transaction }
+      );
+
+      const bankDetails = await BankDetail.create(
+        {
+          sellerId: seller.id,
+          accountHolderName: payload.bankDetails.accountHolderName,
+          accountNumber: payload.bankDetails.accountNumber,
+          ifscCode: payload.bankDetails.ifscCode,
+          termsAccepted: payload.bankDetails.termsAccepted ?? false,
+        },
+        { transaction }
+      );
+
+      const documents = await Document.create(
+        {
+          sellerId: seller.id,
+          aadhaarUrl: payload.documents.aadhaarUrl,
+          panUrl: payload.documents.panUrl,
+          gstUrl: payload.documents.gstUrl,
+        },
+        { transaction }
+      );
+
+      await transaction.commit();
+
+      return {
+        message: "Seller onboarding completed successfully",
+        data: {
+          seller,
+          store,
+          bankDetails,
+          documents,
+        },
+      };
+    } catch (error: any) {
+      await transaction.rollback();
+      throw new Error(error);
+    }
   }
 }

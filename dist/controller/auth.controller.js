@@ -94,4 +94,72 @@ export default class AuthController {
             });
         }
     }
+    static async registerSeller(req, res) {
+        try {
+            const { phone_number, email, password } = req.body;
+            if (!phone_number || !email || !password)
+                return createResponse(res, {
+                    status: 400,
+                    message: "Phone number, Email and Password required",
+                    response: null,
+                });
+            const response = await AuthService.registerSeller(req.body);
+            return createResponse(res, {
+                status: 200,
+                message: "OTP sent successfully",
+                response: response.user,
+            });
+        }
+        catch (error) {
+            console.log(error);
+            return createResponse(res, {
+                status: 500,
+                message: error.message,
+                response: null,
+            });
+        }
+    }
+    static async verifySellerOtp(req, res) {
+        try {
+            const { otp, phone_number } = req.body;
+            if (!otp || phone_number)
+                return createResponse(res, {
+                    status: 400,
+                    message: " Phone & OTP required",
+                    response: null,
+                });
+            const deviceInfo = req.headers["user-agent"] || "unknown";
+            const ip = req.ip;
+            await AuthService.verifySellerOtp(otp, deviceInfo, ip);
+            return createResponse(res, {
+                status: 200,
+                message: "Verification successful",
+            });
+        }
+        catch (error) {
+            console.log(error);
+            return createResponse(res, {
+                status: 400,
+                message: error.message,
+                response: null,
+            });
+        }
+    }
+    static async onboardSeller(req, res) {
+        try {
+            const response = await AuthService.onboardSeller(req.body);
+            return createResponse(res, {
+                status: 200,
+                message: "OTP sent successfully",
+                response: response,
+            });
+        }
+        catch (error) {
+            return createResponse(res, {
+                status: 500,
+                message: error.message,
+                response: null,
+            });
+        }
+    }
 }

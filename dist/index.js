@@ -8,6 +8,7 @@ import authRouter from './routes/auth.js';
 import swaggerUi from "swagger-ui-express";
 import swaggerFile from "./config/swagger-output.json" assert { type: "json" };
 import profileRouter from "./routes/profile.js";
+import storeRouter from './routes/store.js';
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
@@ -15,10 +16,12 @@ app.use(cors());
 dotenv.config();
 app.use('/api/auth', authRouter);
 app.use("/api/profile", profileRouter);
+app.use("/api/stores", storeRouter);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 const startServer = async () => {
     try {
         await jiffy.authenticate();
+        await jiffy.sync({ alter: true });
         console.log('Connection to both databases has been established successfully.');
         const port = process.env.PORT || 3000;
         app.listen(port, () => {
