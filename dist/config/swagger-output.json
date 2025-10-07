@@ -160,9 +160,6 @@
                         "schema": {
                             "type": "object",
                             "properties": {
-                                "userId": {
-                                    "example": "any"
-                                },
                                 "otp": {
                                     "example": "any"
                                 },
@@ -210,6 +207,16 @@
         },
         "/api/profile/setup": {
             "post": {
+                "description": "",
+                "responses": {
+                    "default": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/stores/list": {
+            "get": {
                 "description": "",
                 "responses": {
                     "default": {
