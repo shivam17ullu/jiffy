@@ -225,7 +225,7 @@
                 }
             }
         },
-        "/categories/": {
+        "/api/categories/": {
             "get": {
                 "description": "",
                 "responses": {
@@ -277,7 +277,7 @@
                 }
             }
         },
-        "/categories/{id}": {
+        "/api/categories/{id}": {
             "get": {
                 "description": "",
                 "parameters": [
@@ -298,7 +298,7 @@
                 }
             }
         },
-        "/cart/": {
+        "/api/cart/": {
             "get": {
                 "description": "",
                 "responses": {
@@ -314,7 +314,7 @@
                 }
             }
         },
-        "/cart/add": {
+        "/api/cart/add": {
             "post": {
                 "description": "",
                 "parameters": [
@@ -353,7 +353,7 @@
                 }
             }
         },
-        "/cart/item/{itemId}": {
+        "/api/cart/item/{itemId}": {
             "put": {
                 "description": "",
                 "parameters": [
@@ -411,7 +411,7 @@
                 }
             }
         },
-        "/products/": {
+        "/api/products/": {
             "get": {
                 "description": "",
                 "parameters": [
@@ -482,7 +482,7 @@
                 }
             }
         },
-        "/products/{id}": {
+        "/api/products/{id}": {
             "get": {
                 "description": "",
                 "parameters": [
@@ -503,7 +503,7 @@
                 }
             }
         },
-        "/orders/": {
+        "/api/orders/": {
             "post": {
                 "description": "",
                 "parameters": [

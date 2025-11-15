@@ -22,7 +22,8 @@
     "pm2:delete": "pm2 delete",
     "pm2:logs": "pm2 logs",
     "swagger": "node --loader ts-node/esm src/config/swagger.ts",
-    "seed:category": "node dist/script/seedCategory.js"
+    "seed:category": "node dist/script/seedCategory.js",
+    "seed:product": "node dist/script/seedProduct.js"
   },
   "keywords": [],
   "author": "Shivam Rawat",
