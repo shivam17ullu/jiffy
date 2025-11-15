@@ -58,5 +58,10 @@ Category.belongsToMany(Product, {
     as: "products",
     foreignKey: "categoryId",
 });
+Product.belongsTo(User, { as: "seller", foreignKey: "sellerId" });
+User.hasMany(Product, { as: "products", foreignKey: "sellerId" });
+// CATEGORY TREE
+Category.belongsTo(Category, { as: "parent", foreignKey: "parentId" });
+Category.hasMany(Category, { as: "children", foreignKey: "parentId" });
 // ---------------- Exports ----------------
-export { User, Role, UserRole, OtpLogin, RefreshToken, BuyerProfile, SellerProfile, Store, Document, BankDetail, Product, Cart, CartItem, Category, Order, OrderItem, ProductVariant, ProductCategory, };
+export { User, Role, UserRole, OtpLogin, RefreshToken, BuyerProfile, SellerProfile, Store, Document, BankDetail, VerifiedSellers, Product, Cart, CartItem, Category, Order, OrderItem, ProductVariant, ProductCategory, };

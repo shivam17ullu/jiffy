@@ -9,7 +9,7 @@ Cart.init({
         primaryKey: true,
     },
     userId: {
-        type: DataTypes.INTEGER.UNSIGNED,
+        type: DataTypes.BIGINT,
         allowNull: false,
         unique: true,
     },

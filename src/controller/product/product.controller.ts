@@ -1,13 +1,15 @@
 import * as service from '../../services/product/product.service.js';
 import { Request, Response } from "express";
 
-export const create = async (req: Request, res: Response) => {
+export const create = async (req: any, res: any) => {
   try {
-    const product = await service.createProduct(req.body);
-    res.status(201).json({ success:true, data: product });
-  } catch (err: any) { res.status(400).json({ success:false, message: err.message }); }
+    const sellerId = req.user.id; // ⭐ seller from JWT
+    const product = await service.createProduct(req.body, sellerId);
+    res.json({ success: true, data: product });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
 };
-
 export const list = async (req: any, res: Response) => {
   const params = {
     page: parseInt(req.query.page) || 1,

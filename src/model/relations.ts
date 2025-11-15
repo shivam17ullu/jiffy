@@ -73,6 +73,14 @@ Category.belongsToMany(Product, {
   foreignKey: "categoryId",
 });
 
+Product.belongsTo(User, { as: "seller", foreignKey: "sellerId" });
+User.hasMany(Product, { as: "products", foreignKey: "sellerId" });
+
+// CATEGORY TREE
+Category.belongsTo(Category, { as: "parent", foreignKey: "parentId" });
+Category.hasMany(Category, { as: "children", foreignKey: "parentId" });
+
+
 // ---------------- Exports ----------------
 export {
   User,
@@ -85,6 +93,7 @@ export {
   Store,
   Document,
   BankDetail,
+  VerifiedSellers,
   Product,
   Cart,
   CartItem,

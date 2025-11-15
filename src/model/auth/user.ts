@@ -22,6 +22,7 @@ class User
 {
   public id!: number;
   public phone_number!: string;
+  public password!: string;
   public is_active!: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;

@@ -1,8 +1,9 @@
 import * as service from '../../services/product/product.service.js';
 export const create = async (req, res) => {
     try {
-        const product = await service.createProduct(req.body);
-        res.status(201).json({ success: true, data: product });
+        const sellerId = req.user.id; // ⭐ seller from JWT
+        const product = await service.createProduct(req.body, sellerId);
+        res.json({ success: true, data: product });
     }
     catch (err) {
         res.status(400).json({ success: false, message: err.message });

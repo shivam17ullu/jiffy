@@ -7,7 +7,7 @@ export const getOrCreateCart = async (userId: number) => {
   return cart;
 };
 
-export const addToCart = async (userId: number, productId: number, variantId: number | null, qty = 1) => {
+export const addToCart = async (userId: number, productId: number, variantId: number | 0, qty = 1) => {
   const cart = await getOrCreateCart(userId);
   // find variant price snapshot
   let price = 0;

@@ -3,12 +3,10 @@ import slugify from "slugify";
 import { jiffy } from "../../config/sequelize.js";
 import { Op } from "sequelize";
 
-export const createProduct = async (payload: any) => {
+export const createProduct = async (payload: any, sellerId: number) => {
   const t = await jiffy.transaction();
   try {
-    payload.slug =
-      payload.slug ||
-      slugify(payload.name || "", { lower: true, strict: true });
+    payload.slug = slugify(payload.name, { lower: true });
 
     const {
       categories = [],
@@ -18,37 +16,33 @@ export const createProduct = async (payload: any) => {
       ...rest
     } = payload;
 
-    const p = await Product.create(
-      { ...rest, images, tags },
+    const product = await Product.create(
+      { ...rest, images, tags, sellerId },
       { transaction: t }
     );
 
-    // attach categories (many-to-many)
     if (categories.length > 0) {
-      await p.addCategories(categories, { transaction: t });
+      await product.addCategories(categories, { transaction: t });
     }
 
-    // create variants
-    if (variants.length > 0) {
-      for (const v of variants) {
-        await ProductVariant.create(
-          { ...v, productId: p.id },
-          { transaction: t }
-        );
-      }
+    for (const v of variants) {
+      await ProductVariant.create(
+        { ...v, productId: product.id },
+        { transaction: t }
+      );
     }
 
     await t.commit();
 
-    return await Product.findByPk(p.id, {
-      include: ["variants", "categories"],
+    return await Product.findByPk(product.id, {
+      include: ["categories", "variants", "seller"],
     });
-
   } catch (err) {
     await t.rollback();
     throw err;
   }
 };
+
 
 export const listProducts = async (opts: any) => {
   const {
