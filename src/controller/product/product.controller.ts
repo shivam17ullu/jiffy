@@ -72,7 +72,7 @@ import { Request, Response } from "express";
  */
 export const create = async (req: any, res: any) => {
   try {
-    const sellerId = req.user.id; // ⭐ seller from JWT
+    const sellerId = req.userId; // ⭐ seller from JWT
     const product = await service.createProduct(req.body, sellerId);
     res.json({ success: true, data: product });
   } catch (err: any) {
