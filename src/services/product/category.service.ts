@@ -11,17 +11,34 @@ export const createCategory = async (
   return cat;
 };
 
-export const getAllCategories = async () => {
-  // fetch hierarchical structure (simple approach)
-  const cats = await Category.findAll({
-    where: { isActive: true },
+export const getAllCategories = async ({
+  level,
+  parentId,
+}: {
+  level?: number;
+  parentId?: number;
+}) => {
+  const where: any = { isActive: true };
+
+  // Filter by level if provided
+  if (level !== undefined) {
+    where.level = level;
+  }
+
+  // Filter by parent category if provided
+  if (parentId !== undefined) {
+    where.parentId = parentId;
+  }
+
+  return Category.findAll({
+    where,
     order: [
       ["level", "ASC"],
       ["name", "ASC"],
     ],
   });
-  return cats;
 };
+
 
 export const getCategoryById = async (id: number) => Category.findByPk(id);
 export const updateCategory = async (id: number, payload: Partial<any>) =>
