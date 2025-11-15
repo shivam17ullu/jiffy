@@ -6,7 +6,7 @@ interface CartItemAttributes {
   id: number;
   cartId: number;
   productId: number;
-  variantId: number;
+  variantId: number | null;
   qty: number;
   price: number;
 }
@@ -20,7 +20,7 @@ class CartItem
   public id!: number;
   public cartId!: number;
   public productId!: number;
-  public variantId!: number;
+  public variantId!: number | null;
   public qty!: number;
   public price!: number;
 
@@ -41,7 +41,7 @@ CartItem.init(
     },
     cartId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
     productId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
-    variantId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
+    variantId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
     qty: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
     price: { type: DataTypes.FLOAT, allowNull: false },
   },

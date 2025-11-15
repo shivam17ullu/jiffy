@@ -1,6 +1,75 @@
 import * as service from '../../services/product/product.service.js';
 import { Request, Response } from "express";
 
+/**
+ * @swagger
+ * /api/products:
+ *   post:
+ *     summary: Create a new product
+ *     description: Create a new product (Seller only)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - categories
+ *               - variants
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: "Blue Shirt"
+ *               description:
+ *                 type: string
+ *                 example: "Premium cotton shirt"
+ *               brand:
+ *                 type: string
+ *                 example: "Levis"
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example: ["https://example.com/image1.jpg"]
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example: ["shirt", "men"]
+ *               categories:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 example: [1, 2]
+ *               variants:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     sku:
+ *                       type: string
+ *                     size:
+ *                       type: string
+ *                     color:
+ *                       type: string
+ *                     price:
+ *                       type: number
+ *                     mrp:
+ *                       type: number
+ *                     stock:
+ *                       type: integer
+ *     responses:
+ *       200:
+ *         description: Product created successfully
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ */
 export const create = async (req: any, res: any) => {
   try {
     const sellerId = req.user.id; // ⭐ seller from JWT
@@ -10,12 +79,88 @@ export const create = async (req: any, res: any) => {
     res.status(400).json({ success: false, message: err.message });
   }
 };
+
+/**
+ * @swagger
+ * /api/products:
+ *   get:
+ *     summary: Get list of products
+ *     description: Get paginated list of products with filters and search
+ *     tags: [Products]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Items per page
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Search query (searches in name, description, brand)
+ *       - in: query
+ *         name: categoryId
+ *         schema:
+ *           type: integer
+ *         description: Filter by category ID (includes subcategories and sub-subcategories)
+ *       - in: query
+ *         name: brand
+ *         schema:
+ *           type: string
+ *         description: Filter by brand name
+ *       - in: query
+ *         name: minPrice
+ *         schema:
+ *           type: number
+ *         description: Minimum price filter
+ *       - in: query
+ *         name: maxPrice
+ *         schema:
+ *           type: number
+ *         description: Maximum price filter
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [price:ASC, price:DESC, name:ASC, name:DESC, createdAt:DESC, createdAt:ASC]
+ *         description: Sort field and direction (format: field:direction)
+ *     responses:
+ *       200:
+ *         description: List of products
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ */
 export const list = async (req: any, res: Response) => {
   const params = {
     page: parseInt(req.query.page) || 1,
     limit: parseInt(req.query.limit) || 20,
     q: req.query.q,
     categoryId: req.query.categoryId ? +req.query.categoryId : undefined,
+    brand: req.query.brand,
     minPrice: req.query.minPrice,
     maxPrice: req.query.maxPrice,
     sort: req.query.sort
@@ -24,8 +169,80 @@ export const list = async (req: any, res: Response) => {
   res.json({ success:true, ...result });
 };
 
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   get:
+ *     summary: Get product by ID
+ *     description: Get detailed product information including seller details, variants, and categories
+ *     tags: [Products]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Product ID
+ *     responses:
+ *       200:
+ *         description: Product details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     name:
+ *                       type: string
+ *                     description:
+ *                       type: string
+ *                     brand:
+ *                       type: string
+ *                     images:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                     tags:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                     priceRange:
+ *                       type: object
+ *                       properties:
+ *                         min:
+ *                           type: number
+ *                         max:
+ *                           type: number
+ *                     variants:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     categories:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     seller:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: integer
+ *                         phone_number:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                         profile:
+ *                           type: object
+ *       404:
+ *         description: Product not found
+ */
 export const get = async (req: Request, res: Response) => {
   const product = await service.getProductById(+req.params.id);
-  if (!product) return res.status(404).json({ success:false });
+  if (!product) return res.status(404).json({ success:false, message: "Product not found" });
   res.json({ success:true, data: product });
 };

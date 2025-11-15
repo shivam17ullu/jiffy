@@ -11,7 +11,7 @@ CartItem.init({
     },
     cartId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
     productId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
-    variantId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
+    variantId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
     qty: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
     price: { type: DataTypes.FLOAT, allowNull: false },
 }, { tableName: "cartItems", sequelize: jiffy });

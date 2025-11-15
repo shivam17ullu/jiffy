@@ -1,4 +1,4 @@
-import { Product, ProductVariant, Category } from "../../model/relations.js";
+import { Product, ProductVariant, Category, SellerProfile, } from "../../model/relations.js";
 import slugify from "slugify";
 import { jiffy } from "../../config/sequelize.js";
 import { Op } from "sequelize";
@@ -25,26 +25,225 @@ export const createProduct = async (payload, sellerId) => {
     }
 };
 export const listProducts = async (opts) => {
-    const { page = 1, limit = 20, q, categoryId, minPrice, maxPrice, sort, } = opts;
+    const { page = 1, limit = 20, q, categoryId, brand, minPrice, maxPrice, sort, } = opts;
     const where = { isActive: true };
-    if (q)
-        where.name = { [Op.iLike]: `%${q}%` };
-    // base query
+    // Search query
+    if (q) {
+        where[Op.or] = [
+            { name: { [Op.like]: `%${q}%` } },
+            { description: { [Op.like]: `%${q}%` } },
+            { brand: { [Op.like]: `%${q}%` } },
+        ];
+    }
+    // Brand filter
+    if (brand) {
+        where.brand = { [Op.like]: `%${brand}%` };
+    }
+    // Category filtering - handle hierarchical categories
+    let categoryFilter = null;
+    if (categoryId) {
+        // Get the category and all its children (subcategories and sub-subcategories)
+        const category = await Category.findByPk(categoryId);
+        if (category) {
+            // Get all descendant category IDs
+            const descendantIds = await getCategoryDescendants(categoryId);
+            categoryFilter = descendantIds;
+        }
+    }
+    // Price filtering - filter by variant prices
+    let priceFilter = null;
+    if (minPrice || maxPrice) {
+        priceFilter = {};
+        if (minPrice)
+            priceFilter.price = { [Op.gte]: parseFloat(minPrice) };
+        if (maxPrice)
+            priceFilter.price = {
+                ...priceFilter.price,
+                [Op.lte]: parseFloat(maxPrice),
+            };
+    }
+    // Build include array
     const include = [
-        { association: "variants" },
-        { association: "categories" },
+        {
+            association: "variants",
+            where: priceFilter || undefined,
+            required: priceFilter ? true : false,
+        },
+        {
+            association: "categories",
+            where: categoryFilter
+                ? { id: { [Op.in]: categoryFilter } }
+                : undefined,
+            required: categoryFilter ? true : false,
+            include: [
+                {
+                    association: "parent",
+                    include: [{ association: "parent" }], // Include grandparent for full hierarchy
+                },
+            ],
+        },
+        {
+            association: "seller",
+            attributes: ["id", "phone_number", "email"],
+            include: [
+                {
+                    model: SellerProfile,
+                    required: false,
+                    attributes: [
+                        "businessName",
+                        "gstNumber",
+                        "address",
+                        "city",
+                        "state",
+                        "zipCode",
+                        "phone",
+                    ],
+                },
+            ],
+        },
     ];
-    if (categoryId)
-        include.push({ model: Category, where: { id: categoryId } });
+    // Sort handling
+    let order = [["createdAt", "DESC"]];
+    if (sort) {
+        const [field, direction] = sort.split(":");
+        if (field === "price") {
+            // Sort by minimum variant price
+            order = [
+                [
+                    { model: ProductVariant, as: "variants" },
+                    "price",
+                    direction?.toUpperCase() || "ASC",
+                ],
+            ];
+        }
+        else {
+            order = [[field, direction?.toUpperCase() || "ASC"]];
+        }
+    }
     const products = await Product.findAndCountAll({
         where,
         include,
-        limit,
-        offset: (page - 1) * limit,
-        order: sort ? [sort.split(":")] : [["createdAt", "DESC"]],
+        limit: parseInt(limit),
+        offset: (parseInt(page) - 1) * parseInt(limit),
+        order,
+        distinct: true, // Important for count with joins
     });
-    return { items: products.rows, total: products.count, page, limit };
+    // Transform products to include min/max price
+    const transformedProducts = products.rows.map((product) => {
+        const variants = product.variants || [];
+        const prices = variants.map((v) => v.price).filter((p) => p);
+        const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+        const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
+        return {
+            ...product.toJSON(),
+            priceRange: {
+                min: minPrice,
+                max: maxPrice,
+            },
+            seller: product.seller
+                ? {
+                    id: product.seller.id,
+                    phone_number: product.seller.phone_number,
+                    email: product.seller.email,
+                    profile: product.seller.SellerProfile
+                        ? {
+                            businessName: product.seller.SellerProfile.businessName,
+                            city: product.seller.SellerProfile.city,
+                            state: product.seller.SellerProfile.state,
+                        }
+                        : null,
+                }
+                : null,
+        };
+    });
+    return {
+        items: transformedProducts,
+        total: products.count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(products.count / parseInt(limit)),
+    };
 };
-export const getProductById = async (id) => Product.findByPk(id, { include: ["variants", "categories"] });
+// Helper function to get all descendant category IDs
+async function getCategoryDescendants(categoryId) {
+    const categoryIds = [categoryId];
+    const children = await Category.findAll({
+        where: { parentId: categoryId },
+    });
+    for (const child of children) {
+        const grandChildren = await getCategoryDescendants(child.id);
+        categoryIds.push(...grandChildren);
+    }
+    return categoryIds;
+}
+export const getProductById = async (id) => {
+    const product = await Product.findByPk(id, {
+        include: [
+            {
+                association: "variants",
+            },
+            {
+                association: "categories",
+                include: [
+                    {
+                        association: "parent",
+                        include: [{ association: "parent" }],
+                    },
+                ],
+            },
+            {
+                association: "seller",
+                attributes: ["id", "phone_number", "email"],
+                include: [
+                    {
+                        model: SellerProfile,
+                        required: false,
+                        attributes: [
+                            "businessName",
+                            "gstNumber",
+                            "address",
+                            "city",
+                            "state",
+                            "zipCode",
+                            "phone",
+                        ],
+                    },
+                ],
+            },
+        ],
+    });
+    if (!product)
+        return null;
+    // Transform product to include price range and seller details
+    const variants = product.variants || [];
+    const prices = variants.map((v) => v.price).filter((p) => p);
+    const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+    const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
+    return {
+        ...product.toJSON(),
+        priceRange: {
+            min: minPrice,
+            max: maxPrice,
+        },
+        seller: product.seller
+            ? {
+                id: product.seller.id,
+                phone_number: product.seller.phone_number,
+                email: product.seller.email,
+                profile: product.seller?.SellerProfile
+                    ? {
+                        businessName: product.seller.SellerProfile.businessName,
+                        gstNumber: product.seller.SellerProfile.gstNumber,
+                        address: product.seller.SellerProfile.address,
+                        city: product.seller.SellerProfile.city,
+                        state: product.seller.SellerProfile.state,
+                        zipCode: product.seller.SellerProfile.zipCode,
+                        phone: product.seller.SellerProfile.phone,
+                    }
+                    : null,
+            }
+            : null,
+    };
+};
 export const updateProduct = async (id, payload) => Product.update(payload, { where: { id }, returning: true }).then((r) => r[1][0]);
 export const deleteProduct = async (id) => Product.destroy({ where: { id } });

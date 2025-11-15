@@ -3,4 +3,6 @@ import * as ctrl from '../controller/order/order.controller.js';
 import { authenticate } from '../middleware/auth.js';
 const orderRouter = Router();
 orderRouter.post('/', authenticate, ctrl.createOrder);
+orderRouter.get('/', authenticate, ctrl.listOrders);
+orderRouter.get('/:id', authenticate, ctrl.getOrderById);
 export default orderRouter;

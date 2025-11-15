@@ -27,6 +27,9 @@ RefreshToken.belongsTo(User, { foreignKey: "user_id" });
 // User -> SellerProfile (1:1)
 User.hasOne(SellerProfile, { foreignKey: "userId" });
 SellerProfile.belongsTo(User, { foreignKey: "userId" });
+// User -> BuyerProfile (1:1)
+User.hasOne(BuyerProfile, { foreignKey: "userId" });
+BuyerProfile.belongsTo(User, { foreignKey: "userId" });
 // SellerProfile -> Store (1:M)
 SellerProfile.hasMany(Store, { foreignKey: "sellerId" });
 Store.belongsTo(SellerProfile, { foreignKey: "sellerId" });
@@ -46,6 +49,11 @@ Product.hasMany(CartItem, { as: "cartItems", foreignKey: "productId" });
 OrderItem.belongsTo(Order, { as: "order", foreignKey: "orderId" });
 Order.hasMany(OrderItem, { as: "items", foreignKey: "orderId" });
 OrderItem.belongsTo(Product, { as: "product", foreignKey: "productId" });
+// Order associations
+Order.belongsTo(User, { as: "buyer", foreignKey: "userId" });
+Order.belongsTo(User, { as: "seller", foreignKey: "sellerId" });
+User.hasMany(Order, { as: "orders", foreignKey: "userId" });
+User.hasMany(Order, { as: "sellerOrders", foreignKey: "sellerId" });
 Product.hasMany(ProductVariant, { as: "variants", foreignKey: "productId" });
 ProductVariant.belongsTo(Product, { as: "product", foreignKey: "productId" });
 Product.belongsToMany(Category, {

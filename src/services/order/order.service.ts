@@ -8,7 +8,11 @@ import {
   OrderItem,
   Product,
   ProductVariant,
+  User,
+  SellerProfile,
+  BuyerProfile,
 } from "../../model/relations.js";
+import { Op } from "sequelize";
 
 export const createOrdersFromCart = async (
   userId: number,
@@ -116,4 +120,187 @@ export const createOrdersFromCart = async (
     await t.rollback();
     throw err;
   }
+};
+
+/**
+ * Get list of orders for a user (buyer or seller)
+ * @param userId - User ID
+ * @param role - User role ('buyer' or 'seller')
+ * @param opts - Filter options (page, limit, status)
+ */
+export const listOrders = async (
+  userId: number,
+  role: string,
+  opts: any
+) => {
+  const { page = 1, limit = 20, status } = opts;
+
+  const where: any = {};
+
+  // Filter by user role
+  if (role === "buyer") {
+    where.userId = userId;
+  } else if (role === "seller") {
+    where.sellerId = userId;
+  }
+
+  // Filter by status if provided
+  if (status) {
+    where.status = status;
+  }
+
+  const orders = await Order.findAndCountAll({
+    where,
+    include: [
+      {
+        association: "items",
+        include: [
+          {
+            association: "product",
+            include: [
+              {
+                association: "categories",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        association: "buyer",
+        attributes: ["id", "phone_number", "email"],
+      },
+      {
+        association: "seller",
+        attributes: ["id", "phone_number", "email"],
+        include: [
+          {
+            model: SellerProfile,
+            required: false,
+            attributes: [
+              "businessName",
+              "city",
+              "state",
+              "phone",
+            ],
+          },
+        ],
+      },
+    ],
+    limit: parseInt(limit),
+    offset: (parseInt(page) - 1) * parseInt(limit),
+    order: [["createdAt", "DESC"]],
+    distinct: true,
+  });
+
+  return {
+    items: orders.rows,
+    total: orders.count,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    totalPages: Math.ceil(orders.count / parseInt(limit)),
+  };
+};
+
+/**
+ * Get order details by ID
+ * @param orderId - Order ID
+ * @param userId - User ID (for authorization)
+ * @param role - User role ('buyer' or 'seller')
+ */
+export const getOrderById = async (
+  orderId: number,
+  userId: number,
+  role: string
+) => {
+  const where: any = { id: orderId };
+
+  // Filter by user role for authorization
+  if (role === "buyer") {
+    where.userId = userId;
+  } else if (role === "seller") {
+    where.sellerId = userId;
+  }
+
+  const order = await Order.findOne({
+    where,
+    include: [
+      {
+        association: "items",
+        include: [
+          {
+            association: "product",
+            include: [
+              {
+                association: "categories",
+                include: [
+                  {
+                    association: "parent",
+                    include: [{ association: "parent" }],
+                  },
+                ],
+              },
+              {
+                association: "seller",
+                attributes: ["id", "phone_number", "email"],
+                include: [
+                  {
+                    model: SellerProfile,
+                    required: false,
+                    attributes: [
+                      "businessName",
+                      "gstNumber",
+                      "address",
+                      "city",
+                      "state",
+                      "zipCode",
+                      "phone",
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        association: "buyer",
+        attributes: ["id", "phone_number", "email"],
+        include: [
+          {
+            model: BuyerProfile,
+            required: false,
+            attributes: [
+              "fullName",
+              "phone",
+              "address",
+              "city",
+              "state",
+              "zipCode",
+            ],
+          },
+        ],
+      },
+      {
+        association: "seller",
+        attributes: ["id", "phone_number", "email"],
+        include: [
+          {
+            model: SellerProfile,
+            required: false,
+            attributes: [
+              "businessName",
+              "gstNumber",
+              "address",
+              "city",
+              "state",
+              "zipCode",
+              "phone",
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  return order;
 };

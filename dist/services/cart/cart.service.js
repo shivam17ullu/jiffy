@@ -1,4 +1,4 @@
-import { Cart, CartItem, ProductVariant } from "../../model/relations.js";
+import { Cart, CartItem, ProductVariant, SellerProfile, } from "../../model/relations.js";
 export const getOrCreateCart = async (userId) => {
     let cart = await Cart.findOne({ where: { userId } });
     if (!cart)
@@ -9,32 +9,160 @@ export const addToCart = async (userId, productId, variantId, qty = 1) => {
     const cart = await getOrCreateCart(userId);
     // find variant price snapshot
     let price = 0;
+    let finalVariantId = null;
     if (variantId) {
         const v = await ProductVariant.findByPk(variantId);
         if (!v)
             throw new Error('Variant not found');
         price = v.price;
+        finalVariantId = variantId;
     }
     else {
         // fallback first variant
         const v = await ProductVariant.findOne({ where: { productId } });
-        price = v?.price ?? 0;
+        if (v) {
+            price = v.price;
+            finalVariantId = v.id;
+        }
+        else {
+            throw new Error('No variant found for this product');
+        }
     }
-    const existing = await CartItem.findOne({ where: { cartId: cart.id, productId, variantId } });
+    const whereClause = { cartId: cart.id, productId };
+    if (finalVariantId) {
+        whereClause.variantId = finalVariantId;
+    }
+    else {
+        whereClause.variantId = null;
+    }
+    const existing = await CartItem.findOne({ where: whereClause });
     if (existing) {
         existing.qty += qty;
         existing.price = price;
         await existing.save();
     }
     else {
-        await CartItem.create({ cartId: cart.id, productId, variantId, qty, price });
+        await CartItem.create({ cartId: cart.id, productId, variantId: finalVariantId, qty, price });
     }
-    return CartItem.findAll({ where: { cartId: cart.id }, include: ['product'] });
+    return CartItem.findAll({ where: { cartId: cart.id }, include: [{ association: 'product' }] });
 };
 export const getCart = async (userId) => {
     const cart = await getOrCreateCart(userId);
-    const items = await CartItem.findAll({ where: { cartId: cart.id }, include: ['product', 'product.variant'] });
-    return { cart, items };
+    const items = await CartItem.findAll({
+        where: { cartId: cart.id },
+        include: [
+            {
+                association: "product",
+                include: [
+                    {
+                        association: "categories",
+                        include: [
+                            {
+                                association: "parent",
+                                include: [{ association: "parent" }],
+                            },
+                        ],
+                    },
+                    {
+                        association: "seller",
+                        attributes: ["id", "phone_number", "email"],
+                        include: [
+                            {
+                                model: SellerProfile,
+                                required: false,
+                                attributes: [
+                                    "businessName",
+                                    "city",
+                                    "state",
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        association: "variants",
+                    },
+                ],
+            },
+        ],
+    });
+    // Calculate totals and enrich items with variant details
+    let subtotal = 0;
+    const enrichedItems = await Promise.all(items.map(async (item) => {
+        const product = item.product;
+        // Get variant details if variantId exists
+        let variant = null;
+        if (item.variantId) {
+            variant = await ProductVariant.findByPk(item.variantId);
+        }
+        else if (product?.variants?.length > 0) {
+            // Use first variant if no variantId specified
+            variant = product.variants[0];
+        }
+        const itemSubtotal = item.price * item.qty;
+        subtotal += itemSubtotal;
+        return {
+            id: item.id,
+            productId: item.productId,
+            variantId: item.variantId,
+            qty: item.qty,
+            price: item.price,
+            subtotal: itemSubtotal,
+            product: product
+                ? {
+                    id: product.id,
+                    name: product.name,
+                    slug: product.slug,
+                    description: product.description,
+                    brand: product.brand,
+                    images: product.images || [],
+                    tags: product.tags || [],
+                    categories: product.categories || [],
+                    seller: product.seller
+                        ? {
+                            id: product.seller.id,
+                            phone_number: product.seller.phone_number,
+                            email: product.seller.email,
+                            profile: product.seller.SellerProfile
+                                ? {
+                                    businessName: product.seller.SellerProfile.businessName,
+                                    city: product.seller.SellerProfile.city,
+                                    state: product.seller.SellerProfile.state,
+                                }
+                                : null,
+                        }
+                        : null,
+                }
+                : null,
+            variant: variant
+                ? {
+                    id: variant.id,
+                    sku: variant.sku,
+                    size: variant.size,
+                    color: variant.color,
+                    price: variant.price,
+                    mrp: variant.mrp,
+                    stock: variant.stock,
+                }
+                : null,
+            stockAvailable: variant ? variant.stock >= item.qty : false,
+        };
+    }));
+    return {
+        cart: {
+            id: cart.id,
+            userId: cart.userId,
+            createdAt: cart.createdAt,
+            updatedAt: cart.updatedAt,
+        },
+        items: enrichedItems,
+        summary: {
+            itemCount: enrichedItems.length,
+            totalItems: enrichedItems.reduce((sum, item) => sum + item.qty, 0),
+            subtotal: subtotal,
+            // You can add tax, shipping, discount calculations here
+            total: subtotal,
+        },
+    };
 };
 export const updateQty = async (userId, itemId, qty) => {
     const cart = await getOrCreateCart(userId);
