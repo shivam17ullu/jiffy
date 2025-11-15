@@ -10,6 +10,10 @@ import swaggerUi from "swagger-ui-express";
 import swaggerFile from "./config/swagger-output.json" assert { type: "json" };
 import profileRouter from "./routes/profile.js";
 import storeRouter from './routes/store.js';
+import categoryRouter from './routes/category.js';
+import cartRouter from './routes/cart.js';
+import productRouter from './routes/product.js';
+import orderRouter from './routes/order.js';
 
 
 
@@ -21,6 +25,10 @@ dotenv.config();
 app.use('/api/auth', authRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/stores", storeRouter);
+app.use('/api/categories', categoryRouter)
+app.use("/api/cart", cartRouter)
+app.use("/api/products", productRouter)
+app.use("/api/orders", orderRouter)
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 
 const startServer = async () => {

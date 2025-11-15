@@ -9,6 +9,14 @@ import Store from "./seller/store.js";
 import Document from "./seller/document.js";
 import BankDetail from "./seller/bankDetail.js";
 import VerifiedSellers from "./seller/verified_sellers.js";
+import Product from "./product/product.js";
+import Cart from "./cart/cart.js";
+import CartItem from "./cart/cartItem.js";
+import Category from "./product/category.js";
+import Order from "./order/order.js";
+import OrderItem from "./order/orderItem.js";
+import ProductVariant from "./product/productVariant.js";
+import { ProductCategory } from "./product/product.js";
 
 // ---------------- Associations ----------------
 
@@ -40,6 +48,31 @@ BankDetail.belongsTo(SellerProfile, { foreignKey: "sellerId" });
 VerifiedSellers.hasOne(SellerProfile, { foreignKey: "id" });
 SellerProfile.belongsTo(VerifiedSellers, { foreignKey: "id" });
 
+CartItem.belongsTo(Cart, { as: "cart", foreignKey: "cartId" });
+Cart.hasMany(CartItem, { as: "items", foreignKey: "cartId" });
+
+CartItem.belongsTo(Product, { as: "product", foreignKey: "productId" });
+Product.hasMany(CartItem, { as: "cartItems", foreignKey: "productId" });
+
+OrderItem.belongsTo(Order, { as: "order", foreignKey: "orderId" });
+Order.hasMany(OrderItem, { as: "items", foreignKey: "orderId" });
+
+OrderItem.belongsTo(Product, { as: "product", foreignKey: "productId" });
+
+Product.hasMany(ProductVariant, { as: "variants", foreignKey: "productId" });
+ProductVariant.belongsTo(Product, { as: "product", foreignKey: "productId" });
+
+Product.belongsToMany(Category, {
+  through: ProductCategory,
+  as: "categories",
+  foreignKey: "productId",
+});
+Category.belongsToMany(Product, {
+  through: ProductCategory,
+  as: "products",
+  foreignKey: "categoryId",
+});
+
 // ---------------- Exports ----------------
 export {
   User,
@@ -52,4 +85,12 @@ export {
   Store,
   Document,
   BankDetail,
+  Product,
+  Cart,
+  CartItem,
+  Category,
+  Order,
+  OrderItem,
+  ProductVariant,
+  ProductCategory,
 };

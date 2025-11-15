@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import * as ctrl from '../controller/cart/cart.controller.js';
+import { authenticate } from '../middleware/auth.js';
+const cartRouter = Router();
+cartRouter.use(authenticate);
+cartRouter.get('/', ctrl.getCart);
+cartRouter.post('/add', ctrl.addItem);
+cartRouter.put('/item/:itemId', ctrl.updateQty);
+cartRouter.delete('/item/:itemId', ctrl.removeItem);
+export default cartRouter;

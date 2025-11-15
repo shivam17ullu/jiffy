@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { User, Role } from "../model/relations";
+import { User, Role } from "../model/relations.js";
 export const authenticate = (req, res, next) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
