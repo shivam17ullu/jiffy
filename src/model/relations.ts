@@ -8,6 +8,7 @@ import SellerProfile from "./profile/sellerProfile.js";
 import Store from "./seller/store.js";
 import Document from "./seller/document.js";
 import BankDetail from "./seller/bankDetail.js";
+import VerifiedSellers from "./seller/verified_sellers.js";
 
 // ---------------- Associations ----------------
 
@@ -34,6 +35,10 @@ Document.belongsTo(SellerProfile, { foreignKey: "sellerId" });
 // SellerProfile -> BankDetail (1:1)
 SellerProfile.hasOne(BankDetail, { foreignKey: "sellerId" });
 BankDetail.belongsTo(SellerProfile, { foreignKey: "sellerId" });
+
+// User -> SellerProfile (1:1)
+VerifiedSellers.hasOne(SellerProfile, { foreignKey: "id" });
+SellerProfile.belongsTo(VerifiedSellers, { foreignKey: "id" });
 
 // ---------------- Exports ----------------
 export {

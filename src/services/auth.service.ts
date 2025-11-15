@@ -18,6 +18,7 @@ import { SellerFirstStepBody, SellerOnboardingBody } from "../types/auth.js";
 import bcrypt from "bcrypt";
 import { jiffy } from "../config/sequelize.js";
 import { Transaction } from "sequelize";
+import VerifiedSellers from "../model/seller/verified_sellers.js";
 
 const ACCESS_TOKEN_EXP = "15m";
 const REFRESH_TOKEN_EXP_MIN = 60 * 24 * 7; // 7 days
@@ -137,11 +138,16 @@ export default class AuthService {
     const existingUser = await OtpLogin.findOne({
       where: { phone_number: phone_number },
     });
-    if (existingUser) throw new Error("User already Exists");
     const otp = await generateOtp();
     const expires_at = addMinutes(new Date(), 5);
-
-    await OtpLogin.create({ phone_number, otp, expires_at });
+    if (existingUser) {
+      await OtpLogin.update(
+        { otp }, // values to update
+        { where: { phone_number } } // condition
+      );
+    } else {
+      await OtpLogin.create({ phone_number, otp, expires_at });
+    }
     const user = await User.create({
       phone_number: phone_number,
       email: email,
@@ -224,6 +230,11 @@ export default class AuthService {
         },
         { transaction }
       );
+
+      await VerifiedSellers.create({
+        sellerId: seller.id!,
+        is_active: false
+      })
 
       await transaction.commit();
 
