@@ -159,7 +159,7 @@ export default class AuthService {
     await sendOtpFast2SMS(phone_number, otp);
     const sellerRole = await Role.findOne({ where: { name: "seller" } });
     if (sellerRole) {
-      await UserRole.create({user_id: user.id, role_id: sellerRole.id});
+      await UserRole.create({ user_id: user.id, role_id: sellerRole.id });
     } else {
       throw new Error("Error Occurred.");
     }
@@ -173,19 +173,49 @@ export default class AuthService {
     deviceInfo?: string,
     ip?: string
   ) {
+    // Find latest valid OTP
     const otpRecord = await OtpLogin.findOne({
       where: { phone_number, otp, is_used: false },
       order: [["created_at", "DESC"]],
     });
-
+  
     if (!otpRecord) throw new Error("Invalid OTP");
-    if (isBefore(otpRecord.expires_at, new Date()))
+    if (isBefore(otpRecord.expires_at, new Date())) {
       throw new Error("OTP expired");
-
-    // mark OTP as used
+    }
+  
+    // Mark OTP as used
     otpRecord.is_used = true;
     await otpRecord.save();
+  
+    // Fetch the user
+    const user = await User.findOne({
+      where: { phone_number },
+    });
+  
+    if (!user) {
+      throw new Error("User not found for this phone number");
+    }
+  
+    // Activate user
+    await user.update({ is_active: true });
+  
+    // Assign seller role
+    const sellerRole = await Role.findOne({ where: { name: "seller" } });
+    if (sellerRole) {
+      await UserRole.create({
+        user_id: Number(user.id),
+        role_id: Number(sellerRole!.id),
+      });
+    }
+  
+    return {
+      success: true,
+      message: "Seller verified successfully",
+      user,
+    };
   }
+  
 
   static async onboardSeller(payload: SellerOnboardingBody) {
     const transaction: Transaction = await jiffy.transaction();
@@ -200,6 +230,13 @@ export default class AuthService {
         },
         { transaction }
       );
+      console.log(seller);
+
+      const verified = await VerifiedSellers.create({
+        sellerId: seller.id!,
+        is_active: false,
+      });
+
       const store = await Store.create(
         {
           sellerId: seller.id,
@@ -209,6 +246,7 @@ export default class AuthService {
         },
         { transaction }
       );
+      console.log(store);
 
       const bankDetails = await BankDetail.create(
         {
@@ -220,6 +258,7 @@ export default class AuthService {
         },
         { transaction }
       );
+      console.log(bankDetails);
 
       const documents = await Document.create(
         {
@@ -230,11 +269,9 @@ export default class AuthService {
         },
         { transaction }
       );
+      console.log(documents);
 
-      await VerifiedSellers.create({
-        sellerId: seller.id!,
-        is_active: false
-      })
+      console.log(verified);
 
       await transaction.commit();
 

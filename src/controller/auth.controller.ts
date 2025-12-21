@@ -139,7 +139,7 @@ export default class AuthController {
   static async verifySellerOtp(req: Request, res: Response) {
     try {
       const { otp, phone_number } = req.body;
-      if (!otp || phone_number)
+      if (!otp || !phone_number)
         return createResponse(res, {
           status: 400,
           message: " Phone & OTP required",
@@ -149,14 +149,13 @@ export default class AuthController {
       const deviceInfo = req.headers["user-agent"] || "unknown";
       const ip = req.ip;
 
-      await AuthService.verifySellerOtp(otp, deviceInfo, ip);
+      await AuthService.verifySellerOtp(phone_number, otp,deviceInfo, ip);
 
       return createResponse(res, {
         status: 200,
         message: "Verification successful",
       });
     } catch (error: any) {
-      console.log(error);
       return createResponse(res, {
         status: 400,
         message: error.message,
@@ -175,6 +174,7 @@ export default class AuthController {
         response: response,
       });
     } catch (error: any) {
+      console.log(error)
       return createResponse(res, {
         status: 500,
         message: error.message,
