@@ -118,8 +118,11 @@ export default class AuthService {
     };
 
     const accessToken = this.generateAccessToken(payload.userId);
+    const refreshToken = await this.generateRefreshToken(
+      payload.userId
+    );
 
-    return { accessToken };
+    return { accessToken, refreshToken };
   }
 
   static async revokeRefreshToken(token: string) {

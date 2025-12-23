@@ -14,6 +14,7 @@ import categoryRouter from './routes/category.js';
 import cartRouter from './routes/cart.js';
 import productRouter from './routes/product.js';
 import orderRouter from './routes/order.js';
+import locationRouter from './routes/location.js';
 
 
 
@@ -29,6 +30,7 @@ app.use('/api/categories', categoryRouter)
 app.use("/api/cart", cartRouter)
 app.use("/api/products", productRouter)
 app.use("/api/orders", orderRouter)
+app.use("/api/location", locationRouter)
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 
 const startServer = async () => {

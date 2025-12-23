@@ -17,6 +17,7 @@ import Order from "./order/order.js";
 import OrderItem from "./order/orderItem.js";
 import ProductVariant from "./product/productVariant.js";
 import { ProductCategory } from "./product/product.js";
+import Location from "./profile/location.js";
 
 // ---------------- Associations ----------------
 
@@ -94,6 +95,18 @@ User.hasMany(Product, { as: "products", foreignKey: "sellerId" });
 Category.belongsTo(Category, { as: "parent", foreignKey: "parentId" });
 Category.hasMany(Category, { as: "children", foreignKey: "parentId" });
 
+// User -> Locations (1:M)
+User.hasMany(Location, { foreignKey: "userId", as: "locations" });
+Location.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+// SellerProfile -> Locations (1:M)
+SellerProfile.hasMany(Location, { foreignKey: "sellerId", as: "sellerLocations" });
+Location.belongsTo(SellerProfile, { foreignKey: "sellerId", as: "seller" });
+
+// BuyerProfile -> Locations (1:M)
+BuyerProfile.hasMany(Location, { foreignKey: "buyerId", as: "buyerLocations" });
+Location.belongsTo(BuyerProfile, { foreignKey: "buyerId", as: "buyer" });
+
 // EXPORTS
 export {
   User,
@@ -115,4 +128,5 @@ export {
   OrderItem,
   ProductVariant,
   ProductCategory,
+  Location
 };
