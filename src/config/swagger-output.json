@@ -5,7 +5,7 @@
     "description": "API Docs",
     "version": "1.0.0"
   },
-  "host": "localhost:3000",
+  "host": "localhost:5000",
   "basePath": "/",
   "schemes": [
     "http"
@@ -228,9 +228,24 @@
     "/api/categories/": {
       "get": {
         "description": "",
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "parentId",
+            "in": "query",
+            "type": "string"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "500": {
+            "description": "Internal Server Error"
           }
         }
       },

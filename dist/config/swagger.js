@@ -4,7 +4,7 @@ const doc = {
         title: "Jiffy API",
         description: "API Docs",
     },
-    host: "localhost:3000",
+    host: "localhost:5000",
     schemes: ["http"],
 };
 const outputFile = "./src/config/swagger-output.json";

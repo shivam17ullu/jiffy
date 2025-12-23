@@ -5,7 +5,7 @@ const doc = {
     title: "Jiffy API",
     description: "API Docs",
   },
-  host: "localhost:3000",
+  host: "localhost:5000",
   schemes: ["http"],
 };
 

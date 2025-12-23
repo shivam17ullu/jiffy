@@ -116,17 +116,41 @@ export default class AuthService {
         return { user, otp };
     }
     static async verifySellerOtp(phone_number, otp, deviceInfo, ip) {
+        // Find latest valid OTP
         const otpRecord = await OtpLogin.findOne({
             where: { phone_number, otp, is_used: false },
             order: [["created_at", "DESC"]],
         });
         if (!otpRecord)
             throw new Error("Invalid OTP");
-        if (isBefore(otpRecord.expires_at, new Date()))
+        if (isBefore(otpRecord.expires_at, new Date())) {
             throw new Error("OTP expired");
-        // mark OTP as used
+        }
+        // Mark OTP as used
         otpRecord.is_used = true;
         await otpRecord.save();
+        // Fetch the user
+        const user = await User.findOne({
+            where: { phone_number },
+        });
+        if (!user) {
+            throw new Error("User not found for this phone number");
+        }
+        // Activate user
+        await user.update({ is_active: true });
+        // Assign seller role
+        const sellerRole = await Role.findOne({ where: { name: "seller" } });
+        if (sellerRole) {
+            await UserRole.create({
+                user_id: Number(user.id),
+                role_id: Number(sellerRole.id),
+            });
+        }
+        return {
+            success: true,
+            message: "Seller verified successfully",
+            user,
+        };
     }
     static async onboardSeller(payload) {
         const transaction = await jiffy.transaction();
@@ -138,12 +162,18 @@ export default class AuthService {
                 zipCode: payload.store.pincode,
                 address: payload.store.storeAddress,
             }, { transaction });
+            console.log(seller);
+            const verified = await VerifiedSellers.create({
+                sellerId: seller.id,
+                is_active: false,
+            });
             const store = await Store.create({
                 sellerId: seller.id,
                 storeName: payload.store.storeName,
                 storeAddress: payload.store.storeAddress,
                 pincode: payload.store.pincode,
             }, { transaction });
+            console.log(store);
             const bankDetails = await BankDetail.create({
                 sellerId: seller.id,
                 accountHolderName: payload.bankDetails.accountHolderName,
@@ -151,16 +181,15 @@ export default class AuthService {
                 ifscCode: payload.bankDetails.ifscCode,
                 termsAccepted: payload.bankDetails.termsAccepted ?? false,
             }, { transaction });
+            console.log(bankDetails);
             const documents = await Document.create({
                 sellerId: seller.id,
                 aadhaarUrl: payload.documents.aadhaarUrl,
                 panUrl: payload.documents.panUrl,
                 gstUrl: payload.documents.gstUrl,
             }, { transaction });
-            await VerifiedSellers.create({
-                sellerId: seller.id,
-                is_active: false
-            });
+            console.log(documents);
+            console.log(verified);
             await transaction.commit();
             return {
                 message: "Seller onboarding completed successfully",

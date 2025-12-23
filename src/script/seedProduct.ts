@@ -40,7 +40,7 @@ async function seedProducts() {
       transaction: t,
     });
 
-    if (sellers.length < 2) {
+    if (sellers.length < 0) {
       throw new Error(
         "Not enough sellers found. Please run seedUsers.ts first."
       );
@@ -135,7 +135,7 @@ async function seedProducts() {
           "https://jiffy-products.s3.ap-south-1.amazonaws.com/Screenshot+2025-10-04+144159.png",
         ],
         tags: ["dress", "women", "party", "elegant"],
-        sellerId: sellers[1].id, // ⭐ Second seller
+        sellerId: sellers[0].id, // ⭐ Second seller
         categories: [womenClothing.id],
         variants: [
           {
@@ -202,7 +202,7 @@ async function seedProducts() {
           "https://jiffy-products.s3.ap-south-1.amazonaws.com/Screenshot+2025-10-04+133125.png",
         ],
         tags: ["top", "women", "floral", "summer"],
-        sellerId: sellers[1].id, // ⭐ Second seller
+        sellerId: sellers[0].id, // ⭐ Second seller
         categories: [womenClothing.id],
         variants: [
           {

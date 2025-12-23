@@ -9,9 +9,17 @@ export const create = async (req, res) => {
         res.status(400).json({ success: false, message: err.message });
     }
 };
+// GET /api/categories
 export const list = async (req, res) => {
-    const cats = await service.getAllCategories();
-    res.json({ success: true, data: cats });
+    try {
+        const level = req.query.level ? Number(req.query.level) : undefined;
+        const parentId = req.query.parentId ? Number(req.query.parentId) : undefined;
+        const cats = await service.getAllCategories({ level, parentId });
+        res.json({ success: true, data: cats });
+    }
+    catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 };
 export const get = async (req, res) => {
     const cat = await service.getCategoryById(+req.params.id);

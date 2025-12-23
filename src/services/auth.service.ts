@@ -230,12 +230,11 @@ export default class AuthService {
         },
         { transaction }
       );
-      console.log(seller);
 
       const verified = await VerifiedSellers.create({
         sellerId: seller.id!,
         is_active: false,
-      });
+      }, {transaction});
 
       const store = await Store.create(
         {
@@ -246,7 +245,6 @@ export default class AuthService {
         },
         { transaction }
       );
-      console.log(store);
 
       const bankDetails = await BankDetail.create(
         {
@@ -258,7 +256,6 @@ export default class AuthService {
         },
         { transaction }
       );
-      console.log(bankDetails);
 
       const documents = await Document.create(
         {
@@ -269,7 +266,6 @@ export default class AuthService {
         },
         { transaction }
       );
-      console.log(documents);
 
       console.log(verified);
 

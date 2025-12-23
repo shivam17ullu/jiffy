@@ -6,7 +6,7 @@ export const authenticate = (req, res, next) => {
     if (!token)
         return res.status(401).json({ message: "Unauthorized" });
     try {
-        const payload = jwt.verify(token, process.env.JWT_SECRET);
+        const payload = jwt.verify(token, process.env.TOKEN);
         req.userId = payload.userId;
         next();
     }

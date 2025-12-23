@@ -65,8 +65,8 @@ async function seedProducts() {
                 description: "Premium cotton shirt perfect for casual and semi-formal occasions. Comfortable fit with modern design.",
                 brand: "Levis",
                 images: [
-                    "https://picsum.photos/300?random=1",
-                    "https://picsum.photos/300?random=11",
+                    "https://jiffy-products.s3.ap-south-1.amazonaws.com/Screenshot+2025-10-04+133125.png",
+                    "https://jiffy-products.s3.ap-south-1.amazonaws.com/Screenshot+2025-10-04+144159.png",
                 ],
                 tags: ["shirt", "men", "casual", "cotton"],
                 sellerId: sellers[0].id, // ⭐ First seller
@@ -103,8 +103,8 @@ async function seedProducts() {
                 description: "Elegant party dress with a flattering silhouette. Perfect for evening events and special occasions.",
                 brand: "Only",
                 images: [
-                    "https://picsum.photos/300?random=2",
-                    "https://picsum.photos/300?random=22",
+                    "https://jiffy-products.s3.ap-south-1.amazonaws.com/Screenshot+2025-10-04+133125.png",
+                    "https://jiffy-products.s3.ap-south-1.amazonaws.com/Screenshot+2025-10-04+144159.png",
                 ],
                 tags: ["dress", "women", "party", "elegant"],
                 sellerId: sellers[1].id, // ⭐ Second seller
@@ -140,7 +140,9 @@ async function seedProducts() {
                 name: "Classic Jeans",
                 description: "Durable denim jeans with a classic fit. Perfect for everyday wear.",
                 brand: "Levis",
-                images: ["https://picsum.photos/300?random=3"],
+                images: [
+                    "https://jiffy-products.s3.ap-south-1.amazonaws.com/Screenshot+2025-10-04+133125.png",
+                ],
                 tags: ["jeans", "men", "denim", "casual"],
                 sellerId: sellers[0].id, // ⭐ First seller
                 categories: [menClothing.id],
@@ -167,7 +169,9 @@ async function seedProducts() {
                 name: "Floral Top",
                 description: "Beautiful floral print top for a fresh summer look.",
                 brand: "Only",
-                images: ["https://picsum.photos/300?random=4"],
+                images: [
+                    "https://jiffy-products.s3.ap-south-1.amazonaws.com/Screenshot+2025-10-04+133125.png",
+                ],
                 tags: ["top", "women", "floral", "summer"],
                 sellerId: sellers[1].id, // ⭐ Second seller
                 categories: [womenClothing.id],
