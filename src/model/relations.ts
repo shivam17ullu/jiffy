@@ -107,6 +107,12 @@ Location.belongsTo(SellerProfile, { foreignKey: "sellerId", as: "seller" });
 BuyerProfile.hasMany(Location, { foreignKey: "buyerId", as: "buyerLocations" });
 Location.belongsTo(BuyerProfile, { foreignKey: "buyerId", as: "buyer" });
 
+CartItem.belongsTo(ProductVariant, {
+  as: "variant",
+  foreignKey: "variantId",
+});
+ProductVariant.hasMany(CartItem, { as: "cartItems", foreignKey: "variantId" });
+
 // EXPORTS
 export {
   User,

@@ -45,13 +45,23 @@ import { User, Role } from "../../model/relations.js";
  *       401:
  *         description: Unauthorized
  */
+
 export const createOrder = async (req: any, res: Response) => {
   try {
     const userId = req.userId || req.user?.id;
+    const cartId = req.body.cartId;
     const { shippingAddress, paymentInfo } = req.body;
-    const order = await service.createOrdersFromCart(userId, shippingAddress, paymentInfo);
-    res.status(201).json({ success:true, data: order });
-  } catch (err: any) { res.status(400).json({ success:false, message: err.message }); }
+    const order = await service.createOrdersFromCart(
+      userId,
+      shippingAddress,
+      paymentInfo,
+      cartId
+    );
+    res.status(201).json({ success: true, data: order });
+  } catch (err: any) {
+    console.log(err);
+    res.status(400).json({ success: false, message: err.message });
+  }
 };
 
 /**

@@ -17,19 +17,20 @@ import { Op } from "sequelize";
 export const createOrdersFromCart = async (
   userId: number,
   shippingAddress: any,
-  paymentInfo: any
+  paymentInfo: any,
+  cartId: number
 ) => {
   const t = await jiffy.transaction();
 
   try {
-    const cart = await Cart.findOne({
-      where: { userId },
-      transaction: t,
-    });
-    if (!cart) throw new Error("Cart not found");
+    // const cart = await Cart.findOne({
+    //   where: { userId },
+    //   transaction: t,
+    // });
+    // if (!cart) throw new Error("Cart not found");
 
     const items = await CartItem.findAll({
-      where: { cartId: cart.id },
+      where: { cartId: cartId },
       include: [
         { model: Product, as: "product" },
         { model: ProductVariant, as: "variant" },
@@ -71,7 +72,7 @@ export const createOrdersFromCart = async (
           userId,
           sellerId,       // <-- REQUIRED FIELD FIX
           total,
-          status: "pending",
+          status: "created",
           shippingAddress,
           paymentInfo,
         },
@@ -102,7 +103,7 @@ export const createOrdersFromCart = async (
 
     // clear cart
     await CartItem.destroy({
-      where: { cartId: cart.id },
+      where: { cartId: cartId },
       transaction: t,
     });
 
