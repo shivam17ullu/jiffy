@@ -168,6 +168,62 @@ export const list = async (req, res) => {
 };
 /**
  * @swagger
+ * /api/products/my-products:
+ *   get:
+ *     summary: Get seller's products
+ *     description: Get paginated list of products for the authenticated seller
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Items per page
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Search query
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *         description: Sort options
+ *     responses:
+ *       200:
+ *         description: List of seller products
+ */
+export const getSellerProducts = async (req, res) => {
+    try {
+        const sellerId = req.userId;
+        const params = {
+            page: parseInt(req.query.page) || 1,
+            limit: parseInt(req.query.limit) || 20,
+            q: req.query.q,
+            categoryId: req.query.categoryId ? +req.query.categoryId : undefined,
+            brand: req.query.brand,
+            minPrice: req.query.minPrice,
+            maxPrice: req.query.maxPrice,
+            sort: req.query.sort
+        };
+        const result = await service.listSellerProducts(sellerId, params);
+        res.json({ success: true, ...result });
+    }
+    catch (err) {
+        res.status(400).json({ success: false, message: err.message });
+    }
+};
+/**
+ * @swagger
  * /api/products/{id}:
  *   get:
  *     summary: Get product by ID
@@ -243,4 +299,84 @@ export const get = async (req, res) => {
     if (!product)
         return res.status(404).json({ success: false, message: "Product not found" });
     res.json({ success: true, data: product });
+};
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   put:
+ *     summary: Update product
+ *     description: Update product details (Seller only)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Product updated successfully
+ *       403:
+ *         description: Forbidden - Not the owner
+ *       404:
+ *         description: Product not found
+ */
+export const update = async (req, res) => {
+    try {
+        const productId = parseInt(req.params.id);
+        const sellerId = req.userId;
+        const result = await service.updateProduct(productId, sellerId, req.body);
+        if (!result) {
+            return res.status(404).json({ success: false, message: "Product not found or unauthorized" });
+        }
+        res.json({ success: true, data: result });
+    }
+    catch (err) {
+        res.status(400).json({ success: false, message: err.message });
+    }
+};
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   delete:
+ *     summary: Delete product
+ *     description: Delete a product (Seller only)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Product deleted successfully
+ *       403:
+ *         description: Forbidden - Not the owner
+ *       404:
+ *         description: Product not found
+ */
+export const deleteProduct = async (req, res) => {
+    try {
+        const productId = parseInt(req.params.id);
+        const sellerId = req.userId;
+        const result = await service.deleteProduct(productId, sellerId);
+        if (!result) {
+            return res.status(404).json({ success: false, message: "Product not found or unauthorized" });
+        }
+        res.json({ success: true, message: "Product deleted successfully" });
+    }
+    catch (err) {
+        res.status(400).json({ success: false, message: err.message });
+    }
 };

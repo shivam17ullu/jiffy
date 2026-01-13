@@ -1,6 +1,33 @@
 import AuthService from "../services/auth.service.js";
 import { createResponse } from "../middleware/responseHandler.js";
 export default class AuthController {
+    /**
+     * @swagger
+     * /api/auth/send-otp:
+     *   post:
+     *     summary: Send OTP for login
+     *     description: Sends OTP to the provided phone number for buyer login
+     *     tags: [Authentication]
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - phone_number
+     *             properties:
+     *               phone_number:
+     *                 type: string
+     *                 example: "9876543210"
+     *     responses:
+     *       200:
+     *         description: OTP sent successfully
+     *       400:
+     *         description: Bad request
+     *       500:
+     *         description: Server error
+     */
     static async sendOtp(req, res) {
         try {
             const { phone_number } = req.body;
@@ -25,6 +52,53 @@ export default class AuthController {
             });
         }
     }
+    /**
+     * @swagger
+     * /api/auth/verify-otp:
+     *   post:
+     *     summary: Verify OTP and login
+     *     description: Verifies OTP and logs in the user (creates user if new). Returns access and refresh tokens.
+     *     tags: [Authentication]
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - phone_number
+     *               - otp
+     *             properties:
+     *               phone_number:
+     *                 type: string
+     *                 example: "9876543210"
+     *               otp:
+     *                 type: string
+     *                 example: "123456"
+     *     responses:
+     *       200:
+     *         description: Login successful
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 status:
+     *                   type: integer
+     *                 message:
+     *                   type: string
+     *                 response:
+     *                   type: object
+     *                   properties:
+     *                     user:
+     *                       type: object
+     *                     accessToken:
+     *                       type: string
+     *                     refreshToken:
+     *                       type: string
+     *       400:
+     *         description: Invalid OTP or expired
+     */
     static async verifyOtp(req, res) {
         try {
             const { phone_number, otp } = req.body;
@@ -52,6 +126,30 @@ export default class AuthController {
             });
         }
     }
+    /**
+     * @swagger
+     * /api/auth/refresh-token:
+     *   post:
+     *     summary: Refresh access token
+     *     description: Generates a new access token using a valid refresh token
+     *     tags: [Authentication]
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - refreshToken
+     *             properties:
+     *               refreshToken:
+     *                 type: string
+     *     responses:
+     *       200:
+     *         description: Token refreshed successfully
+     *       401:
+     *         description: Invalid or expired refresh token
+     */
     static async refreshToken(req, res) {
         try {
             const { refreshToken } = req.body;
@@ -76,6 +174,28 @@ export default class AuthController {
             });
         }
     }
+    /**
+     * @swagger
+     * /api/auth/logout:
+     *   post:
+     *     summary: Logout user
+     *     description: Revokes the refresh token to logout the user
+     *     tags: [Authentication]
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - refreshToken
+     *             properties:
+     *               refreshToken:
+     *                 type: string
+     *     responses:
+     *       200:
+     *         description: Logged out successfully
+     */
     static async logout(req, res) {
         try {
             const { refreshToken } = req.body;
@@ -94,6 +214,40 @@ export default class AuthController {
             });
         }
     }
+    /**
+     * @swagger
+     * /api/auth/register-seller:
+     *   post:
+     *     summary: Register seller (Step 1)
+     *     description: First step of seller registration. Creates seller account and sends OTP.
+     *     tags: [Authentication, Seller]
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - phone_number
+     *               - email
+     *               - password
+     *             properties:
+     *               phone_number:
+     *                 type: string
+     *                 example: "9876543210"
+     *               email:
+     *                 type: string
+     *                 format: email
+     *                 example: "seller@example.com"
+     *               password:
+     *                 type: string
+     *                 example: "SecurePassword123"
+     *     responses:
+     *       200:
+     *         description: OTP sent successfully
+     *       400:
+     *         description: Bad request
+     */
     static async registerSeller(req, res) {
         try {
             const { phone_number, email, password } = req.body;
@@ -119,6 +273,33 @@ export default class AuthController {
             });
         }
     }
+    /**
+     * @swagger
+     * /api/auth/verify-seller-otp:
+     *   post:
+     *     summary: Verify seller OTP (Step 2)
+     *     description: Second step of seller registration. Verifies OTP and activates seller account.
+     *     tags: [Authentication, Seller]
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - phone_number
+     *               - otp
+     *             properties:
+     *               phone_number:
+     *                 type: string
+     *               otp:
+     *                 type: string
+     *     responses:
+     *       200:
+     *         description: Seller verified successfully
+     *       400:
+     *         description: Invalid OTP
+     */
     static async verifySellerOtp(req, res) {
         try {
             const { otp, phone_number } = req.body;
@@ -144,6 +325,68 @@ export default class AuthController {
             });
         }
     }
+    /**
+     * @swagger
+     * /api/auth/onboard-seller:
+     *   post:
+     *     summary: Complete seller onboarding (Step 3)
+     *     description: Final step of seller registration. Creates seller profile, store, bank details, and documents.
+     *     tags: [Authentication, Seller]
+     *     security:
+     *       - bearerAuth: []
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - userId
+     *               - store
+     *               - bankDetails
+     *               - documents
+     *             properties:
+     *               userId:
+     *                 type: integer
+     *               store:
+     *                 type: object
+     *                 properties:
+     *                   storeName:
+     *                     type: string
+     *                   storeAddress:
+     *                     type: string
+     *                   pincode:
+     *                     type: string
+     *                   phone:
+     *                     type: string
+     *               bankDetails:
+     *                 type: object
+     *                 properties:
+     *                   accountHolderName:
+     *                     type: string
+     *                   accountNumber:
+     *                     type: string
+     *                   ifscCode:
+     *                     type: string
+     *                   termsAccepted:
+     *                     type: boolean
+     *               documents:
+     *                 type: object
+     *                 properties:
+     *                   aadhaarUrl:
+     *                     type: string
+     *                   panUrl:
+     *                     type: string
+     *                   gstUrl:
+     *                     type: string
+     *     responses:
+     *       200:
+     *         description: Seller onboarding completed successfully
+     *       400:
+     *         description: Bad request
+     *       401:
+     *         description: Unauthorized
+     */
     static async onboardSeller(req, res) {
         try {
             const response = await AuthService.onboardSeller(req.body);

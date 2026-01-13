@@ -305,3 +305,44 @@ export const getOrderById = async (
 
   return order;
 };
+
+/**
+ * Update order status (Seller only)
+ * @param orderId - Order ID
+ * @param sellerId - Seller ID
+ * @param status - New status
+ */
+export const updateOrderStatus = async (
+  orderId: number,
+  sellerId: number,
+  status: string
+) => {
+  const allowedStatuses = [
+    "pending",
+    "confirmed",
+    "processing",
+    "shipped",
+    "delivered",
+    "cancelled",
+  ];
+
+  if (!allowedStatuses.includes(status)) {
+    throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);
+  }
+
+  const [updatedCount] = await Order.update(
+    { status },
+    {
+      where: {
+        id: orderId,
+        sellerId: sellerId,
+      },
+    }
+  );
+
+  if (updatedCount === 0) {
+    throw new Error("Order not found or you don't have permission to update it");
+  }
+
+  return await Order.findByPk(orderId);
+};

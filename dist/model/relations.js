@@ -17,6 +17,8 @@ import Order from "./order/order.js";
 import OrderItem from "./order/orderItem.js";
 import ProductVariant from "./product/productVariant.js";
 import { ProductCategory } from "./product/product.js";
+import Location from "./profile/location.js";
+import Wishlist from "./wishlist/wishlist.js";
 // ---------------- Associations ----------------
 // Users ↔ Roles (Many-to-Many)
 User.belongsToMany(Role, { through: UserRole, foreignKey: "user_id" });
@@ -75,5 +77,24 @@ User.hasMany(Product, { as: "products", foreignKey: "sellerId" });
 // Category hierarchy
 Category.belongsTo(Category, { as: "parent", foreignKey: "parentId" });
 Category.hasMany(Category, { as: "children", foreignKey: "parentId" });
+// User -> Locations (1:M)
+User.hasMany(Location, { foreignKey: "userId", as: "locations" });
+Location.belongsTo(User, { foreignKey: "userId", as: "user" });
+// SellerProfile -> Locations (1:M)
+SellerProfile.hasMany(Location, { foreignKey: "sellerId", as: "sellerLocations" });
+Location.belongsTo(SellerProfile, { foreignKey: "sellerId", as: "seller" });
+// BuyerProfile -> Locations (1:M)
+BuyerProfile.hasMany(Location, { foreignKey: "buyerId", as: "buyerLocations" });
+Location.belongsTo(BuyerProfile, { foreignKey: "buyerId", as: "buyer" });
+CartItem.belongsTo(ProductVariant, {
+    as: "variant",
+    foreignKey: "variantId",
+});
+ProductVariant.hasMany(CartItem, { as: "cartItems", foreignKey: "variantId" });
+// Wishlist relations
+Wishlist.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(Wishlist, { foreignKey: "userId", as: "wishlist" });
+Wishlist.belongsTo(Product, { foreignKey: "productId", as: "product" });
+Product.hasMany(Wishlist, { foreignKey: "productId", as: "wishlists" });
 // EXPORTS
-export { User, Role, UserRole, OtpLogin, RefreshToken, BuyerProfile, SellerProfile, Store, Document, BankDetail, VerifiedSellers, Product, Cart, CartItem, Category, Order, OrderItem, ProductVariant, ProductCategory, };
+export { User, Role, UserRole, OtpLogin, RefreshToken, BuyerProfile, SellerProfile, Store, Document, BankDetail, VerifiedSellers, Product, Cart, CartItem, Category, Order, OrderItem, ProductVariant, ProductCategory, Location, Wishlist };

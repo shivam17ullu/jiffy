@@ -46,11 +46,13 @@ import { User, Role } from "../../model/relations.js";
 export const createOrder = async (req, res) => {
     try {
         const userId = req.userId || req.user?.id;
+        const cartId = req.body.cartId;
         const { shippingAddress, paymentInfo } = req.body;
-        const order = await service.createOrdersFromCart(userId, shippingAddress, paymentInfo);
+        const order = await service.createOrdersFromCart(userId, shippingAddress, paymentInfo, cartId);
         res.status(201).json({ success: true, data: order });
     }
     catch (err) {
+        console.log(err);
         res.status(400).json({ success: false, message: err.message });
     }
 };
@@ -206,6 +208,68 @@ export const getOrderById = async (req, res) => {
             });
         }
         res.json({ success: true, data: order });
+    }
+    catch (err) {
+        res.status(400).json({ success: false, message: err.message });
+    }
+};
+/**
+ * @swagger
+ * /api/orders/{id}/status:
+ *   patch:
+ *     summary: Update order status
+ *     description: Update the status of an order (Seller only)
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Order ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [pending, confirmed, processing, shipped, delivered, cancelled]
+ *     responses:
+ *       200:
+ *         description: Order status updated
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Order not found
+ */
+export const updateStatus = async (req, res) => {
+    try {
+        const userId = req.userId || req.user?.id;
+        const orderId = parseInt(req.params.id);
+        const { status } = req.body;
+        if (!status) {
+            return res.status(400).json({ success: false, message: "Status is required" });
+        }
+        // Get user roles to ensure it's a seller
+        const user = await User.findByPk(userId, { include: [Role] });
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        const roles = user.Roles.map((r) => r.name);
+        if (!roles.includes("seller")) {
+            return res.status(403).json({ success: false, message: "Only sellers can update order status" });
+        }
+        const updatedOrder = await service.updateOrderStatus(orderId, userId, status);
+        res.json({ success: true, data: updatedOrder });
     }
     catch (err) {
         res.status(400).json({ success: false, message: err.message });

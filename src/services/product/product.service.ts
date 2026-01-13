@@ -4,12 +4,13 @@ import {
   Category,
   User,
   SellerProfile,
+  Wishlist,
 } from "../../model/relations.js";
 import slugify from "slugify";
 import { jiffy } from "../../config/sequelize.js";
 import { Op } from "sequelize";
 
-export const createProduct = async (payload: any, sellerId: number) => {
+export const createProduct = async (payload: any, sellerId: number, imageUrls: string[] = []) => {
   const t = await jiffy.transaction();
   try {
     payload.slug = slugify(payload.name, { lower: true });
@@ -22,8 +23,11 @@ export const createProduct = async (payload: any, sellerId: number) => {
       ...rest
     } = payload;
 
+    // Use uploaded S3 URLs if provided, otherwise use provided URLs
+    const finalImages = imageUrls.length > 0 ? imageUrls : images;
+
     const product = await Product.create(
-      { ...rest, images, tags, sellerId },
+      { ...rest, images: finalImages, tags, sellerId },
       { transaction: t }
     );
 
@@ -60,6 +64,7 @@ export const listProducts = async (opts: any) => {
     minPrice,
     maxPrice,
     sort,
+    userId, // Optional: to check wishlist status
   } = opts;
 
   const where: any = { isActive: true };
@@ -170,7 +175,20 @@ export const listProducts = async (opts: any) => {
     distinct: true, // Important for count with joins
   });
 
-  // Transform products to include min/max price
+  // Get wishlist status for all products if userId is provided
+  let wishlistProductIds: Set<number> = new Set();
+  if (userId) {
+    const wishlistItems = await Wishlist.findAll({
+      where: {
+        userId: userId,
+        productId: { [Op.in]: products.rows.map((p: any) => p.id) },
+      },
+      attributes: ['productId'],
+    });
+    wishlistProductIds = new Set(wishlistItems.map((item: any) => item.productId));
+  }
+
+  // Transform products to include min/max price and wishlist status
   const transformedProducts = products.rows.map((product: any) => {
     const variants = product.variants || [];
     const prices = variants.map((v: any) => v.price).filter((p: any) => p);
@@ -183,6 +201,7 @@ export const listProducts = async (opts: any) => {
         min: minPrice,
         max: maxPrice,
       },
+      isWishlisted: userId ? wishlistProductIds.has(product.id) : false,
       seller: product.seller
         ? {
             id: product.seller.id,
@@ -224,7 +243,7 @@ async function getCategoryDescendants(categoryId: number): Promise<number[]> {
   return categoryIds;
 }
 
-export const getProductById = async (id: number) => {
+export const getProductById = async (id: number, userId?: number) => {
   const product = await Product.findByPk(id, {
     include: [
       {
@@ -263,7 +282,19 @@ export const getProductById = async (id: number) => {
 
   if (!product) return null;
 
-  // Transform product to include price range and seller details
+  // Check if product is in wishlist
+  let isWishlisted = false;
+  if (userId) {
+    const wishlistItem = await Wishlist.findOne({
+      where: {
+        userId: userId,
+        productId: id,
+      },
+    });
+    isWishlisted = !!wishlistItem;
+  }
+
+  // Transform product to include price range, seller details, and wishlist status
   const variants = (product as any).variants || [];
   const prices = variants.map((v: any) => v.price).filter((p: any) => p);
   const minPrice = prices.length > 0 ? Math.min(...prices) : null;
@@ -275,6 +306,7 @@ export const getProductById = async (id: number) => {
       min: minPrice,
       max: maxPrice,
     },
+    isWishlisted,
     seller: (product as any).seller
       ? {
           id: (product as any).seller.id,
@@ -295,9 +327,133 @@ export const getProductById = async (id: number) => {
       : null,
   };
 };
-export const updateProduct = async (id: number, payload: any) =>
-  Product.update(payload, { where: { id }, returning: true }).then(
-    (r) => r[1][0]
-  );
-export const deleteProduct = async (id: number) =>
-  Product.destroy({ where: { id } });
+// Update product with seller ownership check
+export const updateProduct = async (id: number, sellerId: number, payload: any, imageUrls: string[] | null = null) => {
+  // If imageUrls is provided (even if empty array), replace existing images
+  // If imageUrls is null, don't touch the images field
+  if (imageUrls !== null) {
+    // Replace images with the new list (frontend sends the complete list)
+    payload.images = imageUrls;
+  }
+
+  const [updatedCount] = await Product.update(payload, {
+    where: { id, sellerId },
+  });
+  
+  if (updatedCount === 0) return null;
+  // Fetch updated product with all associations
+  return await getProductById(id);
+};
+
+// Delete product with seller ownership check
+export const deleteProduct = async (id: number, sellerId: number) => {
+  return await Product.destroy({ where: { id, sellerId } });
+};
+
+export const listSellerProducts = async (sellerId: number, opts: any) => {
+  const { page = 1, limit = 20, q, categoryId, brand, minPrice, maxPrice, sort } = opts;
+
+  // Base where clause - strictly enforce sellerId
+  const where: any = { sellerId };
+
+  // Note: We intentionally do NOT filter by isActive, so sellers can see inactive products
+
+  // Search query
+  if (q) {
+    where[Op.or] = [
+      { name: { [Op.like]: `%${q}%` } },
+      { description: { [Op.like]: `%${q}%` } },
+      { brand: { [Op.like]: `%${q}%` } },
+    ];
+  }
+
+  // Brand filter
+  if (brand) {
+    where.brand = { [Op.like]: `%${brand}%` };
+  }
+
+  // Category filtering
+  let categoryFilter: any = null;
+  if (categoryId) {
+    const descendantIds = await getCategoryDescendants(categoryId);
+    categoryFilter = descendantIds;
+  }
+
+  // Price filtering
+  let priceFilter: any = null;
+  if (minPrice || maxPrice) {
+    priceFilter = {};
+    if (minPrice) priceFilter.price = { [Op.gte]: parseFloat(minPrice) };
+    if (maxPrice)
+      priceFilter.price = {
+        ...priceFilter.price,
+        [Op.lte]: parseFloat(maxPrice),
+      };
+  }
+
+  // Include array
+  const include: any = [
+    {
+      association: "variants",
+      where: priceFilter || undefined,
+      required: priceFilter ? true : false,
+    },
+    {
+      association: "categories",
+      where: categoryFilter
+        ? { id: { [Op.in]: categoryFilter } }
+        : undefined,
+      required: categoryFilter ? true : false,
+    },
+  ];
+
+  // Sort handling
+  let order: any = [["createdAt", "DESC"]];
+  if (sort) {
+    const [field, direction] = sort.split(":");
+    if (field === "price") {
+      order = [
+        [
+          { model: ProductVariant, as: "variants" },
+          "price",
+          direction?.toUpperCase() || "ASC",
+        ],
+      ];
+    } else {
+      order = [[field, direction?.toUpperCase() || "ASC"]];
+    }
+  }
+
+  const products = await Product.findAndCountAll({
+    where,
+    include,
+    limit: parseInt(limit),
+    offset: (parseInt(page) - 1) * parseInt(limit),
+    order,
+    distinct: true,
+  });
+
+  // Transform products
+  const transformedProducts = products.rows.map((product: any) => {
+    const variants = product.variants || [];
+    const prices = variants.map((v: any) => v.price).filter((p: any) => p);
+    const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+    const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
+
+    return {
+      ...product.toJSON(),
+      priceRange: {
+        min: minPrice,
+        max: maxPrice,
+      },
+    };
+  });
+
+  return {
+    items: transformedProducts,
+    total: products.count,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    totalPages: Math.ceil(products.count / parseInt(limit)),
+  };
+};

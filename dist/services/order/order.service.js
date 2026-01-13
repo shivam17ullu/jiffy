@@ -1,17 +1,16 @@
 // src/services/order/order.service.ts
 import { jiffy } from "../../config/sequelize.js";
-import { Cart, CartItem, Order, OrderItem, Product, ProductVariant, SellerProfile, BuyerProfile, } from "../../model/relations.js";
-export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo) => {
+import { CartItem, Order, OrderItem, Product, ProductVariant, SellerProfile, BuyerProfile, } from "../../model/relations.js";
+export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo, cartId) => {
     const t = await jiffy.transaction();
     try {
-        const cart = await Cart.findOne({
-            where: { userId },
-            transaction: t,
-        });
-        if (!cart)
-            throw new Error("Cart not found");
+        // const cart = await Cart.findOne({
+        //   where: { userId },
+        //   transaction: t,
+        // });
+        // if (!cart) throw new Error("Cart not found");
         const items = await CartItem.findAll({
-            where: { cartId: cart.id },
+            where: { cartId: cartId },
             include: [
                 { model: Product, as: "product" },
                 { model: ProductVariant, as: "variant" },
@@ -46,7 +45,7 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo)
                 userId,
                 sellerId, // <-- REQUIRED FIELD FIX
                 total,
-                status: "pending",
+                status: "created",
                 shippingAddress,
                 paymentInfo,
             }, { transaction: t });
@@ -65,7 +64,7 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo)
         }
         // clear cart
         await CartItem.destroy({
-            where: { cartId: cart.id },
+            where: { cartId: cartId },
             transaction: t,
         });
         await t.commit();
@@ -245,4 +244,33 @@ export const getOrderById = async (orderId, userId, role) => {
         ],
     });
     return order;
+};
+/**
+ * Update order status (Seller only)
+ * @param orderId - Order ID
+ * @param sellerId - Seller ID
+ * @param status - New status
+ */
+export const updateOrderStatus = async (orderId, sellerId, status) => {
+    const allowedStatuses = [
+        "pending",
+        "confirmed",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled",
+    ];
+    if (!allowedStatuses.includes(status)) {
+        throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);
+    }
+    const [updatedCount] = await Order.update({ status }, {
+        where: {
+            id: orderId,
+            sellerId: sellerId,
+        },
+    });
+    if (updatedCount === 0) {
+        throw new Error("Order not found or you don't have permission to update it");
+    }
+    return await Order.findByPk(orderId);
 };
