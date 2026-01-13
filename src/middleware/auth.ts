@@ -26,6 +26,39 @@ export const authorize = (roles: string[]) => {
     const hasRole = (user as any).Roles.some((r: any) => roles.includes(r.name));
     if (!hasRole) return res.status(403).json({ message: "Forbidden" });
 
+    // Attach user roles to request for use in controllers
+    (req as any).userRoles = (user as any).Roles.map((r: any) => r.name);
     next();
   };
+};
+
+/**
+ * Middleware to check if user is a seller
+ * Must be used after authenticate middleware
+ */
+export const requireSeller = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const userId = (req as any).userId;
+  const user = await User.findByPk(userId, { include: [Role] });
+  
+  if (!user) {
+    return res.status(404).json({ success: false, message: "User not found" });
+  }
+
+  const userRoles = (user as any).Roles.map((r: any) => r.name);
+  const isSeller = userRoles.includes("seller");
+
+  if (!isSeller) {
+    return res.status(403).json({
+      success: false,
+      message: "Access denied. Seller role required.",
+    });
+  }
+
+  // Attach user roles to request
+  (req as any).userRoles = userRoles;
+  next();
 };

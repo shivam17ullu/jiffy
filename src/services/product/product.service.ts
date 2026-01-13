@@ -9,7 +9,7 @@ import slugify from "slugify";
 import { jiffy } from "../../config/sequelize.js";
 import { Op } from "sequelize";
 
-export const createProduct = async (payload: any, sellerId: number) => {
+export const createProduct = async (payload: any, sellerId: number, imageUrls: string[] = []) => {
   const t = await jiffy.transaction();
   try {
     payload.slug = slugify(payload.name, { lower: true });
@@ -22,8 +22,11 @@ export const createProduct = async (payload: any, sellerId: number) => {
       ...rest
     } = payload;
 
+    // Use uploaded S3 URLs if provided, otherwise use provided URLs
+    const finalImages = imageUrls.length > 0 ? imageUrls : images;
+
     const product = await Product.create(
-      { ...rest, images, tags, sellerId },
+      { ...rest, images: finalImages, tags, sellerId },
       { transaction: t }
     );
 
@@ -296,14 +299,21 @@ export const getProductById = async (id: number) => {
   };
 };
 // Update product with seller ownership check
-export const updateProduct = async (id: number, sellerId: number, payload: any) => {
+export const updateProduct = async (id: number, sellerId: number, payload: any, imageUrls: string[] | null = null) => {
+  // If imageUrls is provided (even if empty array), replace existing images
+  // If imageUrls is null, don't touch the images field
+  if (imageUrls !== null) {
+    // Replace images with the new list (frontend sends the complete list)
+    payload.images = imageUrls;
+  }
+
   const [updatedCount] = await Product.update(payload, {
     where: { id, sellerId },
   });
   
   if (updatedCount === 0) return null;
-  // Fetch updated product
-  return await Product.findByPk(id);
+  // Fetch updated product with all associations
+  return await getProductById(id);
 };
 
 // Delete product with seller ownership check
