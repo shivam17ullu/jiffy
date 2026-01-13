@@ -18,6 +18,7 @@ import OrderItem from "./order/orderItem.js";
 import ProductVariant from "./product/productVariant.js";
 import { ProductCategory } from "./product/product.js";
 import Location from "./profile/location.js";
+import Wishlist from "./wishlist/wishlist.js";
 
 // ---------------- Associations ----------------
 
@@ -113,6 +114,13 @@ CartItem.belongsTo(ProductVariant, {
 });
 ProductVariant.hasMany(CartItem, { as: "cartItems", foreignKey: "variantId" });
 
+// Wishlist relations
+Wishlist.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(Wishlist, { foreignKey: "userId", as: "wishlist" });
+
+Wishlist.belongsTo(Product, { foreignKey: "productId", as: "product" });
+Product.hasMany(Wishlist, { foreignKey: "productId", as: "wishlists" });
+
 // EXPORTS
 export {
   User,
@@ -134,5 +142,6 @@ export {
   OrderItem,
   ProductVariant,
   ProductCategory,
-  Location
+  Location,
+  Wishlist
 };

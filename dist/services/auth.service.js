@@ -73,7 +73,8 @@ export default class AuthService {
             throw new Error("Refresh token expired");
         const payload = jwt.verify(oldToken, process.env.TOKEN);
         const accessToken = this.generateAccessToken(payload.userId);
-        return { accessToken };
+        const refreshToken = await this.generateRefreshToken(payload.userId);
+        return { accessToken, refreshToken };
     }
     static async revokeRefreshToken(token) {
         const stored = await RefreshToken.findOne({ where: { token } });
@@ -162,18 +163,16 @@ export default class AuthService {
                 zipCode: payload.store.pincode,
                 address: payload.store.storeAddress,
             }, { transaction });
-            console.log(seller);
             const verified = await VerifiedSellers.create({
                 sellerId: seller.id,
                 is_active: false,
-            });
+            }, { transaction });
             const store = await Store.create({
                 sellerId: seller.id,
                 storeName: payload.store.storeName,
                 storeAddress: payload.store.storeAddress,
                 pincode: payload.store.pincode,
             }, { transaction });
-            console.log(store);
             const bankDetails = await BankDetail.create({
                 sellerId: seller.id,
                 accountHolderName: payload.bankDetails.accountHolderName,
@@ -181,14 +180,12 @@ export default class AuthService {
                 ifscCode: payload.bankDetails.ifscCode,
                 termsAccepted: payload.bankDetails.termsAccepted ?? false,
             }, { transaction });
-            console.log(bankDetails);
             const documents = await Document.create({
                 sellerId: seller.id,
                 aadhaarUrl: payload.documents.aadhaarUrl,
                 panUrl: payload.documents.panUrl,
                 gstUrl: payload.documents.gstUrl,
             }, { transaction });
-            console.log(documents);
             console.log(verified);
             await transaction.commit();
             return {

@@ -245,5 +245,114 @@ export const getProductById = async (id) => {
             : null,
     };
 };
-export const updateProduct = async (id, payload) => Product.update(payload, { where: { id }, returning: true }).then((r) => r[1][0]);
-export const deleteProduct = async (id) => Product.destroy({ where: { id } });
+// Update product with seller ownership check
+export const updateProduct = async (id, sellerId, payload) => {
+    const [updatedCount] = await Product.update(payload, {
+        where: { id, sellerId },
+    });
+    if (updatedCount === 0)
+        return null;
+    // Fetch updated product
+    return await Product.findByPk(id);
+};
+// Delete product with seller ownership check
+export const deleteProduct = async (id, sellerId) => {
+    return await Product.destroy({ where: { id, sellerId } });
+};
+export const listSellerProducts = async (sellerId, opts) => {
+    const { page = 1, limit = 20, q, categoryId, brand, minPrice, maxPrice, sort } = opts;
+    // Base where clause - strictly enforce sellerId
+    const where = { sellerId };
+    // Note: We intentionally do NOT filter by isActive, so sellers can see inactive products
+    // Search query
+    if (q) {
+        where[Op.or] = [
+            { name: { [Op.like]: `%${q}%` } },
+            { description: { [Op.like]: `%${q}%` } },
+            { brand: { [Op.like]: `%${q}%` } },
+        ];
+    }
+    // Brand filter
+    if (brand) {
+        where.brand = { [Op.like]: `%${brand}%` };
+    }
+    // Category filtering
+    let categoryFilter = null;
+    if (categoryId) {
+        const descendantIds = await getCategoryDescendants(categoryId);
+        categoryFilter = descendantIds;
+    }
+    // Price filtering
+    let priceFilter = null;
+    if (minPrice || maxPrice) {
+        priceFilter = {};
+        if (minPrice)
+            priceFilter.price = { [Op.gte]: parseFloat(minPrice) };
+        if (maxPrice)
+            priceFilter.price = {
+                ...priceFilter.price,
+                [Op.lte]: parseFloat(maxPrice),
+            };
+    }
+    // Include array
+    const include = [
+        {
+            association: "variants",
+            where: priceFilter || undefined,
+            required: priceFilter ? true : false,
+        },
+        {
+            association: "categories",
+            where: categoryFilter
+                ? { id: { [Op.in]: categoryFilter } }
+                : undefined,
+            required: categoryFilter ? true : false,
+        },
+    ];
+    // Sort handling
+    let order = [["createdAt", "DESC"]];
+    if (sort) {
+        const [field, direction] = sort.split(":");
+        if (field === "price") {
+            order = [
+                [
+                    { model: ProductVariant, as: "variants" },
+                    "price",
+                    direction?.toUpperCase() || "ASC",
+                ],
+            ];
+        }
+        else {
+            order = [[field, direction?.toUpperCase() || "ASC"]];
+        }
+    }
+    const products = await Product.findAndCountAll({
+        where,
+        include,
+        limit: parseInt(limit),
+        offset: (parseInt(page) - 1) * parseInt(limit),
+        order,
+        distinct: true,
+    });
+    // Transform products
+    const transformedProducts = products.rows.map((product) => {
+        const variants = product.variants || [];
+        const prices = variants.map((v) => v.price).filter((p) => p);
+        const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+        const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
+        return {
+            ...product.toJSON(),
+            priceRange: {
+                min: minPrice,
+                max: maxPrice,
+            },
+        };
+    });
+    return {
+        items: transformedProducts,
+        total: products.count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(products.count / parseInt(limit)),
+    };
+};

@@ -1,6 +1,41 @@
 import { createResponse } from "../middleware/responseHandler.js";
 import StoreService from "../services/stores.service.js";
 export default class StoreController {
+    /**
+     * @swagger
+     * /api/stores/list:
+     *   get:
+     *     summary: Get list of verified stores
+     *     description: Get all verified and active seller stores
+     *     tags: [Stores]
+     *     responses:
+     *       200:
+     *         description: List of verified stores
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 status:
+     *                   type: integer
+     *                 message:
+     *                   type: string
+     *                 response:
+     *                   type: array
+     *                   items:
+     *                     type: object
+     *                     properties:
+     *                       id:
+     *                         type: integer
+     *                       businessName:
+     *                         type: string
+     *                       city:
+     *                         type: string
+     *                       state:
+     *                         type: string
+     *       404:
+     *         description: No stores found
+     */
     static async getStores(req, res) {
         try {
             const stores = await StoreService.getstores();
