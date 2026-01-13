@@ -4,6 +4,7 @@ import {
   Category,
   User,
   SellerProfile,
+  Wishlist,
 } from "../../model/relations.js";
 import slugify from "slugify";
 import { jiffy } from "../../config/sequelize.js";
@@ -63,6 +64,7 @@ export const listProducts = async (opts: any) => {
     minPrice,
     maxPrice,
     sort,
+    userId, // Optional: to check wishlist status
   } = opts;
 
   const where: any = { isActive: true };
@@ -173,7 +175,20 @@ export const listProducts = async (opts: any) => {
     distinct: true, // Important for count with joins
   });
 
-  // Transform products to include min/max price
+  // Get wishlist status for all products if userId is provided
+  let wishlistProductIds: Set<number> = new Set();
+  if (userId) {
+    const wishlistItems = await Wishlist.findAll({
+      where: {
+        userId: userId,
+        productId: { [Op.in]: products.rows.map((p: any) => p.id) },
+      },
+      attributes: ['productId'],
+    });
+    wishlistProductIds = new Set(wishlistItems.map((item: any) => item.productId));
+  }
+
+  // Transform products to include min/max price and wishlist status
   const transformedProducts = products.rows.map((product: any) => {
     const variants = product.variants || [];
     const prices = variants.map((v: any) => v.price).filter((p: any) => p);
@@ -186,6 +201,7 @@ export const listProducts = async (opts: any) => {
         min: minPrice,
         max: maxPrice,
       },
+      isWishlisted: userId ? wishlistProductIds.has(product.id) : false,
       seller: product.seller
         ? {
             id: product.seller.id,
@@ -227,7 +243,7 @@ async function getCategoryDescendants(categoryId: number): Promise<number[]> {
   return categoryIds;
 }
 
-export const getProductById = async (id: number) => {
+export const getProductById = async (id: number, userId?: number) => {
   const product = await Product.findByPk(id, {
     include: [
       {
@@ -266,7 +282,19 @@ export const getProductById = async (id: number) => {
 
   if (!product) return null;
 
-  // Transform product to include price range and seller details
+  // Check if product is in wishlist
+  let isWishlisted = false;
+  if (userId) {
+    const wishlistItem = await Wishlist.findOne({
+      where: {
+        userId: userId,
+        productId: id,
+      },
+    });
+    isWishlisted = !!wishlistItem;
+  }
+
+  // Transform product to include price range, seller details, and wishlist status
   const variants = (product as any).variants || [];
   const prices = variants.map((v: any) => v.price).filter((p: any) => p);
   const minPrice = prices.length > 0 ? Math.min(...prices) : null;
@@ -278,6 +306,7 @@ export const getProductById = async (id: number) => {
       min: minPrice,
       max: maxPrice,
     },
+    isWishlisted,
     seller: (product as any).seller
       ? {
           id: (product as any).seller.id,

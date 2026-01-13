@@ -17,6 +17,31 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
   }
 };
 
+/**
+ * Optional authentication middleware
+ * If token is provided and valid, sets userId
+ * If no token or invalid token, continues without userId (for public routes that can show personalized data)
+ */
+export const optionalAuthenticate = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) {
+    // If no token, continue without userId
+    (req as any).userId = undefined;
+    return next();
+  }
+
+  try {
+    const payload = jwt.verify(token, process.env.TOKEN as string) as { userId: number };
+    (req as any).userId = payload.userId;
+    next();
+  } catch (err) {
+    // If token is invalid, continue without userId
+    (req as any).userId = undefined;
+    return next();
+  }
+};
+
 export const authorize = (roles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     const userId = (req as any).userId;

@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import * as ctrl from '../controller/product/product.controller.js';
-import { authenticate, requireSeller } from '../middleware/auth.js';
+import { authenticate, requireSeller, optionalAuthenticate } from '../middleware/auth.js';
 import { uploadMultiple } from '../middleware/upload.js';
 
 const productRouter = Router();
 
-// Public routes
-productRouter.get('/', ctrl.list);
-productRouter.get('/:id', ctrl.get);
+// Public routes (with optional authentication for wishlist status)
+productRouter.get('/', optionalAuthenticate, ctrl.list); // Optional auth - will use userId if authenticated
+productRouter.get('/:id', optionalAuthenticate, ctrl.get); // Optional auth - will use userId if authenticated
 
 // Seller-only routes (require authentication + seller role)
 productRouter.get('/seller/me', authenticate, requireSeller, ctrl.getSellerProducts);

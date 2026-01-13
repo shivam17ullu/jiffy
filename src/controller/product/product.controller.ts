@@ -220,7 +220,8 @@ export const list = async (req: any, res: Response) => {
     brand: req.query.brand,
     minPrice: req.query.minPrice,
     maxPrice: req.query.maxPrice,
-    sort: req.query.sort
+    sort: req.query.sort,
+    userId: req.userId || undefined, // Include userId if authenticated
   };
   const result = await service.listProducts(params);
   res.json({ success:true, ...result });
@@ -354,8 +355,10 @@ export const getSellerProducts = async (req: any, res: Response) => {
  *       404:
  *         description: Product not found
  */
-export const get = async (req: Request, res: Response) => {
-  const product = await service.getProductById(+req.params.id);
+export const get = async (req: any, res: Response) => {
+  const productId = +req.params.id;
+  const userId = req.userId || undefined; // Include userId if authenticated
+  const product = await service.getProductById(productId, userId);
   if (!product) return res.status(404).json({ success:false, message: "Product not found" });
   res.json({ success:true, data: product });
 };
