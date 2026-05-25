@@ -329,20 +329,85 @@ export const getProductById = async (id: number, userId?: number) => {
 };
 // Update product with seller ownership check
 export const updateProduct = async (id: number, sellerId: number, payload: any, imageUrls: string[] | null = null) => {
-  // If imageUrls is provided (even if empty array), replace existing images
-  // If imageUrls is null, don't touch the images field
-  if (imageUrls !== null) {
-    // Replace images with the new list (frontend sends the complete list)
-    payload.images = imageUrls;
-  }
+  const t = await jiffy.transaction();
+  try {
+    // If imageUrls is provided (even if empty array), replace existing images
+    // If imageUrls is null, don't touch the images field
+    if (imageUrls !== null) {
+      // Replace images with the new list (frontend sends the complete list)
+      payload.images = imageUrls;
+    }
 
-  const [updatedCount] = await Product.update(payload, {
-    where: { id, sellerId },
-  });
-  
-  if (updatedCount === 0) return null;
-  // Fetch updated product with all associations
-  return await getProductById(id);
+    if (payload.name) {
+      payload.slug = slugify(payload.name, { lower: true });
+    }
+
+    const {
+      categories,
+      variants,
+      tags,
+      ...rest
+    } = payload;
+
+    const updateData: any = { ...rest };
+    if (tags !== undefined) updateData.tags = tags;
+
+    const [updatedCount] = await Product.update(updateData, {
+      where: { id, sellerId },
+      transaction: t,
+    });
+    
+    if (updatedCount === 0) {
+      await t.rollback();
+      return null;
+    }
+
+    const product = await Product.findByPk(id, { transaction: t });
+
+    if (product) {
+      if (categories && Array.isArray(categories)) {
+        await (product as any).setCategories(categories, { transaction: t });
+      }
+
+      if (variants && Array.isArray(variants)) {
+        const existingVariants = await ProductVariant.findAll({ 
+          where: { productId: id }, 
+          transaction: t 
+        });
+        
+        const existingVariantIds = existingVariants.map(v => v.id);
+        const payloadVariantIds = variants.map(v => v.id).filter(id => id);
+        
+        // Variants to delete
+        const variantsToDelete = existingVariantIds.filter(id => !payloadVariantIds.includes(id));
+        if (variantsToDelete.length > 0) {
+          await ProductVariant.destroy({ 
+            where: { id: { [Op.in]: variantsToDelete } }, 
+            transaction: t 
+          });
+        }
+        
+        // Variants to update/create
+        for (const v of variants) {
+          if (v.id) {
+            const { productId, ...variantData } = v;
+            await ProductVariant.update(variantData, { 
+              where: { id: v.id }, 
+              transaction: t 
+            });
+          } else {
+            await ProductVariant.create({ ...v, productId: id }, { transaction: t });
+          }
+        }
+      }
+    }
+
+    await t.commit();
+    return await getProductById(id);
+  } catch (err) {
+    await t.rollback();
+    throw err;
+  }
 };
 
 // Delete product with seller ownership check
@@ -456,4 +521,21 @@ export const listSellerProducts = async (sellerId: number, opts: any) => {
     limit: parseInt(limit),
     totalPages: Math.ceil(products.count / parseInt(limit)),
   };
+};
+
+export const toggleVariantStatus = async (productId: number, variantId: number, sellerId: number, isActive: boolean) => {
+  // Verify the product belongs to the seller
+  const product = await Product.findOne({ where: { id: productId, sellerId } });
+  if (!product) {
+    return null;
+  }
+
+  const variant = await ProductVariant.findOne({ where: { id: variantId, productId } });
+  if (!variant) {
+    return null;
+  }
+
+  await variant.update({ isActive });
+
+  return await getProductById(productId);
 };

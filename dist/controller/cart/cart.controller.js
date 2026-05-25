@@ -1,4 +1,5 @@
 import * as service from '../../services/cart/cart.service.js';
+import { handleControllerError, sendValidationError, } from "../../middleware/responseHandler.js";
 /**
  * @swagger
  * /api/cart/add:
@@ -39,11 +40,14 @@ export const addItem = async (req, res) => {
     try {
         const userId = req.userId || req.user?.id;
         const { productId, variantId, qty } = req.body;
+        if (!productId) {
+            return sendValidationError(res, "Product ID is required", "productId");
+        }
         const items = await service.addToCart(userId, productId, variantId ?? null, qty ?? 1);
         res.json({ success: true, data: items });
     }
     catch (err) {
-        res.status(400).json({ success: false, message: err.message });
+        return handleControllerError(res, err);
     }
 };
 /**
@@ -153,7 +157,7 @@ export const getCart = async (req, res) => {
         res.json({ success: true, data: cart });
     }
     catch (err) {
-        res.status(400).json({ success: false, message: err.message });
+        return handleControllerError(res, err);
     }
 };
 /**
@@ -201,13 +205,13 @@ export const updateQty = async (req, res) => {
         const { itemId } = req.params;
         const { qty } = req.body;
         if (!qty || qty < 1) {
-            return res.status(400).json({ success: false, message: "Quantity must be at least 1" });
+            return sendValidationError(res, "Quantity must be at least 1", "qty");
         }
         const updated = await service.updateQty(userId, +itemId, qty);
         res.json({ success: true, data: updated });
     }
     catch (err) {
-        res.status(400).json({ success: false, message: err.message });
+        return handleControllerError(res, err);
     }
 };
 /**
@@ -242,6 +246,6 @@ export const removeItem = async (req, res) => {
         res.json({ success: true, message: "Item removed from cart" });
     }
     catch (err) {
-        res.status(400).json({ success: false, message: err.message });
+        return handleControllerError(res, err);
     }
 };

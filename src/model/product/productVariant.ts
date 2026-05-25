@@ -9,8 +9,10 @@ interface VariantAttributes {
   price: number;
   mrp?: number;
   stock: number;
+  isStock: boolean;
+  isActive: boolean;
 }
-type VariantCreation = Optional<VariantAttributes, 'id' | 'sku' | 'size' | 'color' | 'mrp'>;
+type VariantCreation = Optional<VariantAttributes, 'id' | 'sku' | 'size' | 'color' | 'mrp' | 'isActive' | 'isStock'>;
 
 class ProductVariant extends Model<VariantAttributes, VariantCreation> implements VariantAttributes {
   public id!: number;
@@ -21,6 +23,8 @@ class ProductVariant extends Model<VariantAttributes, VariantCreation> implement
   public price!: number;
   public mrp?: number;
   public stock!: number;
+  public isStock!: boolean;
+  public isActive!: boolean;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -33,7 +37,9 @@ ProductVariant.init({
   color: { type: DataTypes.STRING(80), allowNull: true },
   price: { type: DataTypes.FLOAT, allowNull: false },
   mrp: { type: DataTypes.FLOAT, allowNull: true },
-  stock: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 }
+  stock: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
+  isStock: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+  isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true }
 }, { tableName: 'product_variants', sequelize: jiffy });
 
 

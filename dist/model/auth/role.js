@@ -11,12 +11,17 @@ Role.init({
     name: {
         type: DataTypes.STRING(50),
         allowNull: false,
-        unique: true,
     },
 }, {
     sequelize: jiffy,
     tableName: "roles",
     modelName: "Role",
     timestamps: false,
+    indexes: [
+        {
+            unique: true,
+            fields: ["name"],
+        },
+    ],
 });
 export default Role;

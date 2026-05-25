@@ -1,5 +1,10 @@
 import * as service from '../../services/product/product.service.js';
-import { Request, Response } from "express";
+import { Response } from "express";
+import {
+  handleControllerError,
+  sendError,
+  sendValidationError,
+} from "../../middleware/responseHandler.js";
 import { uploadMultiple } from '../../middleware/upload.js';
 import { uploadMultipleToS3, uploadMultipleBase64ToS3, deleteFromS3 } from '../../utils/s3Upload.js';
 import { Product } from '../../model/relations.js';
@@ -49,7 +54,7 @@ import { Product } from '../../model/relations.js';
  *                 description: JSON array string of category IDs
  *               variants:
  *                 type: string
- *                 example: '[{"sku":"BS-S-M","size":"M","color":"Blue","price":500,"mrp":800,"stock":100}]'
+ *                 example: '[{"sku":"BS-S-M","size":"M","color":"Blue","price":500,"mrp":800,"stock":100,"isStock":true}]'
  *                 description: JSON array string of variant objects
  *     responses:
  *       200:
@@ -63,10 +68,18 @@ import { Product } from '../../model/relations.js';
  */
 export const create = async (req: any, res: any) => {
   try {
-    const sellerId = req.userId; // ⭐ seller from JWT
-    
-    // Parse JSON fields if they come as strings (from multipart/form-data)
+    const sellerId = req.userId;
     let productData = { ...req.body };
+
+    if (!productData.name) {
+      return sendValidationError(res, "Product name is required", "name");
+    }
+    if (!productData.categories) {
+      return sendValidationError(res, "At least one category is required", "categories");
+    }
+    if (!productData.variants) {
+      return sendValidationError(res, "At least one variant is required", "variants");
+    }
     
     // Parse categories if it's a string
     if (typeof productData.categories === 'string') {
@@ -132,8 +145,8 @@ export const create = async (req: any, res: any) => {
     // Create product with S3 image URLs
     const product = await service.createProduct(productData, sellerId, imageUrls);
     res.json({ success: true, data: product });
-  } catch (err: any) {
-    res.status(400).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
   }
 };
 
@@ -188,6 +201,11 @@ export const create = async (req: any, res: any) => {
  *           type: string
  *           enum: [price:ASC, price:DESC, name:ASC, name:DESC, createdAt:DESC, createdAt:ASC]
  *         description: Sort field and direction (format: field:direction)
+ *       - in: query
+ *         name: filter
+ *         schema:
+ *           type: string
+ *         description: Filter by category ID
  *     responses:
  *       200:
  *         description: List of products
@@ -216,7 +234,7 @@ export const list = async (req: any, res: Response) => {
     page: parseInt(req.query.page) || 1,
     limit: parseInt(req.query.limit) || 20,
     q: req.query.q,
-    categoryId: req.query.categoryId ? +req.query.categoryId : undefined,
+    categoryId: req.query.categoryId ? +req.query.categoryId : (req.query.filter ? +req.query.filter : undefined),
     brand: req.query.brand,
     minPrice: req.query.minPrice,
     maxPrice: req.query.maxPrice,
@@ -259,6 +277,11 @@ export const list = async (req: any, res: Response) => {
  *         schema:
  *           type: string
  *         description: Sort options
+ *       - in: query
+ *         name: filter
+ *         schema:
+ *           type: string
+ *         description: Filter by category ID
  *     responses:
  *       200:
  *         description: List of seller products
@@ -270,7 +293,7 @@ export const getSellerProducts = async (req: any, res: Response) => {
             page: parseInt(req.query.page) || 1,
             limit: parseInt(req.query.limit) || 20,
             q: req.query.q,
-            categoryId: req.query.categoryId ? +req.query.categoryId : undefined,
+            categoryId: req.query.categoryId ? +req.query.categoryId : (req.query.filter ? +req.query.filter : undefined),
             brand: req.query.brand,
             minPrice: req.query.minPrice,
             maxPrice: req.query.maxPrice,
@@ -278,8 +301,8 @@ export const getSellerProducts = async (req: any, res: Response) => {
         };
         const result = await service.listSellerProducts(sellerId, params);
         res.json({ success: true, ...result });
-    } catch (err: any) {
-        res.status(400).json({ success: false, message: err.message });
+    } catch (err: unknown) {
+        return handleControllerError(res, err);
     }
 };
 
@@ -359,7 +382,9 @@ export const get = async (req: any, res: Response) => {
   const productId = +req.params.id;
   const userId = req.userId || undefined; // Include userId if authenticated
   const product = await service.getProductById(productId, userId);
-  if (!product) return res.status(404).json({ success:false, message: "Product not found" });
+  if (!product) {
+    return sendError(res, 404, "Product not found");
+  }
   res.json({ success:true, data: product });
 };
 
@@ -430,12 +455,11 @@ export const update = async (req: any, res: Response) => {
         // Get existing product to compare images and verify ownership
         const existingProduct = await Product.findByPk(productId);
         if (!existingProduct) {
-          return res.status(404).json({ success: false, message: "Product not found" });
+          return sendError(res, 404, "Product not found");
         }
         
-        // Check ownership
         if (existingProduct.sellerId !== sellerId) {
-          return res.status(403).json({ success: false, message: "Unauthorized - Not the product owner" });
+          return sendError(res, 403, "You are not authorized to update this product");
         }
         
         const existingImages: string[] = (existingProduct.images as string[]) || [];
@@ -498,12 +522,12 @@ export const update = async (req: any, res: Response) => {
         const result = await service.updateProduct(productId, sellerId, productData, finalImageUrls);
         
         if (!result) {
-            return res.status(404).json({ success: false, message: "Product not found or unauthorized" });
+            return sendError(res, 404, "Product not found or you are not authorized to update it");
         }
         
         res.json({ success: true, data: result });
-    } catch (err: any) {
-        res.status(400).json({ success: false, message: err.message });
+    } catch (err: unknown) {
+        return handleControllerError(res, err);
     }
 };
 
@@ -537,11 +561,75 @@ export const deleteProduct = async (req: any, res: Response) => {
         const result = await service.deleteProduct(productId, sellerId);
         
         if (!result) {
-            return res.status(404).json({ success: false, message: "Product not found or unauthorized" });
+            return sendError(res, 404, "Product not found or you are not authorized to delete it");
         }
         
         res.json({ success: true, message: "Product deleted successfully" });
-    } catch (err: any) {
-        res.status(400).json({ success: false, message: err.message });
+    } catch (err: unknown) {
+        return handleControllerError(res, err);
+    }
+};
+
+/**
+ * @swagger
+ * /api/products/{id}/variants/{variantId}/status:
+ *   patch:
+ *     summary: Enable or disable a product variant
+ *     description: Enable or disable a product variant (Seller only)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: variantId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - isActive
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Variant status updated successfully
+ *       400:
+ *         description: Bad request
+ *       403:
+ *         description: Forbidden - Not the owner
+ *       404:
+ *         description: Product or variant not found
+ */
+export const toggleVariantStatus = async (req: any, res: Response) => {
+    try {
+        const productId = parseInt(req.params.id);
+        const variantId = parseInt(req.params.variantId);
+        const sellerId = req.userId;
+        const { isActive } = req.body;
+
+        if (typeof isActive !== 'boolean') {
+            return sendValidationError(res, "isActive must be a boolean", "isActive");
+        }
+
+        const result = await service.toggleVariantStatus(productId, variantId, sellerId, isActive);
+        
+        if (!result) {
+            return sendError(res, 404, "Product/Variant not found or you are not authorized to update it");
+        }
+        
+        res.json({ success: true, data: result, message: "Variant status updated successfully" });
+    } catch (err: unknown) {
+        return handleControllerError(res, err);
     }
 };

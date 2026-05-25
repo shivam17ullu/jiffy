@@ -12,6 +12,8 @@ class Store extends Model<StoreAttributes, StoreCreationAttributes> implements S
   public storeName!: string;
   public storeAddress!: string;
   public pincode!: string;
+  public is_active!: boolean;
+  public isSellerOpen!: boolean;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -23,6 +25,8 @@ Store.init(
     storeName: { type: DataTypes.STRING(150), allowNull: false },
     storeAddress: { type: DataTypes.TEXT, allowNull: false },
     pincode: { type: DataTypes.STRING(10), allowNull: false },
+    is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
+    isSellerOpen: { type: DataTypes.BOOLEAN, defaultValue: true },
   },
   {
     sequelize: jiffy,

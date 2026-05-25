@@ -5,7 +5,7 @@ class Product extends Model {
 Product.init({
     id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
     name: { type: DataTypes.STRING(255), allowNull: false },
-    slug: { type: DataTypes.STRING(300), allowNull: false, unique: true },
+    slug: { type: DataTypes.STRING(300), allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: true },
     brand: { type: DataTypes.STRING(120), allowNull: true },
     images: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
@@ -16,7 +16,16 @@ Product.init({
         type: DataTypes.BIGINT,
         allowNull: false,
     },
-}, { tableName: "products", sequelize: jiffy });
+}, {
+    tableName: "products",
+    sequelize: jiffy,
+    indexes: [
+        {
+            unique: true,
+            fields: ["slug"],
+        },
+    ],
+});
 // join table for categories
 export const ProductCategory = jiffy.define("product_categories", {
     productId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },

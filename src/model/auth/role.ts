@@ -23,7 +23,6 @@ Role.init(
     name: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true,
     },
   },
   {
@@ -31,6 +30,12 @@ Role.init(
     tableName: "roles",
     modelName: "Role",
     timestamps: false,
+    indexes: [
+      {
+        unique: true,
+        fields: ["name"],
+      },
+    ],
   }
 );
 

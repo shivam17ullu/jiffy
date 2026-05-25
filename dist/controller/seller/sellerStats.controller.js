@@ -1,4 +1,5 @@
 import * as service from '../../services/seller/sellerStats.service.js';
+import { handleControllerError } from "../../middleware/responseHandler.js";
 /**
  * @swagger
  * /api/seller/stats:
@@ -76,6 +77,6 @@ export const getStats = async (req, res) => {
         res.json({ success: true, data: stats });
     }
     catch (err) {
-        res.status(400).json({ success: false, message: err.message });
+        return handleControllerError(res, err);
     }
 };

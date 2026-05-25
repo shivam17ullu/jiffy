@@ -16,6 +16,9 @@ export interface LocationAttributes {
   latitude?: number | null;
   longitude?: number | null;
   isDefault: boolean;
+  phone_number?: string;
+  name?: string;
+  alternate_number?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -66,6 +69,10 @@ Location.init(
     longitude: { type: DataTypes.FLOAT },
 
     isDefault: { type: DataTypes.BOOLEAN, defaultValue: false },
+
+    phone_number: { type: DataTypes.STRING(15) },
+    name: { type: DataTypes.STRING },
+    alternate_number: { type: DataTypes.STRING(15) },
   },
   {
     sequelize: jiffy,

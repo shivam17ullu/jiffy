@@ -10,6 +10,8 @@ ProductVariant.init({
     color: { type: DataTypes.STRING(80), allowNull: true },
     price: { type: DataTypes.FLOAT, allowNull: false },
     mrp: { type: DataTypes.FLOAT, allowNull: true },
-    stock: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 }
+    stock: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
+    isStock: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true }
 }, { tableName: 'product_variants', sequelize: jiffy });
 export default ProductVariant;

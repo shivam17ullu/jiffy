@@ -1,5 +1,6 @@
 import * as service from '../../services/order/order.service.js';
 import { User, Role } from "../../model/relations.js";
+import { handleControllerError, sendError, sendValidationError, } from "../../middleware/responseHandler.js";
 /**
  * @swagger
  * /api/orders:
@@ -48,12 +49,14 @@ export const createOrder = async (req, res) => {
         const userId = req.userId || req.user?.id;
         const cartId = req.body.cartId;
         const { shippingAddress, paymentInfo } = req.body;
+        if (!shippingAddress) {
+            return sendValidationError(res, "Shipping address is required", "shippingAddress");
+        }
         const order = await service.createOrdersFromCart(userId, shippingAddress, paymentInfo, cartId);
         res.status(201).json({ success: true, data: order });
     }
     catch (err) {
-        console.log(err);
-        res.status(400).json({ success: false, message: err.message });
+        return handleControllerError(res, err);
     }
 };
 /**
@@ -115,7 +118,7 @@ export const listOrders = async (req, res) => {
         // Get user roles to determine if buyer or seller
         const user = await User.findByPk(userId, { include: [Role] });
         if (!user) {
-            return res.status(404).json({ success: false, message: "User not found" });
+            return sendError(res, 404, "User account not found");
         }
         const roles = user.Roles.map((r) => r.name);
         const role = roles.includes("seller") ? "seller" : "buyer";
@@ -128,7 +131,7 @@ export const listOrders = async (req, res) => {
         res.json({ success: true, ...result });
     }
     catch (err) {
-        res.status(400).json({ success: false, message: err.message });
+        return handleControllerError(res, err);
     }
 };
 /**
@@ -196,21 +199,18 @@ export const getOrderById = async (req, res) => {
         // Get user roles to determine if buyer or seller
         const user = await User.findByPk(userId, { include: [Role] });
         if (!user) {
-            return res.status(404).json({ success: false, message: "User not found" });
+            return sendError(res, 404, "User account not found");
         }
         const roles = user.Roles.map((r) => r.name);
         const role = roles.includes("seller") ? "seller" : "buyer";
         const order = await service.getOrderById(orderId, userId, role);
         if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: "Order not found or you don't have permission to view it"
-            });
+            return sendError(res, 404, "Order not found or you do not have permission to view it");
         }
         res.json({ success: true, data: order });
     }
     catch (err) {
-        res.status(400).json({ success: false, message: err.message });
+        return handleControllerError(res, err);
     }
 };
 /**
@@ -257,21 +257,20 @@ export const updateStatus = async (req, res) => {
         const orderId = parseInt(req.params.id);
         const { status } = req.body;
         if (!status) {
-            return res.status(400).json({ success: false, message: "Status is required" });
+            return sendValidationError(res, "Order status is required", "status");
         }
-        // Get user roles to ensure it's a seller
         const user = await User.findByPk(userId, { include: [Role] });
         if (!user) {
-            return res.status(404).json({ success: false, message: "User not found" });
+            return sendError(res, 404, "User account not found");
         }
         const roles = user.Roles.map((r) => r.name);
         if (!roles.includes("seller")) {
-            return res.status(403).json({ success: false, message: "Only sellers can update order status" });
+            return sendError(res, 403, "Only sellers can update order status");
         }
         const updatedOrder = await service.updateOrderStatus(orderId, userId, status);
         res.json({ success: true, data: updatedOrder });
     }
     catch (err) {
-        res.status(400).json({ success: false, message: err.message });
+        return handleControllerError(res, err);
     }
 };

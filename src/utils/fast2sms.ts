@@ -34,9 +34,15 @@ export const sendOtpFast2SMS = async (
   phone_number: string,
   otp: string
 ) => {
+  const apiKey = process.env.FAST2SMS_API_KEY;
+  if (!apiKey || process.env.SKIP_OTP_SMS === "true") {
+    console.log(
+      `[OTP] SMS skipped — phone: ${phone_number}, otp: ${otp} (read from otp_logins table)`
+    );
+    return null;
+  }
+
   try {
-    const apiKey = process.env.FAST2SMS_API_KEY;
-    if (!apiKey) throw new Error("FAST2SMS_API_KEY is missing");
 
     // ⚠️ Must EXACTLY match your DLT template
     const message = `Your OTP is ${otp}. Valid for 5 minutes.`;

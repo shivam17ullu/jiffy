@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import * as ctrl from '../controller/product/product.controller.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireSeller, optionalAuthenticate } from '../middleware/auth.js';
+import { uploadMultiple } from '../middleware/upload.js';
 const productRouter = Router();
-productRouter.get('/', ctrl.list);
-// Specific routes must come before parameterized routes
-productRouter.get('/seller/me', authenticate, ctrl.getSellerProducts);
-productRouter.get('/:id', ctrl.get);
-productRouter.post('/', authenticate, ctrl.create);
-productRouter.put('/:id', authenticate, ctrl.update);
-productRouter.delete('/:id', authenticate, ctrl.deleteProduct);
+// Public routes (with optional authentication for wishlist status)
+productRouter.get('/', optionalAuthenticate, ctrl.list); // Optional auth - will use userId if authenticated
+productRouter.get('/:id', optionalAuthenticate, ctrl.get); // Optional auth - will use userId if authenticated
+// Seller-only routes (require authentication + seller role)
+productRouter.get('/seller/me', authenticate, requireSeller, ctrl.getSellerProducts);
+productRouter.post('/', authenticate, requireSeller, uploadMultiple, ctrl.create);
+productRouter.put('/:id', authenticate, requireSeller, uploadMultiple, ctrl.update);
+productRouter.delete('/:id', authenticate, requireSeller, ctrl.deleteProduct);
+productRouter.patch('/:id/variants/:variantId/status', authenticate, requireSeller, ctrl.toggleVariantStatus);
 export default productRouter;

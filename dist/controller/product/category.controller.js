@@ -1,4 +1,5 @@
 import * as service from '../../services/product/category.service.js';
+import { handleControllerError, sendError, sendValidationError, } from "../../middleware/responseHandler.js";
 /**
  * @swagger
  * /api/categories:
@@ -40,11 +41,17 @@ import * as service from '../../services/product/category.service.js';
 export const create = async (req, res) => {
     try {
         const { name, parentId, level } = req.body;
+        if (!name) {
+            return sendValidationError(res, "Category name is required", "name");
+        }
+        if (level === undefined || level === null) {
+            return sendValidationError(res, "Category level is required", "level");
+        }
         const cat = await service.createCategory(name, parentId ?? null, level);
         res.status(201).json({ success: true, data: cat });
     }
     catch (err) {
-        res.status(400).json({ success: false, message: err.message });
+        return handleControllerError(res, err);
     }
 };
 /**
@@ -103,7 +110,7 @@ export const list = async (req, res) => {
         res.json({ success: true, data: cats });
     }
     catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        return handleControllerError(res, err, 500);
     }
 };
 /**
@@ -129,6 +136,6 @@ export const list = async (req, res) => {
 export const get = async (req, res) => {
     const cat = await service.getCategoryById(+req.params.id);
     if (!cat)
-        return res.status(404).json({ success: false, message: 'Not found' });
+        return sendError(res, 404, "Category not found");
     res.json({ success: true, data: cat });
 };

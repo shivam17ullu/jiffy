@@ -1,6 +1,11 @@
 import { Request, Response } from "express";
 import ProfileService from "../services/profile.service.js";
-import { createResponse } from "../middleware/responseHandler.js";
+import {
+  createResponse,
+  handleControllerError,
+  sendError,
+  sendValidationError,
+} from "../middleware/responseHandler.js";
 
 export default class BuyerProfileController {
   /**
@@ -46,10 +51,17 @@ export default class BuyerProfileController {
    */
   static async createOrUpdate(req: Request, res: Response) {
     try {
+      const { userId, fullName } = req.body;
+      if (!userId) {
+        return sendValidationError(res, "User ID is required", "userId");
+      }
+      if (!fullName) {
+        return sendValidationError(res, "Full name is required", "fullName");
+      }
       const profile = await ProfileService.createOrUpdateProfile(req.body);
-      createResponse(res, { status: 200, message: 'Success', response: profile });
-    } catch (error: any) {
-      createResponse(res, { status: 500, message: error.message });
+      createResponse(res, { status: 200, message: "Profile saved successfully", response: profile });
+    } catch (error: unknown) {
+      return handleControllerError(res, error, 500);
     }
   }
 
@@ -80,11 +92,11 @@ export default class BuyerProfileController {
       );
 
       if (!profile) {
-        return createResponse(res, {status: 404, message: 'Profile not found'});
+        return sendError(res, 404, "Profile not found");
       }
-       createResponse(res, {status: 200, message: 'success', response: profile});
-    } catch (error: any) {
-      createResponse(res, { status: 500, message: error.message });
+      createResponse(res, { status: 200, message: "Profile retrieved successfully", response: profile });
+    } catch (error: unknown) {
+      return handleControllerError(res, error, 500);
     }
   }
 }

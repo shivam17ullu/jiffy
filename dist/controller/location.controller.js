@@ -1,5 +1,5 @@
 import LocationService from "../services/location.service.js";
-import { createResponse } from "../middleware/responseHandler.js";
+import { createResponse, handleControllerError, sendValidationError, } from "../middleware/responseHandler.js";
 /**
  * @swagger
  * /api/location:
@@ -21,7 +21,9 @@ import { createResponse } from "../middleware/responseHandler.js";
  *             properties:
  *               userId:
  *                 type: integer
- *               address:
+ *               addressLine1:
+ *                 type: string
+ *               addressLine2:
  *                 type: string
  *               city:
  *                 type: string
@@ -31,6 +33,12 @@ import { createResponse } from "../middleware/responseHandler.js";
  *                 type: string
  *               isDefault:
  *                 type: boolean
+ *               phone_number:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               alternate_number:
+ *                 type: string
  *     responses:
  *       201:
  *         description: Location created successfully
@@ -42,18 +50,22 @@ import { createResponse } from "../middleware/responseHandler.js";
 class LocationController {
     static async create(req, res) {
         try {
+            const { userId, addressLine1 } = req.body;
+            if (!userId) {
+                return sendValidationError(res, "User ID is required", "userId");
+            }
+            if (!addressLine1) {
+                return sendValidationError(res, "Address is required", "addressLine1");
+            }
             const result = await LocationService.createLocation(req.body);
             return createResponse(res, {
                 status: 201,
-                message: "Location added",
+                message: "Location added successfully",
                 response: result,
             });
         }
         catch (e) {
-            return createResponse(res, {
-                status: 500,
-                message: e.message,
-            });
+            return handleControllerError(res, e, 500);
         }
     }
     /**
@@ -87,10 +99,7 @@ class LocationController {
             });
         }
         catch (e) {
-            return createResponse(res, {
-                status: 500,
-                message: e.message,
-            });
+            return handleControllerError(res, e, 500);
         }
     }
     /**
@@ -117,7 +126,9 @@ class LocationController {
      *             properties:
      *               userId:
      *                 type: integer
-     *               address:
+     *               addressLine1:
+     *                 type: string
+     *               addressLine2:
      *                 type: string
      *               city:
      *                 type: string
@@ -127,6 +138,12 @@ class LocationController {
      *                 type: string
      *               isDefault:
      *                 type: boolean
+     *               phone_number:
+     *                 type: string
+     *               name:
+     *                 type: string
+     *               alternate_number:
+     *                 type: string
      *     responses:
      *       200:
      *         description: Location updated successfully
@@ -143,10 +160,7 @@ class LocationController {
             });
         }
         catch (e) {
-            return createResponse(res, {
-                status: 500,
-                message: e.message,
-            });
+            return handleControllerError(res, e, 500);
         }
     }
     /**
@@ -190,10 +204,7 @@ class LocationController {
             });
         }
         catch (e) {
-            return createResponse(res, {
-                status: 500,
-                message: e.message,
-            });
+            return handleControllerError(res, e, 500);
         }
     }
 }

@@ -3,23 +3,41 @@
 Complete API documentation for the Jiffy E-Commerce Platform with Buyer and Seller functionalities.
 
 ## Base URL
+
 ```
 http://localhost:3000/api
 ```
 
 ## Authentication
+
 Most endpoints require JWT authentication. Include the token in the Authorization header:
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 ## Swagger Documentation
+
 Access interactive API documentation at:
+
 ```
 http://localhost:3000/api-docs
 ```
 
 ---
+## Error Response Schema
+
+Error responses return only a message in the body. The HTTP status code is set on the response (e.g. 400, 401, 403, 404).
+
+```json
+{
+  "success": false,
+  "message": "Invalid request data"
+}
+```
+
+---
+
 
 ## 📋 Table of Contents
 
@@ -39,11 +57,13 @@ http://localhost:3000/api-docs
 ## 🔐 Authentication APIs
 
 ### 1. Send OTP (Buyer Login)
+
 **POST** `/api/auth/send-otp`
 
 Send OTP to phone number for buyer login.
 
 **Request Body:**
+
 ```json
 {
   "phone_number": "9876543210"
@@ -51,6 +71,7 @@ Send OTP to phone number for buyer login.
 ```
 
 **Response:**
+
 ```json
 {
   "status": 200,
@@ -59,14 +80,59 @@ Send OTP to phone number for buyer login.
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "Phone number is required",
+  "errors": [
+  {
+    "field": "phone_number",
+    "message": "Phone number is required"
+  }
+]
+}
+```
+
+**Error Response (inactive seller — phone not verified or pending admin approval):**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Seller account is not active. Complete phone verification first.",
+  "errors": []
+}
+```
+
+**Error Response (mobile number not registered):**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Mobile number is not registered. Please sign up first.",
+  "errors": [
+    {
+      "field": "phone_number",
+      "message": "Mobile number is not registered. Please sign up first."
+    }
+  ]
+}
+```
+
 ---
 
 ### 2. Verify OTP (Buyer Login)
+
 **POST** `/api/auth/verify-otp`
 
-Verify OTP and login. Creates user if new.
+Verify OTP and login. Phone number must already exist in the database (registered via buyer or seller sign-up).
 
 **Request Body:**
+
 ```json
 {
   "phone_number": "9876543210",
@@ -75,6 +141,7 @@ Verify OTP and login. Creates user if new.
 ```
 
 **Response:**
+
 ```json
 {
   "status": 200,
@@ -87,35 +154,100 @@ Verify OTP and login. Creates user if new.
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 401,
+  "message": "Invalid OTP provided",
+  "errors": [
+  {
+    "field": "otp",
+    "message": "Invalid OTP provided"
+  }
+]
+}
+```
+
+**Error Response (seller not active or pending admin approval):**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Seller account is pending admin approval.",
+  "errors": []
+}
+```
+
 ---
 
 ### 3. Refresh Token
+
 **POST** `/api/auth/refresh-token`
 
 Get new access token using refresh token.
 
 **Request Body:**
+
 ```json
 {
   "refreshToken": "eyJhbGc..."
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 401,
+  "message": "Refresh token is invalid or expired",
+  "errors": []
+}
+```
+
+**Error Response (seller account deactivated):**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Seller account is not active. Complete phone verification first.",
+  "errors": []
+}
+```
+
 ---
 
 ### 4. Logout
+
 **POST** `/api/auth/logout`
 
 Revoke refresh token.
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 401,
+  "message": "Authentication required to logout",
+  "errors": []
+}
+```
+
 ---
 
 ### 5. Register Seller (Step 1)
+
 **POST** `/api/auth/register-seller`
 
 First step of seller registration.
 
 **Request Body:**
+
 ```json
 {
   "phone_number": "9876543210",
@@ -124,14 +256,27 @@ First step of seller registration.
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 409,
+  "message": "Phone number or email is already registered",
+  "errors": []
+}
+```
+
 ---
 
 ### 6. Verify Seller OTP (Step 2)
+
 **POST** `/api/auth/verify-seller-otp`
 
 Verify OTP and activate seller account.
 
 **Request Body:**
+
 ```json
 {
   "phone_number": "9876543210",
@@ -139,14 +284,32 @@ Verify OTP and activate seller account.
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 401,
+  "message": "Invalid seller OTP",
+  "errors": [
+  {
+    "field": "otp",
+    "message": "Invalid seller OTP"
+  }
+]
+}
+```
+
 ---
 
 ### 7. Onboard Seller (Step 3)
+
 **POST** `/api/auth/onboard-seller`
 
 Complete seller profile setup. **Requires Authentication**
 
 **Request Body:**
+
 ```json
 {
   "userId": 1,
@@ -170,16 +333,29 @@ Complete seller profile setup. **Requires Authentication**
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "All onboarding fields are required",
+  "errors": []
+}
+```
+
 ---
 
 ## 📦 Product APIs
 
 ### 1. List Products (Public)
+
 **GET** `/api/products`
 
 Get paginated list of products with filters.
 
 **Query Parameters:**
+
 - `page` (integer, default: 1)
 - `limit` (integer, default: 20)
 - `q` (string) - Search query
@@ -190,11 +366,13 @@ Get paginated list of products with filters.
 - `sort` (string) - Sort options: `price:ASC`, `price:DESC`, `name:ASC`, `name:DESC`, `createdAt:DESC`
 
 **Example:**
+
 ```
 GET /api/products?page=1&limit=20&q=shirt&categoryId=1&minPrice=100&maxPrice=1000&sort=price:ASC
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -230,14 +408,27 @@ GET /api/products?page=1&limit=20&q=shirt&categoryId=1&minPrice=100&maxPrice=100
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "Invalid filter parameters",
+  "errors": []
+}
+```
+
 ---
 
 ### 2. Get Product by ID (Public)
+
 **GET** `/api/products/:id`
 
 Get detailed product information.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -253,14 +444,27 @@ Get detailed product information.
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Product not found",
+  "errors": []
+}
+```
+
 ---
 
 ### 3. Create Product (Seller Only)
+
 **POST** `/api/products`
 
 Create a new product. **Requires Authentication**
 
 **Request Body:**
+
 ```json
 {
   "name": "Blue Shirt",
@@ -282,60 +486,145 @@ Create a new product. **Requires Authentication**
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 401,
+  "message": "Authentication required to create a product",
+  "errors": []
+}
+```
+
 ---
 
 ### 4. Get Seller's Products (Seller Only)
+
 **GET** `/api/products/seller/me`
 
 Get paginated list of seller's own products. **Requires Authentication**
 
 **Query Parameters:** Same as List Products
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Only sellers can access this endpoint",
+  "errors": []
+}
+```
+
 ---
 
 ### 5. Update Product (Seller Only)
+
 **PUT** `/api/products/:id`
 
 Update product details. **Requires Authentication & Ownership**
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Not authorized to update this product",
+  "errors": []
+}
+```
+
 ---
 
 ### 6. Delete Product (Seller Only)
+
 **DELETE** `/api/products/:id`
 
 Delete a product. **Requires Authentication & Ownership**
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Product not found or already deleted",
+  "errors": []
+}
+```
 
 ---
 
 ## 📁 Category APIs
 
 ### 1. List Categories (Public)
+
 **GET** `/api/categories`
 
 Get all categories with optional filters.
 
 **Query Parameters:**
+
 - `level` (integer) - Filter by level (0, 1, 2)
 - `parentId` (integer) - Filter by parent category
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "Invalid category filter values",
+  "errors": []
+}
+```
 
 ---
 
 ### 2. Get Category by ID (Public)
+
 **GET** `/api/categories/:id`
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Category not found",
+  "errors": []
+}
+```
 
 ---
 
 ### 3. Create Category (Admin)
+
 **POST** `/api/categories`
 
 **Requires Authentication**
 
 **Request Body:**
+
 ```json
 {
   "name": "Electronics",
   "parentId": null,
   "level": 0
+}
+```
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Admin privileges required to create a category",
+  "errors": []
 }
 ```
 
@@ -346,11 +635,13 @@ Get all categories with optional filters.
 All cart APIs require authentication.
 
 ### 1. Get Cart
+
 **GET** `/api/cart`
 
 Get detailed cart with all items.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -384,12 +675,25 @@ Get detailed cart with all items.
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Cart not found for this user",
+  "errors": []
+}
+```
+
 ---
 
 ### 2. Add Item to Cart
+
 **POST** `/api/cart/add`
 
 **Request Body:**
+
 ```json
 {
   "productId": 1,
@@ -398,22 +702,63 @@ Get detailed cart with all items.
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 409,
+  "message": "Requested quantity exceeds available stock",
+  "errors": [
+  {
+    "field": "qty",
+    "message": "Requested quantity exceeds available stock"
+  }
+]
+}
+```
+
 ---
 
 ### 3. Update Cart Item Quantity
+
 **PUT** `/api/cart/item/:itemId`
 
 **Request Body:**
+
 ```json
 {
   "qty": 3
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Cart item not found",
+  "errors": []
+}
+```
+
 ---
 
 ### 4. Remove Item from Cart
+
 **DELETE** `/api/cart/item/:itemId`
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Cart item not found",
+  "errors": []
+}
+```
 
 ---
 
@@ -422,15 +767,18 @@ Get detailed cart with all items.
 All wishlist APIs require authentication (Buyer only).
 
 ### 1. Get Wishlist
+
 **GET** `/api/wishlist`
 
 Get paginated wishlist with product details.
 
 **Query Parameters:**
+
 - `page` (integer, default: 1)
 - `limit` (integer, default: 20)
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -458,35 +806,84 @@ Get paginated wishlist with product details.
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 401,
+  "message": "Authentication required to view wishlist",
+  "errors": []
+}
+```
+
 ---
 
 ### 2. Add Product to Wishlist
+
 **POST** `/api/wishlist`
 
 **Request Body:**
+
 ```json
 {
   "productId": 1
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 409,
+  "message": "Product is already in the wishlist",
+  "errors": []
+}
+```
+
 ---
 
 ### 3. Remove Product from Wishlist
+
 **DELETE** `/api/wishlist/:productId`
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Product not found in wishlist",
+  "errors": []
+}
+```
 
 ---
 
 ### 4. Check if Product in Wishlist
+
 **GET** `/api/wishlist/check/:productId`
 
 **Response:**
+
 ```json
 {
   "success": true,
   "data": {
     "isInWishlist": true
   }
+}
+```
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 401,
+  "message": "Authentication required to check wishlist status",
+  "errors": []
 }
 ```
 
@@ -497,11 +894,13 @@ Get paginated wishlist with product details.
 All order APIs require authentication.
 
 ### 1. Create Order from Cart
+
 **POST** `/api/orders`
 
 Creates separate orders for each seller (groups cart items by seller).
 
 **Request Body:**
+
 ```json
 {
   "cartId": 1,
@@ -521,6 +920,7 @@ Creates separate orders for each seller (groups cart items by seller).
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -537,31 +937,69 @@ Creates separate orders for each seller (groups cart items by seller).
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 409,
+  "message": "One or more cart items are out of stock",
+  "errors": []
+}
+```
+
 ---
 
 ### 2. List Orders
+
 **GET** `/api/orders`
 
 Get paginated list of orders. Returns buyer's orders or seller's orders based on role.
 
 **Query Parameters:**
+
 - `page` (integer, default: 1)
 - `limit` (integer, default: 20)
 - `status` (string) - Filter by status: `pending`, `confirmed`, `processing`, `shipped`, `delivered`, `cancelled`
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "Invalid order status filter",
+  "errors": []
+}
+```
+
 ---
 
 ### 3. Get Order by ID
+
 **GET** `/api/orders/:id`
 
 Get detailed order information with full product, buyer, and seller details.
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Order not found",
+  "errors": []
+}
+```
+
 ---
 
 ### 4. Update Order Status (Seller Only)
+
 **PATCH** `/api/orders/:id/status`
 
 **Request Body:**
+
 ```json
 {
   "status": "shipped"
@@ -570,21 +1008,51 @@ Get detailed order information with full product, buyer, and seller details.
 
 **Allowed Statuses:** `pending`, `confirmed`, `processing`, `shipped`, `delivered`, `cancelled`
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "Invalid order status value",
+  "errors": [
+  {
+    "field": "status",
+    "message": "Invalid order status value"
+  }
+]
+}
+```
+
 ---
 
 ## 👤 Profile APIs
 
 ### 1. Get Buyer Profile
+
 **GET** `/api/profile/:id`
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Profile not found",
+  "errors": []
+}
+```
 
 ---
 
 ### 2. Create/Update Buyer Profile
+
 **POST** `/api/profile/setup`
 
 **Requires Authentication**
 
 **Request Body:**
+
 ```json
 {
   "userId": 1,
@@ -597,14 +1065,42 @@ Get detailed order information with full product, buyer, and seller details.
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "All profile fields are required",
+  "errors": [
+  {
+    "field": "fullName",
+    "message": "All profile fields are required"
+  }
+]
+}
+```
+
 ---
 
 ## 🏪 Store APIs
 
 ### 1. List Verified Stores (Public)
+
 **GET** `/api/stores/list`
 
 Get all verified and active seller stores.
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 500,
+  "message": "Unable to retrieve store list",
+  "errors": []
+}
+```
 
 ---
 
@@ -613,11 +1109,13 @@ Get all verified and active seller stores.
 All location APIs require authentication.
 
 ### 1. Create Location
+
 **POST** `/api/location`
 
 Add a new shipping address.
 
 **Request Body:**
+
 ```json
 {
   "userId": 1,
@@ -629,25 +1127,73 @@ Add a new shipping address.
 }
 ```
 
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "Invalid location data",
+  "errors": []
+}
+```
+
 ---
 
 ### 2. Get User Locations
+
 **GET** `/api/location/:userId`
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "No locations found for this user",
+  "errors": []
+}
+```
 
 ---
 
 ### 3. Update Location
+
 **PUT** `/api/location/:id`
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Location not found",
+  "errors": []
+}
+```
 
 ---
 
 ### 4. Delete Location
+
 **DELETE** `/api/location/:id`
 
 **Request Body:**
+
 ```json
 {
   "userId": 1
+}
+```
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "Unable to delete location",
+  "errors": []
 }
 ```
 
@@ -656,11 +1202,13 @@ Add a new shipping address.
 ## 👨‍💼 Seller APIs
 
 ### 1. Get Seller Dashboard Statistics
+
 **GET** `/api/seller/stats`
 
 Get comprehensive seller statistics. **Requires Authentication (Seller only)**
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -698,23 +1246,59 @@ Get comprehensive seller statistics. **Requires Authentication (Seller only)**
 }
 ```
 
+**Error Response (not a seller):**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Access denied. Seller role required.",
+  "errors": []
+}
+```
+
+**Error Response (seller phone not verified — `users.is_active` is false):**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Seller account is not active. Complete phone verification first.",
+  "errors": []
+}
+```
+
+**Error Response (seller pending admin approval — `verified_sellers.is_active` is false):**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Seller account is pending admin approval.",
+  "errors": []
+}
+```
+
 ---
 
 ## 🔑 Role-Based Access
 
 ### Buyer APIs
+
 - Cart management
 - Wishlist management
 - Order creation and viewing (own orders)
 - Profile management
 
 ### Seller APIs
+
 - Product CRUD (own products)
 - Order management (own orders)
 - Order status updates
 - Seller dashboard/statistics
 
 ### Public APIs
+
 - Product listing (with filters)
 - Product details
 - Category listing
@@ -736,11 +1320,13 @@ Get comprehensive seller statistics. **Requires Authentication (Seller only)**
 ## 🚀 Getting Started
 
 1. **Generate Swagger Documentation:**
+
    ```bash
    npm run swagger
    ```
 
 2. **Access Swagger UI:**
+
    ```
    http://localhost:3000/api-docs
    ```
@@ -755,4 +1341,3 @@ Get comprehensive seller statistics. **Requires Authentication (Seller only)**
 ## 📞 Support
 
 For API support, refer to the Swagger documentation at `/api-docs` or contact the development team.
-

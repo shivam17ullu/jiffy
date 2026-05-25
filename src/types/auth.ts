@@ -1,7 +1,7 @@
 export interface SellerFirstStepBody {
   phone_number: string;
   email: string;
-  password: string;
+  password?: string;
 }
 
 export interface SellerOnboardingBody {
@@ -18,6 +18,8 @@ export interface StoreAttributes {
   storeAddress: string;
   pincode: string;
   phone?: string;
+  is_active?: boolean;
+  isSellerOpen?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -39,6 +41,8 @@ export interface DocumentAttributes {
   aadhaarUrl?: string;
   panUrl?: string;
   gstUrl?: string;
+  storeDocUrl?: string;
+  storeImageUrl?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
