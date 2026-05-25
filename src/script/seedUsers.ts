@@ -26,16 +26,24 @@ async function seedUsers() {
 			throw new Error("Roles not found.");
 		}
 
-		const defaultPassword = await bcrypt.hash("Admin@123#", 10);
+		const adminPhone = process.env.ADMIN_PHONE;
+		const adminEmail = process.env.ADMIN_EMAIL;
+		const adminPassword = process.env.ADMIN_PASSWORD;
+
+		if (!adminPhone || !adminEmail || !adminPassword) {
+			throw new Error("Admin credentials (ADMIN_PHONE, ADMIN_EMAIL, ADMIN_PASSWORD) missing in env.");
+		}
+
+		const defaultPassword = await bcrypt.hash(adminPassword, 10);
 
 		// ----------------------------------------------------------------
 		// ADMIN USER
 		// ----------------------------------------------------------------
 		const [adminUser, adminCreated] = await User.findOrCreate({
-			where: { phone_number: "7089472685" },
+			where: { phone_number: adminPhone },
 			defaults: {
-				phone_number: "7089472685",
-				email: "drapeit916@gmail.com",
+				phone_number: adminPhone,
+				email: adminEmail,
 				password: defaultPassword,
 				is_active: true,
 			},
@@ -68,47 +76,47 @@ async function seedUsers() {
 
 			if (sellerCreated) {
 				await (sellerUser as any).addRole(sellerRole, { transaction: t });
+
+				// 2️⃣ Create SellerProfile FIRST
+				const sellerProfileRecord = await SellerProfile.create(
+					{
+						userId: sellerUser.id,
+						...sellerProfile,
+					},
+					{ transaction: t }
+				);
+
+				console.log("SellerProfile Created:", sellerProfileRecord.id);
+
+				// 3️⃣ NOW create VerifiedSeller with correct FK (NO 0!)
+				await VerifiedSellers.create(
+					{
+						sellerId: sellerProfileRecord.id,
+						is_active: true,
+					},
+					{ transaction: t }
+				);
+
+				// 4️⃣ Store
+				await Store.create(
+					{ sellerId: sellerProfileRecord.id, ...store },
+					{ transaction: t }
+				);
+
+				// 5️⃣ Bank Details
+				await BankDetail.create(
+					{ sellerId: sellerProfileRecord.id, ...bankDetails },
+					{ transaction: t }
+				);
+
+				// 6️⃣ Documents
+				await Document.create(
+					{ sellerId: sellerProfileRecord.id, ...documents },
+					{ transaction: t }
+				);
+
+				console.log(`✅ Complete seller seeded: ${sellerUser.phone_number}`);
 			}
-
-			// 2️⃣ Create SellerProfile FIRST
-			const sellerProfileRecord = await SellerProfile.create(
-				{
-					userId: sellerUser.id,
-					...sellerProfile,
-				},
-				{ transaction: t }
-			);
-
-			console.log("SellerProfile Created:", sellerProfileRecord.id);
-
-			// 3️⃣ NOW create VerifiedSeller with correct FK (NO 0!)
-			await VerifiedSellers.create(
-				{
-					sellerId: sellerProfileRecord.id,
-					is_active: true,
-				},
-				{ transaction: t }
-			);
-
-			// 4️⃣ Store
-			await Store.create(
-				{ sellerId: sellerProfileRecord.id, ...store },
-				{ transaction: t }
-			);
-
-			// 5️⃣ Bank Details
-			await BankDetail.create(
-				{ sellerId: sellerProfileRecord.id, ...bankDetails },
-				{ transaction: t }
-			);
-
-			// 6️⃣ Documents
-			await Document.create(
-				{ sellerId: sellerProfileRecord.id, ...documents },
-				{ transaction: t }
-			);
-
-			console.log(`✅ Complete seller seeded: ${sellerUser.phone_number}`);
 		}
 
 		// ----------------------------------------------------------------
@@ -144,17 +152,17 @@ async function seedUsers() {
 
 			if (buyerCreated) {
 				await (buyerUser as any).addRole(buyerRole, { transaction: t });
+
+				await BuyerProfile.create(
+					{
+						userId: buyerUser.id,
+						...buyerProfile,
+					},
+					{ transaction: t }
+				);
+
+				console.log(`✅ Buyer created: ${buyerUser.phone_number}`);
 			}
-
-			await BuyerProfile.create(
-				{
-					userId: buyerUser.id,
-					...buyerProfile,
-				},
-				{ transaction: t }
-			);
-
-			console.log(`✅ Buyer created: ${buyerUser.phone_number}`);
 		}
 
 		await t.commit();
