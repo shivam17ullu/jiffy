@@ -1,5 +1,6 @@
 import * as service from '../../services/seller/sellerStats.service.js';
-import { Request, Response } from "express";
+import { Response } from "express";
+import { handleControllerError } from "../../middleware/responseHandler.js";
 
 /**
  * @swagger
@@ -76,8 +77,8 @@ export const getStats = async (req: any, res: Response) => {
     const sellerId = req.userId;
     const stats = await service.getSellerStats(sellerId);
     res.json({ success: true, data: stats });
-  } catch (err: any) {
-    res.status(400).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
   }
 };
 

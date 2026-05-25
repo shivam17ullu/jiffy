@@ -33,6 +33,9 @@ Location.init({
     latitude: { type: DataTypes.FLOAT },
     longitude: { type: DataTypes.FLOAT },
     isDefault: { type: DataTypes.BOOLEAN, defaultValue: false },
+    phone_number: { type: DataTypes.STRING(15) },
+    name: { type: DataTypes.STRING },
+    alternate_number: { type: DataTypes.STRING(15) },
 }, {
     sequelize: jiffy,
     tableName: "location",

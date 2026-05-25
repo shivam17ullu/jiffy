@@ -1,5 +1,5 @@
 import multer from "multer";
-import { Request } from "express";
+import { Request, Response, NextFunction } from "express";
 
 // Configure multer to store files in memory (for S3 upload)
 const storage = multer.memoryStorage();
@@ -33,5 +33,17 @@ export const upload = multer({
 export const uploadSingle = upload.single("image");
 
 // Middleware for multiple images upload
-export const uploadMultiple = upload.array("images", 10); // Max 10 images
+const uploadMultipleMulter = upload.array("images", 10);
+
+/** Multer middleware that forwards errors to the global error handler */
+export const uploadMultiple = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  uploadMultipleMulter(req, res, (err) => {
+    if (err) return next(err);
+    next();
+  });
+};
 

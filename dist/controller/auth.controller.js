@@ -1,12 +1,12 @@
+import { createResponse, handleControllerError, sendValidationError, } from "../middleware/responseHandler.js";
 import AuthService from "../services/auth.service.js";
-import { createResponse } from "../middleware/responseHandler.js";
 export default class AuthController {
     /**
      * @swagger
      * /api/auth/send-otp:
      *   post:
      *     summary: Send OTP for login
-     *     description: Sends OTP to the provided phone number for buyer login
+     *     description: Sends OTP for login. Phone number must already be registered in the database.
      *     tags: [Authentication]
      *     requestBody:
      *       required: true
@@ -30,14 +30,11 @@ export default class AuthController {
      */
     static async sendOtp(req, res) {
         try {
-            const { phone_number } = req.body;
-            if (!phone_number)
-                return createResponse(res, {
-                    status: 400,
-                    message: "Phone number required",
-                    response: null,
-                });
-            await AuthService.generateOtp(phone_number);
+            const { phone_number, role } = req.body;
+            if (!phone_number) {
+                return sendValidationError(res, "Phone number is required", "phone_number");
+            }
+            await AuthService.generateOtp(phone_number, role);
             return createResponse(res, {
                 status: 200,
                 message: "OTP sent successfully",
@@ -45,11 +42,7 @@ export default class AuthController {
             });
         }
         catch (error) {
-            return createResponse(res, {
-                status: 500,
-                message: error.message,
-                response: null,
-            });
+            return handleControllerError(res, error, 500);
         }
     }
     /**
@@ -101,29 +94,24 @@ export default class AuthController {
      */
     static async verifyOtp(req, res) {
         try {
-            const { phone_number, otp } = req.body;
-            if (!phone_number || !otp)
-                return createResponse(res, {
-                    status: 400,
-                    message: "Phone number & OTP required",
-                    response: null,
-                });
+            const { phone_number, otp, role } = req.body;
+            if (!phone_number) {
+                return sendValidationError(res, "Phone number is required", "phone_number");
+            }
+            if (!otp) {
+                return sendValidationError(res, "OTP is required", "otp");
+            }
             const deviceInfo = req.headers["user-agent"] || "unknown";
             const ip = req.ip;
-            const { user, accessToken, refreshToken } = await AuthService.verifyOtp(phone_number, otp, deviceInfo, ip);
+            const { user, accessToken, refreshToken, onboardingCompleted } = await AuthService.verifyOtp(phone_number, otp, deviceInfo, ip, role);
             return createResponse(res, {
                 status: 200,
                 message: "Login successful",
-                response: { user, accessToken, refreshToken },
+                response: { user, accessToken, refreshToken, onboardingCompleted },
             });
         }
         catch (error) {
-            console.log(error);
-            return createResponse(res, {
-                status: 400,
-                message: error.message,
-                response: null,
-            });
+            return handleControllerError(res, error);
         }
     }
     /**
@@ -153,12 +141,9 @@ export default class AuthController {
     static async refreshToken(req, res) {
         try {
             const { refreshToken } = req.body;
-            if (!refreshToken)
-                return createResponse(res, {
-                    status: 400,
-                    message: "Refresh token required",
-                    response: null,
-                });
+            if (!refreshToken) {
+                return sendValidationError(res, "Refresh token is required", "refreshToken");
+            }
             const tokens = await AuthService.refreshToken(refreshToken);
             return createResponse(res, {
                 status: 200,
@@ -167,11 +152,7 @@ export default class AuthController {
             });
         }
         catch (error) {
-            return createResponse(res, {
-                status: 401,
-                message: error.message,
-                response: null,
-            });
+            return handleControllerError(res, error, 401);
         }
     }
     /**
@@ -207,11 +188,43 @@ export default class AuthController {
             });
         }
         catch (error) {
+            return handleControllerError(res, error, 500);
+        }
+    }
+    /**
+     * @swagger
+     * /api/auth/admin-logout:
+     *   post:
+     *     summary: Admin logout
+     *     description: Revokes the refresh token to logout the admin
+     *     tags: [Authentication]
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - refreshToken
+     *             properties:
+     *               refreshToken:
+     *                 type: string
+     *     responses:
+     *       200:
+     *         description: Admin logged out successfully
+     */
+    static async adminLogout(req, res) {
+        try {
+            const { refreshToken } = req.body;
+            await AuthService.revokeRefreshToken(refreshToken);
             return createResponse(res, {
-                status: 500,
-                message: error.message,
+                status: 200,
+                message: "Admin logged out successfully",
                 response: null,
             });
+        }
+        catch (error) {
+            return handleControllerError(res, error, 500);
         }
     }
     /**
@@ -230,7 +243,7 @@ export default class AuthController {
      *             required:
      *               - phone_number
      *               - email
-     *               - password
+     *               # - password
      *             properties:
      *               phone_number:
      *                 type: string
@@ -239,9 +252,9 @@ export default class AuthController {
      *                 type: string
      *                 format: email
      *                 example: "seller@example.com"
-     *               password:
-     *                 type: string
-     *                 example: "SecurePassword123"
+     *               # password:
+     *               #   type: string
+     *               #   example: "SecurePassword123"
      *     responses:
      *       200:
      *         description: OTP sent successfully
@@ -250,27 +263,29 @@ export default class AuthController {
      */
     static async registerSeller(req, res) {
         try {
-            const { phone_number, email, password } = req.body;
-            if (!phone_number || !email || !password)
-                return createResponse(res, {
-                    status: 400,
-                    message: "Phone number, Email and Password required",
-                    response: null,
-                });
+            const { phone_number, email } = req.body;
+            // const { password } = req.body; // commented out password
+            if (!phone_number) {
+                return sendValidationError(res, "Phone number is required", "phone_number");
+            }
+            if (!email) {
+                return sendValidationError(res, "Email is required", "email");
+            }
+            // if (!password) {
+            // 	return sendValidationError(res, "Password is required", "password");
+            // }
             const response = await AuthService.registerSeller(req.body);
             return createResponse(res, {
                 status: 200,
                 message: "OTP sent successfully",
-                response: response.user,
+                response: {
+                    user: response.user,
+                    otp: response.otp
+                },
             });
         }
         catch (error) {
-            console.log(error);
-            return createResponse(res, {
-                status: 500,
-                message: error.message,
-                response: null,
-            });
+            return handleControllerError(res, error);
         }
     }
     /**
@@ -303,12 +318,12 @@ export default class AuthController {
     static async verifySellerOtp(req, res) {
         try {
             const { otp, phone_number } = req.body;
-            if (!otp || !phone_number)
-                return createResponse(res, {
-                    status: 400,
-                    message: " Phone & OTP required",
-                    response: null,
-                });
+            if (!phone_number) {
+                return sendValidationError(res, "Phone number is required", "phone_number");
+            }
+            if (!otp) {
+                return sendValidationError(res, "OTP is required", "otp");
+            }
             const deviceInfo = req.headers["user-agent"] || "unknown";
             const ip = req.ip;
             await AuthService.verifySellerOtp(phone_number, otp, deviceInfo, ip);
@@ -318,11 +333,7 @@ export default class AuthController {
             });
         }
         catch (error) {
-            return createResponse(res, {
-                status: 400,
-                message: error.message,
-                response: null,
-            });
+            return handleControllerError(res, error);
         }
     }
     /**
@@ -379,6 +390,8 @@ export default class AuthController {
      *                     type: string
      *                   gstUrl:
      *                     type: string
+     *                   storeDocUrl:
+     *                     type: string
      *     responses:
      *       200:
      *         description: Seller onboarding completed successfully
@@ -397,12 +410,63 @@ export default class AuthController {
             });
         }
         catch (error) {
-            console.log(error);
+            return handleControllerError(res, error, 500);
+        }
+    }
+    /**
+     * @swagger
+     * /api/auth/admin-login:
+     *   post:
+     *     summary: Admin login
+     *     description: Login using email and password. Restricted to users with the 'admin' role.
+     *     tags: [Authentication]
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - email
+     *               - password
+     *             properties:
+     *               email:
+     *                 type: string
+     *                 format: email
+     *                 example: "admin@example.com"
+     *               password:
+     *                 type: string
+     *                 example: "SecurePassword123"
+     *     responses:
+     *       200:
+     *         description: Login successful
+     *       400:
+     *         description: Bad request or validation error
+     *       401:
+     *         description: Invalid credentials
+     *       403:
+     *         description: Access denied (Not an admin)
+     */
+    static async adminLogin(req, res) {
+        try {
+            const { email, password } = req.body;
+            if (!email) {
+                return sendValidationError(res, "Email is required", "email");
+            }
+            if (!password) {
+                return sendValidationError(res, "Password is required", "password");
+            }
+            const deviceInfo = req.headers["user-agent"] || "unknown";
+            const ip = req.ip;
+            const { adminId, accessToken, refreshToken } = await AuthService.adminLogin(email, password, deviceInfo, ip);
             return createResponse(res, {
-                status: 500,
-                message: error.message,
-                response: null,
+                status: 200,
+                message: "Admin login successful",
+                response: { adminId, role: "admin", accessToken, refreshToken },
             });
+        }
+        catch (error) {
+            return handleControllerError(res, error);
         }
     }
 }

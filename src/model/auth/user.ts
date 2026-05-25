@@ -38,7 +38,6 @@ User.init(
     phone_number: {
       type: DataTypes.STRING(15),
       allowNull: false,
-      unique: true,
     },
     email: {
       type: DataTypes.STRING(50),
@@ -57,6 +56,12 @@ User.init(
     modelName: "User",
     timestamps: true,
     underscored: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ["phone_number"],
+      },
+    ],
   }
 );
 

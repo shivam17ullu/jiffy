@@ -1,7 +1,7 @@
-import { jiffy } from "../config/sequelize.js";
-import { User, Role, SellerProfile, VerifiedSellers, Store, Document, BankDetail, BuyerProfile, } from "../model/relations.js";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { fileURLToPath } from "url";
+import { jiffy } from "../config/sequelize.js";
+import { BankDetail, BuyerProfile, Document, Role, SellerProfile, Store, User, VerifiedSellers, } from "../model/relations.js";
 async function seedUsers() {
     const t = await jiffy.transaction();
     try {
@@ -12,15 +12,15 @@ async function seedUsers() {
         if (!adminRole || !sellerRole || !buyerRole) {
             throw new Error("Roles not found.");
         }
-        const defaultPassword = await bcrypt.hash("Password123", 12);
+        const defaultPassword = await bcrypt.hash("Admin@123#", 10);
         // ----------------------------------------------------------------
         // ADMIN USER
         // ----------------------------------------------------------------
         const [adminUser, adminCreated] = await User.findOrCreate({
-            where: { phone_number: "9999999999" },
+            where: { phone_number: "7089472685" },
             defaults: {
-                phone_number: "9999999999",
-                email: "admin@jiffy.com",
+                phone_number: "7089472685",
+                email: "drapeit916@gmail.com",
                 password: defaultPassword,
                 is_active: true,
             },
@@ -33,37 +33,7 @@ async function seedUsers() {
         // ----------------------------------------------------------------
         // SELLERS LIST
         // ----------------------------------------------------------------
-        const sellers = [
-            {
-                phone_number: "9876543210",
-                email: "seller1@jiffy.com",
-                sellerProfile: {
-                    businessName: "Fashion Hub",
-                    gstNumber: "GST123456789",
-                    address: "123 Fashion Street",
-                    city: "Mumbai",
-                    state: "Maharashtra",
-                    zipCode: "400001",
-                    phone: "9876543210",
-                },
-                store: {
-                    storeName: "Fashion Hub Main Store",
-                    storeAddress: "123 Fashion Street, Mumbai",
-                    pincode: "400001",
-                },
-                bankDetails: {
-                    accountHolderName: "Fashion Hub",
-                    accountNumber: "123456789012",
-                    ifscCode: "HDFC0001234",
-                    termsAccepted: true,
-                },
-                documents: {
-                    aadhaarUrl: "https://example.com/aadhaar1.pdf",
-                    panUrl: "https://example.com/pan1.pdf",
-                    gstUrl: "https://example.com/gst1.pdf",
-                },
-            },
-        ];
+        const sellers = [];
         for (const sellerData of sellers) {
             const { sellerProfile, store, bankDetails, documents, ...userData } = sellerData;
             // 1️⃣ Create/find user

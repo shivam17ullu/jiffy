@@ -12,7 +12,6 @@ BuyerProfile.init({
     userId: {
         type: DataTypes.BIGINT,
         allowNull: false,
-        unique: true,
     },
     fullName: {
         type: DataTypes.STRING,
@@ -37,5 +36,11 @@ BuyerProfile.init({
     sequelize: jiffy,
     tableName: "buyer_profile",
     timestamps: true,
+    indexes: [
+        {
+            unique: true,
+            fields: ["userId"],
+        },
+    ],
 });
 export default BuyerProfile;

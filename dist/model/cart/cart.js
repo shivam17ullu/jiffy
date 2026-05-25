@@ -11,7 +11,15 @@ Cart.init({
     userId: {
         type: DataTypes.BIGINT,
         allowNull: false,
-        unique: true,
     },
-}, { tableName: "carts", sequelize: jiffy });
+}, {
+    tableName: "carts",
+    sequelize: jiffy,
+    indexes: [
+        {
+            unique: true,
+            fields: ["userId"],
+        },
+    ],
+});
 export default Cart;

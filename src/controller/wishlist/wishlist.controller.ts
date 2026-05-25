@@ -1,5 +1,10 @@
 import * as service from '../../services/wishlist/wishlist.service.js';
-import { Request, Response } from "express";
+import { Response } from "express";
+import {
+  handleControllerError,
+  sendError,
+  sendValidationError,
+} from "../../middleware/responseHandler.js";
 
 /**
  * @swagger
@@ -100,8 +105,8 @@ export const getWishlist = async (req: any, res: Response) => {
     };
     const result = await service.getWishlist(userId, params);
     res.json({ success: true, data: result });
-  } catch (err: any) {
-    res.status(400).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
   }
 };
 
@@ -151,10 +156,7 @@ export const addToWishlist = async (req: any, res: Response) => {
     const { productId } = req.body;
     
     if (!productId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Product ID is required" 
-      });
+      return sendValidationError(res, "Product ID is required", "productId");
     }
 
     await service.addToWishlist(userId, productId);
@@ -162,8 +164,8 @@ export const addToWishlist = async (req: any, res: Response) => {
       success: true, 
       message: "Product added to wishlist successfully" 
     });
-  } catch (err: any) {
-    res.status(400).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
   }
 };
 
@@ -208,10 +210,7 @@ export const removeFromWishlist = async (req: any, res: Response) => {
     const productId = parseInt(req.params.productId);
     
     if (!productId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Product ID is required" 
-      });
+      return sendValidationError(res, "Product ID is required", "productId");
     }
 
     await service.removeFromWishlist(userId, productId);
@@ -219,8 +218,8 @@ export const removeFromWishlist = async (req: any, res: Response) => {
       success: true, 
       message: "Product removed from wishlist successfully" 
     });
-  } catch (err: any) {
-    res.status(400).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
   }
 };
 
@@ -261,13 +260,17 @@ export const removeFromWishlist = async (req: any, res: Response) => {
 export const checkWishlist = async (req: any, res: Response) => {
   try {
     const userId = req.userId || req.user?.id;
+    if (!userId) {
+      return sendError(
+        res,
+        401,
+        "Authentication required to check wishlist status"
+      );
+    }
     const productId = parseInt(req.params.productId);
     
     if (!productId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Product ID is required" 
-      });
+      return sendValidationError(res, "Product ID is required", "productId");
     }
 
     const isInWishlist = await service.isInWishlist(userId, productId);
@@ -275,8 +278,8 @@ export const checkWishlist = async (req: any, res: Response) => {
       success: true, 
       data: { isInWishlist } 
     });
-  } catch (err: any) {
-    res.status(400).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
   }
 };
 

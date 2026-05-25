@@ -1,5 +1,9 @@
 import * as service from '../../services/cart/cart.service.js';
-import { Request, Response } from "express";
+import { Response } from "express";
+import {
+  handleControllerError,
+  sendValidationError,
+} from "../../middleware/responseHandler.js";
 
 /**
  * @swagger
@@ -41,9 +45,14 @@ export const addItem = async (req: any, res: Response) => {
   try {
     const userId = req.userId || req.user?.id;
     const { productId, variantId, qty } = req.body;
+    if (!productId) {
+      return sendValidationError(res, "Product ID is required", "productId");
+    }
     const items = await service.addToCart(userId, productId, variantId ?? null, qty ?? 1);
     res.json({ success: true, data: items });
-  } catch (err: any) { res.status(400).json({ success:false, message: err.message }); }
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
 };
 
 /**
@@ -151,8 +160,8 @@ export const getCart = async (req: any, res: Response) => {
     const userId = req.userId || req.user?.id;
     const cart = await service.getCart(userId);
     res.json({ success:true, data: cart });
-  } catch (err: any) {
-    res.status(400).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
   }
 };
 
@@ -201,12 +210,16 @@ export const updateQty = async (req: any, res: Response) => {
     const { itemId } = req.params;
     const { qty } = req.body;
     if (!qty || qty < 1) {
-      return res.status(400).json({ success: false, message: "Quantity must be at least 1" });
+      return sendValidationError(
+        res,
+        "Quantity must be at least 1",
+        "qty"
+      );
     }
     const updated = await service.updateQty(userId, +itemId, qty);
     res.json({ success:true, data: updated });
-  } catch (err: any) {
-    res.status(400).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
   }
 };
 
@@ -240,7 +253,7 @@ export const removeItem = async (req: any, res: Response) => {
     const { itemId } = req.params;
     await service.removeItem(userId, +itemId);
     res.json({ success:true, message: "Item removed from cart" });
-  } catch (err: any) {
-    res.status(400).json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
   }
 };

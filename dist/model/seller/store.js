@@ -8,6 +8,8 @@ Store.init({
     storeName: { type: DataTypes.STRING(150), allowNull: false },
     storeAddress: { type: DataTypes.TEXT, allowNull: false },
     pincode: { type: DataTypes.STRING(10), allowNull: false },
+    is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
+    isSellerOpen: { type: DataTypes.BOOLEAN, defaultValue: true },
 }, {
     sequelize: jiffy,
     tableName: "stores",

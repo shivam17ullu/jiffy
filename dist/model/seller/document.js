@@ -8,6 +8,8 @@ Document.init({
     aadhaarUrl: { type: DataTypes.STRING(255) },
     panUrl: { type: DataTypes.STRING(255) },
     gstUrl: { type: DataTypes.STRING(255) },
+    storeDocUrl: { type: DataTypes.STRING(255), field: "store_doc" },
+    storeImageUrl: { type: DataTypes.STRING(255), field: "store_image" },
 }, {
     sequelize: jiffy,
     tableName: "documents",
