@@ -23,6 +23,7 @@
 		"pm2:logs": "pm2 logs",
 		"swagger": "node --loader ts-node/esm src/config/swagger.ts",
 		"seed:roles": "node --loader ts-node/esm src/script/seedRoles.ts",
+		"seed:admin": "node --loader ts-node/esm src/script/seedAdmin.ts",
 		"seed:users": "node --loader ts-node/esm src/script/seedUsers.ts",
 		"seed:category": "node --loader ts-node/esm src/script/seedCategory.ts",
 		"seed:product": "node --loader ts-node/esm src/script/seedProduct.ts",
