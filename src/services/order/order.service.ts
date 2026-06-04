@@ -72,7 +72,7 @@ export const createOrdersFromCart = async (
           userId,
           sellerId,       // <-- REQUIRED FIELD FIX
           total,
-          status: "created",
+          status: "pending",
           shippingAddress,
           paymentInfo,
         },
@@ -143,6 +143,8 @@ export const listOrders = async (
     where.userId = userId;
   } else if (role === "seller") {
     where.sellerId = userId;
+  } else if (role === "all") {
+    where[Op.or] = [{ userId: userId }, { sellerId: userId }];
   }
 
   // Filter by status if provided
@@ -220,6 +222,8 @@ export const getOrderById = async (
     where.userId = userId;
   } else if (role === "seller") {
     where.sellerId = userId;
+  } else if (role === "all") {
+    where[Op.or] = [{ userId: userId }, { sellerId: userId }];
   }
 
   const order = await Order.findOne({

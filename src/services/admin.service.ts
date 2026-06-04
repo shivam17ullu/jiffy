@@ -101,6 +101,12 @@ export default class AdminService {
 		});
 	}
 
+	static async getSellerDocuments(sellerId: number) {
+		return await Document.findOne({
+			where: { sellerId },
+		});
+	}
+
 	static async approveSeller(sellerId: number, action: "accept" | "reject") {
 		const verifiedSeller = await VerifiedSellers.findOne({ 
 			where: { sellerId },

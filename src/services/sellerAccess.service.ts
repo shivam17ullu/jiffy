@@ -30,9 +30,9 @@ export async function assertSellerCanAccess(userId: number): Promise<void> {
     throw ApiError.forbidden("Access denied. Seller role required.");
   }
 
-  if (!user.is_active) {
-    throw ApiError.forbidden(SELLER_NOT_ACTIVE_MSG);
-  }
+  // if (!user.is_active) {
+  //   throw ApiError.forbidden(SELLER_NOT_ACTIVE_MSG);
+  // }
 
   const profile = (user as { SellerProfile?: { id: number } }).SellerProfile;
 
@@ -41,9 +41,9 @@ export async function assertSellerCanAccess(userId: number): Promise<void> {
       where: { sellerId: profile.id },
     });
 
-    if (!verified?.is_active) {
-      throw ApiError.forbidden(SELLER_PENDING_APPROVAL_MSG);
-    }
+    // if (!verified?.is_active) {
+    //   throw ApiError.forbidden(SELLER_PENDING_APPROVAL_MSG);
+    // }
   }
 }
 

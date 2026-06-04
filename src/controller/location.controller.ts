@@ -3,6 +3,7 @@ import LocationService from "../services/location.service.js";
 import {
   createResponse,
   handleControllerError,
+  sendError,
   sendValidationError,
 } from "../middleware/responseHandler.js";
 
@@ -158,9 +159,20 @@ class LocationController {
    */
   static async update(req: Request, res: Response) {
     try {
+      const locationId = Number(req.params.id);
+      let userId = Number((req as any).userId || req.body.userId);
+
+      if (!userId || isNaN(userId)) {
+        const loc = await LocationService.getLocationById(locationId);
+        if (!loc) {
+          return sendError(res, 404, "Location not found");
+        }
+        userId = (loc as any).userId;
+      }
+
       const result = await LocationService.updateLocation(
-        Number(req.params.id),
-        Number(req.body.userId),
+        locationId,
+        userId,
         req.body
       );
 

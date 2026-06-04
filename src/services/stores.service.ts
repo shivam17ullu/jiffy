@@ -2,22 +2,30 @@ import { SellerProfile, User, Store, VerifiedSellers, Document } from "../model/
 import { Op } from "sequelize";
 
 export default class StoreService {
-  static async getstores(zipCode?: string) {
+  static async getstores(zipCode?: string, storeCategory?: string) {
     let storeInclude: any = {
       model: Store,
+      where: {}
     };
 
     if (zipCode && zipCode.length >= 5) {
       const prefix = zipCode.substring(0, 5);
-      storeInclude.where = {
-        pincode: {
-          [Op.like]: `${prefix}%`,
-        },
+      storeInclude.where.pincode = {
+        [Op.like]: `${prefix}%`,
       };
       storeInclude.required = true;
     } else if (zipCode) {
-      storeInclude.where = { pincode: zipCode };
+      storeInclude.where.pincode = zipCode;
       storeInclude.required = true;
+    }
+
+    if (storeCategory && storeCategory.toLowerCase() !== "all") {
+      storeInclude.where.storeCategory = storeCategory;
+      storeInclude.required = true;
+    }
+
+    if (Object.keys(storeInclude.where).length === 0) {
+      delete storeInclude.where;
     }
 
     return await SellerProfile.findAll({

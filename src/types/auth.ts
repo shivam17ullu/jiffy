@@ -17,6 +17,7 @@ export interface StoreAttributes {
   storeName: string;
   storeAddress: string;
   pincode: string;
+  storeCategory?: string;
   phone?: string;
   is_active?: boolean;
   isSellerOpen?: boolean;
