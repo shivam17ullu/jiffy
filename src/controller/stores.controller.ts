@@ -44,11 +44,11 @@ export default class StoreController {
    */
   static async getStores(req: Request, res: Response) {
     try {
-      const { zipCode } = req.query;
-      const stores = await StoreService.getstores(zipCode as string);
+      const { zipCode, storeCategory } = req.query;
+      const stores = await StoreService.getstores(zipCode as string, storeCategory as string);
 
       if (!stores || (Array.isArray(stores) && stores.length === 0)) {
-        return sendError(res, 404, "No verified stores found");
+        return sendError(res, 404, "No stores found");
       }
 
       const formattedStores = stores.map((store: any) => {

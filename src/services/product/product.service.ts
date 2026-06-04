@@ -64,6 +64,7 @@ export const listProducts = async (opts: any) => {
     minPrice,
     maxPrice,
     sort,
+    storeName,
     userId, // Optional: to check wishlist status
   } = opts;
 
@@ -130,10 +131,14 @@ export const listProducts = async (opts: any) => {
     {
       association: "seller",
       attributes: ["id", "phone_number", "email"],
+      required: storeName ? true : false,
       include: [
         {
           model: SellerProfile,
-          required: false,
+          required: storeName ? true : false,
+          where: storeName ? {
+            businessName: { [Op.like]: `%${storeName}%` }
+          } : undefined,
           attributes: [
             "businessName",
             "gstNumber",

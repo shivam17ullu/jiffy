@@ -139,7 +139,13 @@ export const listOrders = async (req: any, res: Response) => {
     }
 
     const roles = (user as any).Roles.map((r: any) => r.name);
-    const role = roles.includes("seller") ? "seller" : "buyer";
+    
+    // Support an optional 'role' query param to filter specifically by buyer or seller orders.
+    // If not provided, fetch 'all' (orders where they are either buyer or seller).
+    let role = (req.query.role as string) || "all";
+    if (role === "seller" && !roles.includes("seller")) {
+      role = "buyer"; // Fallback if they request seller but aren't one
+    }
 
     const params = {
       page: parseInt(req.query.page) || 1,
@@ -224,7 +230,7 @@ export const getOrderById = async (req: any, res: Response) => {
     }
 
     const roles = (user as any).Roles.map((r: any) => r.name);
-    const role = roles.includes("seller") ? "seller" : "buyer";
+    const role = "all";
 
     const order = await service.getOrderById(orderId, userId, role);
     

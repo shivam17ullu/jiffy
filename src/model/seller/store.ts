@@ -12,6 +12,7 @@ class Store extends Model<StoreAttributes, StoreCreationAttributes> implements S
   public storeName!: string;
   public storeAddress!: string;
   public pincode!: string;
+  public storeCategory?: string;
   public is_active!: boolean;
   public isSellerOpen!: boolean;
   public readonly createdAt!: Date;
@@ -25,6 +26,10 @@ Store.init(
     storeName: { type: DataTypes.STRING(150), allowNull: false },
     storeAddress: { type: DataTypes.TEXT, allowNull: false },
     pincode: { type: DataTypes.STRING(10), allowNull: false },
+    storeCategory: { 
+      type: DataTypes.ENUM("Men", "Women", "Kids", "All"), 
+      allowNull: true 
+    },
     is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
     isSellerOpen: { type: DataTypes.BOOLEAN, defaultValue: true },
   },

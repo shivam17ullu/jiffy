@@ -21,6 +21,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { sendOtpFast2SMS } from "../utils/fast2sms.js";
 import { generateOtp } from "../utils/generateOtp.js";
 import { uploadBase64ToS3 } from "../utils/s3Upload.js";
+import { sendSellerOnboardEmail } from "../utils/mailer.js";
 import {
 	assertSellerCanAccess,
 	assertSellerCanAccessByPhone,
@@ -379,6 +380,7 @@ export default class AuthService {
 					storeName: storePayload.storeName || storePayload.store_name,
 					storeAddress: storePayload.storeAddress || storePayload.store_address,
 					pincode: storePayload.pincode,
+					storeCategory: storePayload.storeCategory || storePayload.store_category,
 				},
 				{ transaction }
 			);
@@ -424,6 +426,21 @@ export default class AuthService {
 			console.log(verified);
 
 			await transaction.commit();
+
+			// Fetch user to get email and fallback phone number
+			const user = await User.findByPk(Number(payload.userId));
+			const userPhone = user?.phone_number || seller.phone || "";
+			const userEmail = (user as any)?.email || "";
+			const sellerName = bankPayload.accountHolderName || bankPayload.account_holder_name || "N/A";
+
+			// Send email notification to admins
+			sendSellerOnboardEmail({
+				sellerName,
+				storeName: seller.businessName || "N/A",
+				email: userEmail,
+				phone: userPhone,
+				address: seller.address || "N/A"
+			}).catch(err => console.error("Email notification failed:", err));
 
 			return {
 				message: "Seller onboarding completed successfully",

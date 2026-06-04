@@ -63,6 +63,7 @@ export const handleControllerError = (
   error: unknown,
   fallbackStatus = 400
 ): Response => {
+  console.error("API Error Details:", error);
   const resolved = resolveError(error);
   const status =
     resolved.status >= 400 ? resolved.status : fallbackStatus;
