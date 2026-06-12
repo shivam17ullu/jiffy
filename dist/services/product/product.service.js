@@ -1,7 +1,7 @@
-import { Product, ProductVariant, Category, SellerProfile, Wishlist, } from "../../model/relations.js";
+import { Op } from "sequelize";
 import slugify from "slugify";
 import { jiffy } from "../../config/sequelize.js";
-import { Op } from "sequelize";
+import { Category, Product, ProductVariant, SellerProfile, Wishlist } from "../../model/relations.js";
 export const createProduct = async (payload, sellerId, imageUrls = []) => {
     const t = await jiffy.transaction();
     try {
@@ -14,7 +14,7 @@ export const createProduct = async (payload, sellerId, imageUrls = []) => {
             await product.addCategories(categories, { transaction: t });
         }
         for (const v of variants) {
-            await ProductVariant.create({ ...v, productId: product.id }, { transaction: t });
+            await ProductVariant.create({ ...v, isActive: v.isActive !== undefined ? v.isActive : true, productId: product.id }, { transaction: t });
         }
         await t.commit();
         return await Product.findByPk(product.id, {
@@ -27,7 +27,7 @@ export const createProduct = async (payload, sellerId, imageUrls = []) => {
     }
 };
 export const listProducts = async (opts) => {
-    const { page = 1, limit = 20, q, categoryId, brand, minPrice, maxPrice, sort, userId, // Optional: to check wishlist status
+    const { page = 1, limit = 20, q, categoryId, brand, minPrice, maxPrice, sort, storeName, userId, // Optional: to check wishlist status
      } = opts;
     const where = { isActive: true };
     // Search query
@@ -88,10 +88,14 @@ export const listProducts = async (opts) => {
         {
             association: "seller",
             attributes: ["id", "phone_number", "email"],
+            required: storeName ? true : false,
             include: [
                 {
                     model: SellerProfile,
-                    required: false,
+                    required: storeName ? true : false,
+                    where: storeName ? {
+                        businessName: { [Op.like]: `%${storeName}%` }
+                    } : undefined,
                     attributes: [
                         "businessName",
                         "gstNumber",
@@ -328,7 +332,7 @@ export const updateProduct = async (id, sellerId, payload, imageUrls = null) => 
                         });
                     }
                     else {
-                        await ProductVariant.create({ ...v, productId: id }, { transaction: t });
+                        await ProductVariant.create({ ...v, isActive: true, productId: id }, { transaction: t });
                     }
                 }
             }
@@ -452,6 +456,6 @@ export const toggleVariantStatus = async (productId, variantId, sellerId, isActi
     if (!variant) {
         return null;
     }
-    await variant.update({ isActive });
+    await variant.update({ isActive, isStock: isActive });
     return await getProductById(productId);
 };

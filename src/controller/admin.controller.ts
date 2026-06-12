@@ -324,4 +324,50 @@ export default class AdminController {
 			return handleControllerError(res, error);
 		}
 	}
+
+	/**
+	 * @swagger
+	 * /api/admin/sellers/{id}:
+	 *   delete:
+	 *     summary: Delete a seller and all related details
+	 *     description: Permanently deletes the seller profile, store, documents, bank details, user account, products, variants, and orders.
+	 *     tags: [Admin]
+	 *     security:
+	 *       - bearerAuth: []
+	 *     parameters:
+	 *       - in: path
+	 *         name: id
+	 *         required: true
+	 *         schema:
+	 *           type: integer
+	 *         description: Seller profile ID
+	 *     responses:
+	 *       200:
+	 *         description: Seller and all associated details deleted successfully
+	 *       400:
+	 *         description: Invalid seller ID
+	 *       404:
+	 *         description: Seller not found
+	 */
+	static async deleteSeller(req: Request, res: Response) {
+		try {
+			const id = Number(req.params.id);
+			if (isNaN(id)) {
+				return handleControllerError(res, new Error("Invalid seller ID"), 400);
+			}
+
+			const deleted = await AdminService.deleteSeller(id);
+			if (!deleted) {
+				return handleControllerError(res, new Error("Seller not found"), 404);
+			}
+
+			return createResponse(res, {
+				status: 200,
+				message: "Seller and all associated details deleted successfully",
+			});
+		} catch (error: unknown) {
+			return handleControllerError(res, error);
+		}
+	}
 }
+

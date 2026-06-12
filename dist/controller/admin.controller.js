@@ -99,6 +99,52 @@ export default class AdminController {
     }
     /**
      * @swagger
+     * /api/admin/sellers/{id}/docs:
+     *   get:
+     *     summary: Get seller documents
+     *     description: Retrieve uploaded documents of a specific seller
+     *     tags: [Admin]
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: integer
+     *         description: Seller profile ID
+     *     responses:
+     *       200:
+     *         description: Seller documents retrieved successfully
+     *       400:
+     *         description: Invalid seller ID
+     *       404:
+     *         description: Seller documents not found
+     *       500:
+     *         description: Internal server error
+     */
+    static async getSellerDocuments(req, res) {
+        try {
+            const id = Number(req.params.id);
+            if (isNaN(id)) {
+                return handleControllerError(res, new Error("Invalid seller ID"));
+            }
+            const docs = await AdminService.getSellerDocuments(id);
+            if (!docs) {
+                return handleControllerError(res, new Error("Seller documents not found"));
+            }
+            return createResponse(res, {
+                status: 200,
+                message: "Seller documents retrieved successfully",
+                response: docs,
+            });
+        }
+        catch (error) {
+            return handleControllerError(res, error);
+        }
+    }
+    /**
+     * @swagger
      * /api/admin/products:
      *   get:
      *     summary: Get all products list

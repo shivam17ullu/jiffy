@@ -121,7 +121,12 @@ export const listOrders = async (req, res) => {
             return sendError(res, 404, "User account not found");
         }
         const roles = user.Roles.map((r) => r.name);
-        const role = roles.includes("seller") ? "seller" : "buyer";
+        // Support an optional 'role' query param to filter specifically by buyer or seller orders.
+        // If not provided, fetch 'all' (orders where they are either buyer or seller).
+        let role = req.query.role || "all";
+        if (role === "seller" && !roles.includes("seller")) {
+            role = "buyer"; // Fallback if they request seller but aren't one
+        }
         const params = {
             page: parseInt(req.query.page) || 1,
             limit: parseInt(req.query.limit) || 20,
@@ -202,7 +207,7 @@ export const getOrderById = async (req, res) => {
             return sendError(res, 404, "User account not found");
         }
         const roles = user.Roles.map((r) => r.name);
-        const role = roles.includes("seller") ? "seller" : "buyer";
+        const role = "all";
         const order = await service.getOrderById(orderId, userId, role);
         if (!order) {
             return sendError(res, 404, "Order not found or you do not have permission to view it");

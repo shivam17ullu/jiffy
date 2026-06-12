@@ -1,5 +1,5 @@
 import LocationService from "../services/location.service.js";
-import { createResponse, handleControllerError, sendValidationError, } from "../middleware/responseHandler.js";
+import { createResponse, handleControllerError, sendError, sendValidationError, } from "../middleware/responseHandler.js";
 /**
  * @swagger
  * /api/location:
@@ -152,7 +152,16 @@ class LocationController {
      */
     static async update(req, res) {
         try {
-            const result = await LocationService.updateLocation(Number(req.params.id), Number(req.body.userId), req.body);
+            const locationId = Number(req.params.id);
+            let userId = Number(req.userId || req.body.userId);
+            if (!userId || isNaN(userId)) {
+                const loc = await LocationService.getLocationById(locationId);
+                if (!loc) {
+                    return sendError(res, 404, "Location not found");
+                }
+                userId = loc.userId;
+            }
+            const result = await LocationService.updateLocation(locationId, userId, req.body);
             return createResponse(res, {
                 status: 200,
                 message: "Location updated",

@@ -188,6 +188,11 @@ export const create = async (req, res) => {
  *         schema:
  *           type: string
  *         description: Filter by category ID
+ *       - in: query
+ *         name: storeName
+ *         schema:
+ *           type: string
+ *         description: Filter by store/business name
  *     responses:
  *       200:
  *         description: List of products
@@ -221,6 +226,7 @@ export const list = async (req, res) => {
         minPrice: req.query.minPrice,
         maxPrice: req.query.maxPrice,
         sort: req.query.sort,
+        storeName: req.query.storeName,
         userId: req.userId || undefined, // Include userId if authenticated
     };
     const result = await service.listProducts(params);

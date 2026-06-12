@@ -19,17 +19,17 @@ export async function assertSellerCanAccess(userId) {
     if (!userHasSellerRole(user)) {
         throw ApiError.forbidden("Access denied. Seller role required.");
     }
-    if (!user.is_active) {
-        throw ApiError.forbidden(SELLER_NOT_ACTIVE_MSG);
-    }
+    // if (!user.is_active) {
+    //   throw ApiError.forbidden(SELLER_NOT_ACTIVE_MSG);
+    // }
     const profile = user.SellerProfile;
     if (profile?.id) {
         const verified = await VerifiedSellers.findOne({
             where: { sellerId: profile.id },
         });
-        if (!verified?.is_active) {
-            throw ApiError.forbidden(SELLER_PENDING_APPROVAL_MSG);
-        }
+        // if (!verified?.is_active) {
+        //   throw ApiError.forbidden(SELLER_PENDING_APPROVAL_MSG);
+        // }
     }
 }
 /** Check seller activation by phone before sending OTP (early block). */

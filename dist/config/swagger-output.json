@@ -346,6 +346,18 @@
         "/api/stores/list": {
             "get": {
                 "description": "",
+                "parameters": [
+                    {
+                        "name": "zipCode",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "storeCategory",
+                        "in": "query",
+                        "type": "string"
+                    }
+                ],
                 "responses": {
                     "default": {
                         "description": ""
@@ -623,6 +635,11 @@
                         "name": "sort",
                         "in": "query",
                         "type": "string"
+                    },
+                    {
+                        "name": "storeName",
+                        "in": "query",
+                        "type": "string"
                     }
                 ],
                 "responses": {
@@ -858,6 +875,11 @@
                         "type": "string"
                     },
                     {
+                        "name": "role",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
                         "name": "page",
                         "in": "query",
                         "type": "string"
@@ -951,7 +973,7 @@
                                 "userId": {
                                     "example": "any"
                                 },
-                                "address": {
+                                "addressLine1": {
                                     "example": "any"
                                 }
                             }
@@ -1131,6 +1153,19 @@
                 }
             }
         },
+        "/api/seller/docs": {
+            "get": {
+                "description": "",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    }
+                }
+            }
+        },
         "/api/admin/sellers/active": {
             "get": {
                 "description": "",
@@ -1152,6 +1187,24 @@
             }
         },
         "/api/admin/sellers/{id}": {
+            "get": {
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/admin/sellers/{id}/docs": {
             "get": {
                 "description": "",
                 "parameters": [

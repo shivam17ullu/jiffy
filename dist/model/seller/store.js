@@ -8,6 +8,10 @@ Store.init({
     storeName: { type: DataTypes.STRING(150), allowNull: false },
     storeAddress: { type: DataTypes.TEXT, allowNull: false },
     pincode: { type: DataTypes.STRING(10), allowNull: false },
+    storeCategory: {
+        type: DataTypes.ENUM("Men", "Women", "Kids", "All"),
+        allowNull: true
+    },
     is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
     isSellerOpen: { type: DataTypes.BOOLEAN, defaultValue: true },
 }, {

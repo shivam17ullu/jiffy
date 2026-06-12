@@ -1,6 +1,7 @@
 // src/services/order/order.service.ts
 import { jiffy } from "../../config/sequelize.js";
 import { CartItem, Order, OrderItem, Product, ProductVariant, SellerProfile, BuyerProfile, } from "../../model/relations.js";
+import { Op } from "sequelize";
 export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo, cartId) => {
     const t = await jiffy.transaction();
     try {
@@ -45,7 +46,7 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo,
                 userId,
                 sellerId, // <-- REQUIRED FIELD FIX
                 total,
-                status: "created",
+                status: "pending",
                 shippingAddress,
                 paymentInfo,
             }, { transaction: t });
@@ -93,6 +94,9 @@ export const listOrders = async (userId, role, opts) => {
     }
     else if (role === "seller") {
         where.sellerId = userId;
+    }
+    else if (role === "all") {
+        where[Op.or] = [{ userId: userId }, { sellerId: userId }];
     }
     // Filter by status if provided
     if (status) {
@@ -162,6 +166,9 @@ export const getOrderById = async (orderId, userId, role) => {
     }
     else if (role === "seller") {
         where.sellerId = userId;
+    }
+    else if (role === "all") {
+        where[Op.or] = [{ userId: userId }, { sellerId: userId }];
     }
     const order = await Order.findOne({
         where,
