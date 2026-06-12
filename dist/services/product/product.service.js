@@ -1,11 +1,33 @@
 import { Op } from "sequelize";
 import slugify from "slugify";
 import { jiffy } from "../../config/sequelize.js";
-import { Category, Product, ProductVariant, SellerProfile, Wishlist } from "../../model/relations.js";
+import { Category, Product, ProductVariant, SellerProfile, Store, Wishlist } from "../../model/relations.js";
+// Helper function to generate a unique slug
+async function generateUniqueSlug(name, transaction, excludeProductId) {
+    const baseSlug = slugify(name, { lower: true });
+    let uniqueSlug = baseSlug;
+    let count = 1;
+    while (true) {
+        const whereClause = { slug: uniqueSlug };
+        if (excludeProductId) {
+            whereClause.id = { [Op.ne]: excludeProductId };
+        }
+        const existing = await Product.findOne({
+            where: whereClause,
+            transaction
+        });
+        if (!existing) {
+            break;
+        }
+        uniqueSlug = `${baseSlug}-${count}`;
+        count++;
+    }
+    return uniqueSlug;
+}
 export const createProduct = async (payload, sellerId, imageUrls = []) => {
     const t = await jiffy.transaction();
     try {
-        payload.slug = slugify(payload.name, { lower: true });
+        payload.slug = await generateUniqueSlug(payload.name, t);
         const { categories = [], variants = [], images = [], tags = [], ...rest } = payload;
         // Use uploaded S3 URLs if provided, otherwise use provided URLs
         const finalImages = imageUrls.length > 0 ? imageUrls : images;
@@ -30,13 +52,56 @@ export const listProducts = async (opts) => {
     const { page = 1, limit = 20, q, categoryId, brand, minPrice, maxPrice, sort, storeName, userId, // Optional: to check wishlist status
      } = opts;
     const where = { isActive: true };
-    // Search query
+    // Get matching seller IDs for store name search in q
+    let qSellerIds = [];
+    if (q) {
+        const qProfiles = await SellerProfile.findAll({
+            where: {
+                [Op.or]: [
+                    { businessName: { [Op.like]: `%${q}%` } },
+                    { '$Stores.storeName$': { [Op.like]: `%${q}%` } }
+                ]
+            },
+            include: [
+                {
+                    model: Store,
+                    required: false,
+                    attributes: []
+                }
+            ],
+            attributes: ['userId']
+        });
+        qSellerIds = qProfiles.map((p) => p.userId);
+    }
+    // Search query - searches product name, brand, description, and seller business name / store name
     if (q) {
         where[Op.or] = [
             { name: { [Op.like]: `%${q}%` } },
             { description: { [Op.like]: `%${q}%` } },
             { brand: { [Op.like]: `%${q}%` } },
+            { sellerId: { [Op.in]: qSellerIds } }
         ];
+    }
+    // Store name filter - matches against both businessName and storeName
+    if (storeName) {
+        const filterProfiles = await SellerProfile.findAll({
+            where: {
+                [Op.or]: [
+                    { businessName: { [Op.like]: `%${storeName}%` } },
+                    { '$Stores.storeName$': { [Op.like]: `%${storeName}%` } }
+                ]
+            },
+            include: [
+                {
+                    model: Store,
+                    required: false,
+                    attributes: []
+                }
+            ],
+            attributes: ['userId']
+        });
+        const filterSellerIds = filterProfiles.map((p) => p.userId);
+        where.sellerId = { [Op.in]: filterSellerIds };
     }
     // Brand filter
     if (brand) {
@@ -88,14 +153,11 @@ export const listProducts = async (opts) => {
         {
             association: "seller",
             attributes: ["id", "phone_number", "email"],
-            required: storeName ? true : false,
+            required: false,
             include: [
                 {
                     model: SellerProfile,
-                    required: storeName ? true : false,
-                    where: storeName ? {
-                        businessName: { [Op.like]: `%${storeName}%` }
-                    } : undefined,
+                    required: false,
                     attributes: [
                         "businessName",
                         "gstNumber",
@@ -104,6 +166,13 @@ export const listProducts = async (opts) => {
                         "state",
                         "zipCode",
                         "phone",
+                    ],
+                    include: [
+                        {
+                            model: Store,
+                            required: false,
+                            attributes: ["storeName"],
+                        }
                     ],
                 },
             ],
@@ -288,7 +357,7 @@ export const updateProduct = async (id, sellerId, payload, imageUrls = null) => 
             payload.images = imageUrls;
         }
         if (payload.name) {
-            payload.slug = slugify(payload.name, { lower: true });
+            payload.slug = await generateUniqueSlug(payload.name, t, id);
         }
         const { categories, variants, tags, ...rest } = payload;
         const updateData = { ...rest };

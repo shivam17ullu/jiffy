@@ -112,13 +112,51 @@ export const resolveError = (
   }
 
   if (error instanceof UniqueConstraintError) {
-    const field = error.errors[0]?.path ?? "field";
-    const message =
-      field === "phone_number"
-        ? "Phone number is already registered"
-        : field === "email"
-          ? "Email is already registered"
-          : "Phone number or email is already registered";
+    const errItem = error.errors[0];
+    const field = errItem?.path ?? "field";
+    const modelName = errItem?.instance?.constructor?.name;
+
+    let message = "A record with this value already exists";
+
+    if (modelName === "Product") {
+      if (field === "slug") {
+        message = "A product with this name already exists";
+      } else {
+        message = `Product field '${field}' must be unique`;
+      }
+    } else if (modelName === "Category") {
+      if (field === "slug") {
+        message = "A category with this name already exists";
+      } else {
+        message = `Category field '${field}' must be unique`;
+      }
+    } else if (modelName === "User") {
+      if (field === "phone_number") {
+        message = "Phone number is already registered";
+      } else if (field === "email") {
+        message = "Email is already registered";
+      } else {
+        message = "Phone number or email is already registered";
+      }
+    } else if (modelName === "Wishlist") {
+      message = "Product is already in your wishlist";
+    } else if (modelName === "Cart") {
+      message = "Product variant is already in your cart";
+    } else if (modelName === "Role") {
+      message = "Role already exists";
+    } else {
+      // Fallback matching by field name if modelName is not found or for other models
+      if (field === "phone_number") {
+        message = "Phone number is already registered";
+      } else if (field === "email") {
+        message = "Email is already registered";
+      } else if (field === "slug") {
+        message = "A record with this name already exists";
+      } else {
+        message = `${field.charAt(0).toUpperCase() + field.slice(1)} must be unique`;
+      }
+    }
+
     return { status: 409, message, errors: [] };
   }
 

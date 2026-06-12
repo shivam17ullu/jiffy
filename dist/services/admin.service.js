@@ -1,5 +1,6 @@
-import { SellerProfile, VerifiedSellers, User, Store, Document, BankDetail, Product } from "../model/relations.js";
+import { SellerProfile, VerifiedSellers, User, Store, Document, BankDetail, Product, ProductVariant, ProductCategory, CartItem, Wishlist, Order, OrderItem, Location, RefreshToken, UserRole, BuyerProfile, OtpLogin, } from "../model/relations.js";
 import { Op, Sequelize } from "sequelize";
+import { jiffy } from "../config/sequelize.js";
 import { sendSellerApprovalEmail } from "../utils/mailer.js";
 export default class AdminService {
     static async getActiveSellers() {
@@ -138,5 +139,161 @@ export default class AdminService {
         product.isActive = true;
         await product.save();
         return product;
+    }
+    static async deleteSeller(sellerProfileId) {
+        const sellerProfile = await SellerProfile.findByPk(sellerProfileId, {
+            include: [{ model: User }]
+        });
+        if (!sellerProfile) {
+            return false;
+        }
+        const userId = sellerProfile.userId;
+        const user = sellerProfile.User;
+        const phone_number = user?.phone_number;
+        // 1. Find all product IDs for the seller
+        const products = await Product.findAll({
+            where: { sellerId: userId },
+            attributes: ["id"]
+        });
+        const productIds = products.map((p) => p.id);
+        // 2. Find all variant IDs for these products
+        let variantIds = [];
+        if (productIds.length > 0) {
+            const variants = await ProductVariant.findAll({
+                where: { productId: { [Op.in]: productIds } },
+                attributes: ["id"]
+            });
+            variantIds = variants.map((v) => v.id);
+        }
+        // 3. Find all orders for this seller
+        const orders = await Order.findAll({
+            where: { sellerId: userId },
+            attributes: ["id"]
+        });
+        const orderIds = orders.map((o) => o.id);
+        const transaction = await jiffy.transaction();
+        try {
+            // Delete CartItem referencing the product IDs or variant IDs
+            if (productIds.length > 0) {
+                const cartItemConditions = {
+                    [Op.or]: [
+                        { productId: { [Op.in]: productIds } }
+                    ]
+                };
+                if (variantIds.length > 0) {
+                    cartItemConditions[Op.or].push({ variantId: { [Op.in]: variantIds } });
+                }
+                await CartItem.destroy({
+                    where: cartItemConditions,
+                    transaction
+                });
+                // Delete Wishlist referencing the product IDs
+                await Wishlist.destroy({
+                    where: { productId: { [Op.in]: productIds } },
+                    transaction
+                });
+            }
+            // Delete OrderItem records referencing our products or our orders
+            const orderItemConditions = [];
+            if (productIds.length > 0) {
+                orderItemConditions.push({ productId: { [Op.in]: productIds } });
+            }
+            if (orderIds.length > 0) {
+                orderItemConditions.push({ orderId: { [Op.in]: orderIds } });
+            }
+            if (orderItemConditions.length > 0) {
+                await OrderItem.destroy({
+                    where: { [Op.or]: orderItemConditions },
+                    transaction
+                });
+            }
+            // Delete Order records
+            await Order.destroy({
+                where: { sellerId: userId },
+                transaction
+            });
+            if (productIds.length > 0) {
+                // Delete ProductCategory join records
+                await ProductCategory.destroy({
+                    where: { productId: { [Op.in]: productIds } },
+                    transaction
+                });
+                // Delete ProductVariant records
+                await ProductVariant.destroy({
+                    where: { productId: { [Op.in]: productIds } },
+                    transaction
+                });
+            }
+            // Delete Product records
+            await Product.destroy({
+                where: { sellerId: userId },
+                transaction
+            });
+            // Delete Store, Document, BankDetail, VerifiedSellers
+            await Store.destroy({
+                where: { sellerId: sellerProfileId },
+                transaction
+            });
+            await Document.destroy({
+                where: { sellerId: sellerProfileId },
+                transaction
+            });
+            await BankDetail.destroy({
+                where: { sellerId: sellerProfileId },
+                transaction
+            });
+            await VerifiedSellers.destroy({
+                where: { sellerId: sellerProfileId },
+                transaction
+            });
+            // Delete Locations referencing sellerId or userId
+            await Location.destroy({
+                where: {
+                    [Op.or]: [
+                        { sellerId: sellerProfileId },
+                        { userId: userId }
+                    ]
+                },
+                transaction
+            });
+            // Delete RefreshTokens
+            await RefreshToken.destroy({
+                where: { user_id: userId },
+                transaction
+            });
+            // Delete UserRoles
+            await UserRole.destroy({
+                where: { user_id: userId },
+                transaction
+            });
+            // Delete BuyerProfile if any (just in case they have one, to avoid orphans/constraints)
+            await BuyerProfile.destroy({
+                where: { userId: userId },
+                transaction
+            });
+            // Delete OtpLogin records
+            if (phone_number) {
+                await OtpLogin.destroy({
+                    where: { phone_number },
+                    transaction
+                });
+            }
+            // Delete SellerProfile
+            await SellerProfile.destroy({
+                where: { id: sellerProfileId },
+                transaction
+            });
+            // Delete User
+            await User.destroy({
+                where: { id: userId },
+                transaction
+            });
+            await transaction.commit();
+            return true;
+        }
+        catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
     }
 }

@@ -7,6 +7,7 @@ adminRouter.use(authorize(["admin"]));
 adminRouter.get("/sellers/active", AdminController.getActiveSellers);
 adminRouter.get("/sellers/inactive", AdminController.getInactiveSellers);
 adminRouter.get("/sellers/:id", AdminController.getSellerDetails);
+adminRouter.delete("/sellers/:id", AdminController.deleteSeller);
 adminRouter.get("/sellers/:id/docs", AdminController.getSellerDocuments);
 adminRouter.patch("/sellers/:id/approve", AdminController.approveSeller);
 adminRouter.get("/sellers/:sellerId/products", AdminController.getProducts);

@@ -10,10 +10,34 @@ import {
 	Wishlist
 } from "../../model/relations.js";
 
+// Helper function to generate a unique slug
+async function generateUniqueSlug(name: string, transaction?: any, excludeProductId?: number): Promise<string> {
+	const baseSlug = slugify(name, { lower: true });
+	let uniqueSlug = baseSlug;
+	let count = 1;
+
+	while (true) {
+		const whereClause: any = { slug: uniqueSlug };
+		if (excludeProductId) {
+			whereClause.id = { [Op.ne]: excludeProductId };
+		}
+		const existing = await Product.findOne({
+			where: whereClause,
+			transaction
+		});
+		if (!existing) {
+			break;
+		}
+		uniqueSlug = `${baseSlug}-${count}`;
+		count++;
+	}
+	return uniqueSlug;
+}
+
 export const createProduct = async (payload: any, sellerId: number, imageUrls: string[] = []) => {
 	const t = await jiffy.transaction();
 	try {
-		payload.slug = slugify(payload.name, { lower: true });
+		payload.slug = await generateUniqueSlug(payload.name, t);
 
 		const {
 			categories = [],
@@ -393,7 +417,7 @@ export const updateProduct = async (id: number, sellerId: number, payload: any, 
 		}
 
 		if (payload.name) {
-			payload.slug = slugify(payload.name, { lower: true });
+			payload.slug = await generateUniqueSlug(payload.name, t, id);
 		}
 
 		const {
