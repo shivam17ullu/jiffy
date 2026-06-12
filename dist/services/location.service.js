@@ -2,8 +2,15 @@ import Location from "../model/profile/location.js";
 class LocationService {
     // CREATE location
     static async createLocation(data) {
+        const existingCount = await Location.count({ where: { userId: data.userId } });
+        // Automatically make it default if it is the user's very first address
+        if (existingCount === 0) {
+            data.isDefault = true;
+        }
+        const isDefault = String(data.isDefault) === "true" || data.isDefault === 1 || data.isDefault === true;
+        data.isDefault = isDefault;
         // if isDefault == true → unset others
-        if (data.isDefault) {
+        if (isDefault && existingCount > 0) {
             await Location.update({ isDefault: false }, { where: { userId: data.userId } });
         }
         return await Location.create(data);
@@ -19,10 +26,18 @@ class LocationService {
     static async getLocation(id, userId) {
         return await Location.findOne({ where: { id, userId } });
     }
+    static async getLocationById(id) {
+        return await Location.findByPk(id);
+    }
     // UPDATE
     static async updateLocation(id, userId, data) {
-        if (data.isDefault === true) {
+        const isDefault = String(data.isDefault) === "true" || data.isDefault === 1 || data.isDefault === true;
+        if (isDefault) {
             await Location.update({ isDefault: false }, { where: { userId } });
+            data.isDefault = true;
+        }
+        else if (data.isDefault !== undefined) {
+            data.isDefault = false;
         }
         await Location.update(data, { where: { id, userId } });
         return await Location.findByPk(id);

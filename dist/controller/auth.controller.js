@@ -368,6 +368,9 @@ export default class AuthController {
      *                     type: string
      *                   pincode:
      *                     type: string
+     *                   storeCategory:
+     *                     type: string
+     *                     enum: [Men, Women, Kids, All]
      *                   phone:
      *                     type: string
      *               bankDetails:

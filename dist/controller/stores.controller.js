@@ -38,14 +38,26 @@ export default class StoreController {
      */
     static async getStores(req, res) {
         try {
-            const stores = await StoreService.getstores();
+            const { zipCode, storeCategory } = req.query;
+            const stores = await StoreService.getstores(zipCode, storeCategory);
             if (!stores || (Array.isArray(stores) && stores.length === 0)) {
-                return sendError(res, 404, "No verified stores found");
+                return sendError(res, 404, "No stores found");
             }
+            const formattedStores = stores.map((store) => {
+                const storeData = store.toJSON();
+                if (storeData.Document) {
+                    storeData.store_image = storeData.Document.storeImageUrl;
+                    delete storeData.Document; // optional: clean up the nested object
+                }
+                else {
+                    storeData.store_image = null;
+                }
+                return storeData;
+            });
             createResponse(res, {
                 status: 200,
                 message: "Stores retrieved successfully",
-                response: stores,
+                response: formattedStores,
             });
         }
         catch (error) {

@@ -21,7 +21,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { sendOtpFast2SMS } from "../utils/fast2sms.js";
 import { generateOtp } from "../utils/generateOtp.js";
 import { uploadBase64ToS3 } from "../utils/s3Upload.js";
-import { sendSellerOnboardEmail } from "../utils/mailer.js";
+import { sendSellerOnboardEmail, sendSellerWelcomeEmail } from "../utils/mailer.js";
 import {
 	assertSellerCanAccess,
 	assertSellerCanAccessByPhone,
@@ -365,6 +365,8 @@ export default class AuthService {
 					phone: storePayload.phone,
 					zipCode: storePayload.pincode,
 					address: storePayload.storeAddress || storePayload.store_address,
+					city: storePayload.city,
+					state: storePayload.state,
 				},
 				{ transaction }
 			);
@@ -441,6 +443,13 @@ export default class AuthService {
 				phone: userPhone,
 				address: seller.address || "N/A"
 			}).catch(err => console.error("Email notification failed:", err));
+
+			// Send welcome email to the newly onboarded seller
+			if (userEmail) {
+				sendSellerWelcomeEmail(userEmail, sellerName)
+					.catch(err => console.error("Seller welcome email failed:", err));
+			}
+
 
 			return {
 				message: "Seller onboarding completed successfully",

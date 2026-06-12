@@ -1,5 +1,6 @@
 import { SellerProfile, VerifiedSellers, User, Store, Document, BankDetail, Product } from "../model/relations.js";
 import { Op, Sequelize } from "sequelize";
+import { sendSellerApprovalEmail } from "../utils/mailer.js";
 export default class AdminService {
     static async getActiveSellers() {
         return await SellerProfile.findAll({
@@ -93,6 +94,11 @@ export default class AdminService {
             ],
         });
     }
+    static async getSellerDocuments(sellerId) {
+        return await Document.findOne({
+            where: { sellerId },
+        });
+    }
     static async approveSeller(sellerId, action) {
         const verifiedSeller = await VerifiedSellers.findOne({
             where: { sellerId },
@@ -104,7 +110,23 @@ export default class AdminService {
         verifiedSeller.is_active = action === "accept";
         await verifiedSeller.save();
         if (action === "accept" && verifiedSeller.SellerProfile?.userId) {
-            await User.update({ is_active: true }, { where: { id: verifiedSeller.SellerProfile.userId } });
+            const userId = verifiedSeller.SellerProfile.userId;
+            await User.update({ is_active: true }, { where: { id: userId } });
+            // Send welcome email to the approved seller asynchronously
+            try {
+                const user = await User.findByPk(Number(userId));
+                const userEmail = user?.email || "";
+                if (userEmail) {
+                    const bankDetail = await BankDetail.findOne({ where: { sellerId } });
+                    const sellerName = bankDetail?.accountHolderName || bankDetail?.account_holder_name || "Seller";
+                    sendSellerApprovalEmail(userEmail, sellerName).catch(err => {
+                        console.error("Seller approval email failed:", err);
+                    });
+                }
+            }
+            catch (err) {
+                console.error("Error sending seller approval email:", err);
+            }
         }
         return verifiedSeller;
     }

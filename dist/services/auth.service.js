@@ -10,6 +10,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { sendOtpFast2SMS } from "../utils/fast2sms.js";
 import { generateOtp } from "../utils/generateOtp.js";
 import { uploadBase64ToS3 } from "../utils/s3Upload.js";
+import { sendSellerOnboardEmail, sendSellerWelcomeEmail } from "../utils/mailer.js";
 import { assertSellerCanAccess, assertSellerCanAccessByPhone, userHasSellerRole, } from "./sellerAccess.service.js";
 const ACCESS_TOKEN_EXP = "1d";
 const REFRESH_TOKEN_EXP_MIN = 60 * 24 * 7; // 7 days
@@ -254,6 +255,8 @@ export default class AuthService {
                 phone: storePayload.phone,
                 zipCode: storePayload.pincode,
                 address: storePayload.storeAddress || storePayload.store_address,
+                city: storePayload.city,
+                state: storePayload.state,
             }, { transaction });
             const verified = await VerifiedSellers.create({
                 sellerId: seller.id,
@@ -264,6 +267,7 @@ export default class AuthService {
                 storeName: storePayload.storeName || storePayload.store_name,
                 storeAddress: storePayload.storeAddress || storePayload.store_address,
                 pincode: storePayload.pincode,
+                storeCategory: storePayload.storeCategory || storePayload.store_category,
             }, { transaction });
             const bankDetails = await BankDetail.create({
                 sellerId: seller.id,
@@ -297,6 +301,24 @@ export default class AuthService {
             }, { transaction });
             console.log(verified);
             await transaction.commit();
+            // Fetch user to get email and fallback phone number
+            const user = await User.findByPk(Number(payload.userId));
+            const userPhone = user?.phone_number || seller.phone || "";
+            const userEmail = user?.email || "";
+            const sellerName = bankPayload.accountHolderName || bankPayload.account_holder_name || "N/A";
+            // Send email notification to admins
+            sendSellerOnboardEmail({
+                sellerName,
+                storeName: seller.businessName || "N/A",
+                email: userEmail,
+                phone: userPhone,
+                address: seller.address || "N/A"
+            }).catch(err => console.error("Email notification failed:", err));
+            // Send welcome email to the newly onboarded seller
+            if (userEmail) {
+                sendSellerWelcomeEmail(userEmail, sellerName)
+                    .catch(err => console.error("Seller welcome email failed:", err));
+            }
             return {
                 message: "Seller onboarding completed successfully",
                 data: {

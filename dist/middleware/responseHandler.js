@@ -20,6 +20,7 @@ export const sendError = (res, status, message, _errors) => {
 export const sendValidationError = (res, message, _field, _fieldMessage) => sendError(res, 400, message);
 /** Map thrown errors (ApiError, catalog, or generic) to a client response */
 export const handleControllerError = (res, error, fallbackStatus = 400) => {
+    console.error("API Error Details:", error);
     const resolved = resolveError(error);
     const status = resolved.status >= 400 ? resolved.status : fallbackStatus;
     return sendError(res, status, resolved.message, resolved.errors);
