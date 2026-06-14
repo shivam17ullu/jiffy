@@ -85,7 +85,7 @@ export const createOrder = async (req, res) => {
  *         name: status
  *         schema:
  *           type: string
- *           enum: [pending, confirmed, processing, shipped, delivered, cancelled]
+ *           enum: [created, confirmed, processing, shipped, delivered, cancelled, returned, refunded]
  *         description: Filter by order status
  *     responses:
  *       200:
@@ -245,7 +245,7 @@ export const getOrderById = async (req, res) => {
  *             properties:
  *               status:
  *                 type: string
- *                 enum: [pending, confirmed, processing, shipped, delivered, cancelled]
+ *                 enum: [created, confirmed, processing, shipped, delivered, cancelled, returned, refunded]
  *     responses:
  *       200:
  *         description: Order status updated

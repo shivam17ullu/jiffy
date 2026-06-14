@@ -1335,6 +1335,119 @@
                     }
                 }
             }
+        },
+        "/api/admin/orders": {
+            "get": {
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "sellerId",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "buyerId",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "startDate",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "endDate",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/create-order": {
+            "post": {
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "amount": {
+                                    "example": "any"
+                                },
+                                "receipt": {
+                                    "example": "any"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/verify-payment": {
+            "post": {
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "order_id": {
+                                    "example": "any"
+                                },
+                                "razorpay_order_id": {
+                                    "example": "any"
+                                },
+                                "payment_id": {
+                                    "example": "any"
+                                },
+                                "razorpay_payment_id": {
+                                    "example": "any"
+                                },
+                                "signature": {
+                                    "example": "any"
+                                },
+                                "razorpay_signature": {
+                                    "example": "any"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
         }
     }
 }

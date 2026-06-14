@@ -359,5 +359,141 @@ export default class AdminService {
 			throw error;
 		}
 	}
+
+	static async getSellersOrders(filters: {
+		sellerId?: number;
+		buyerId?: number;
+		status?: string;
+		startDate?: string;
+		endDate?: string;
+		page?: number;
+		limit?: number;
+	}) {
+		const { sellerId, buyerId, status, startDate, endDate, page = 1, limit = 20 } = filters;
+		const where: any = {};
+
+		if (sellerId) {
+			where.sellerId = sellerId;
+		}
+
+		if (buyerId) {
+			where.userId = buyerId;
+		}
+
+		if (status) {
+			where.status = status;
+		}
+
+		if (startDate || endDate) {
+			where.createdAt = {};
+			if (startDate) {
+				where.createdAt[Op.gte] = new Date(startDate);
+			}
+			if (endDate) {
+				where.createdAt[Op.lte] = new Date(endDate);
+			}
+		}
+
+		const orders = await Order.findAndCountAll({
+			where,
+			include: [
+				{
+					association: "items",
+					include: [
+						{
+							association: "product",
+							include: [
+								{
+									association: "categories",
+								},
+							],
+						},
+					],
+				},
+				{
+					association: "buyer",
+					attributes: ["id", "phone_number", "email"],
+					include: [
+						{
+							model: BuyerProfile,
+							required: false,
+							attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
+						},
+					],
+				},
+				{
+					association: "seller",
+					attributes: ["id", "phone_number", "email"],
+					include: [
+						{
+							model: SellerProfile,
+							required: false,
+							attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone"],
+						},
+					],
+				},
+			],
+			limit: limit,
+			offset: (page - 1) * limit,
+			order: [["createdAt", "DESC"]],
+			distinct: true,
+		});
+
+		return {
+			items: orders.rows,
+			total: orders.count,
+			page,
+			limit,
+			totalPages: Math.ceil(orders.count / limit),
+		};
+	}
+
+	static async getOrderDetail(orderId: number) {
+		return await Order.findByPk(orderId, {
+			include: [
+				{
+					association: "items",
+					include: [
+						{
+							association: "product",
+							include: [
+								{
+									association: "categories",
+									include: [
+										{
+											association: "parent",
+											include: [{ association: "parent" }],
+										},
+									],
+								},
+							],
+						},
+					],
+				},
+				{
+					association: "buyer",
+					attributes: ["id", "phone_number", "email"],
+					include: [
+						{
+							model: BuyerProfile,
+							required: false,
+							attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
+						},
+					],
+				},
+				{
+					association: "seller",
+					attributes: ["id", "phone_number", "email"],
+					include: [
+						{
+							model: SellerProfile,
+							required: false,
+							attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone"],
+						},
+					],
+				},
+			],
+		});
+	}
 }
 

@@ -13,4 +13,6 @@ adminRouter.patch("/sellers/:id/approve", AdminController.approveSeller);
 adminRouter.get("/sellers/:sellerId/products", AdminController.getProducts);
 adminRouter.get("/products", AdminController.getProducts);
 adminRouter.patch("/products/:id/approve", AdminController.approveProduct);
+adminRouter.get("/orders", AdminController.getSellersOrders);
+adminRouter.get("/orders/:id", AdminController.getOrderDetail);
 export default adminRouter;

@@ -157,3 +157,100 @@ export const sendSellerApprovalEmail = async (email, sellerName) => {
         console.error("Error sending seller approval email:", error);
     }
 };
+export const sendNewOrderEmail = async (details) => {
+    try {
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST || 'smtp.gmail.com',
+            port: Number(process.env.SMTP_PORT) || 587,
+            secure: process.env.SMTP_SECURE === 'true',
+            auth: {
+                user: process.env.SMTP_USER || process.env.EMAIL_FROM,
+                pass: process.env.SMTP_PASS, // User must provide this in .env
+            },
+        });
+        const fromEmail = process.env.EMAIL_FROM || 'ranjitkumarbgs61@gmail.com';
+        const itemsHtml = details.items
+            .map((item) => `
+      <tr>
+        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+          <div style="font-weight: bold; color: #1e293b;">${item.productName}</div>
+          <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Size: ${item.size || "N/A"}</div>
+        </td>
+        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #334155;">${item.qty}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #334155;">₹${item.price}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: #0f172a;">₹${item.price * item.qty}</td>
+      </tr>
+    `)
+            .join("");
+        const info = await transporter.sendMail({
+            from: `"Drapeit" <${fromEmail}>`,
+            to: details.sellerEmail,
+            subject: `New Order Received - Order #${details.orderId}`,
+            text: `Dear ${details.sellerName},\n\nYou have received a new order!\n\nOrder ID: #${details.orderId}\nTotal Amount: ₹${details.totalAmount}\nCustomer: ${details.buyerName} (${details.buyerPhone})\nShipping Destination: ${details.shippingCity}, ${details.shippingState}\n\nPlease log in to the Seller Portal to manage this order: https://www.drapeit.in/\n\nWarm regards,\nTeam Drapeit`,
+            html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; color: #334155;">
+        <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
+          <h1 style="margin: 0; font-size: 24px;">Drapeit</h1>
+          <p style="margin: 4px 0 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;">New Order Notification</p>
+        </div>
+        
+        <div style="padding: 24px; line-height: 1.5;">
+          <h2 style="color: #0f172a; font-size: 18px; margin-top: 0;">Dear ${details.sellerName},</h2>
+          <p>Great news! You have received a new order on Drapeit.</p>
+          
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 6px; margin-bottom: 24px;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 4px 0; color: #64748b;">Order ID:</td>
+                <td style="padding: 4px 0; font-weight: bold; text-align: right;">#${details.orderId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: #64748b;">Customer Name:</td>
+                <td style="padding: 4px 0; font-weight: bold; text-align: right;">${details.buyerName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: #64748b;">Customer Phone:</td>
+                <td style="padding: 4px 0; font-weight: bold; text-align: right;">${details.buyerPhone}</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: #64748b;">Delivery Destination:</td>
+                <td style="padding: 4px 0; font-weight: bold; text-align: right;">${details.shippingCity}, ${details.shippingState}</td>
+              </tr>
+            </table>
+          </div>
+          
+          <h3 style="color: #0f172a; font-size: 16px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">Order Details</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 14px;">
+            <thead>
+              <tr style="background-color: #f8fafc;">
+                <th style="padding: 8px 12px; border-bottom: 2px solid #e2e8f0; text-align: left;">Product</th>
+                <th style="padding: 8px 12px; border-bottom: 2px solid #e2e8f0; text-align: center;">Qty</th>
+                <th style="padding: 8px 12px; border-bottom: 2px solid #e2e8f0; text-align: right;">Price</th>
+                <th style="padding: 8px 12px; border-bottom: 2px solid #e2e8f0; text-align: right;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+              <tr>
+                <td colspan="3" style="padding: 12px; text-align: right; font-weight: bold; font-size: 16px;">Total Amount:</td>
+                <td style="padding: 12px; text-align: right; font-weight: bold; font-size: 16px; color: #0f172a;">₹${details.totalAmount}</td>
+              </tr>
+            </tbody>
+          </table>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="https://www.drapeit.in/" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Login to Seller Portal</a>
+          </div>
+          
+          <p>Please process this order promptly to maintain high merchant quality standards.</p>
+          <p style="margin-bottom: 0;">Warm regards,<br><strong>Team Drapeit</strong></p>
+        </div>
+      </div>
+      `,
+        });
+        console.log("New order email sent to seller: %s", info.messageId);
+    }
+    catch (error) {
+        console.error("Error sending new order email to seller:", error);
+    }
+};

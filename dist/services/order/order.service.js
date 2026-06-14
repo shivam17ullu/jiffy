@@ -1,7 +1,8 @@
 // src/services/order/order.service.ts
 import { jiffy } from "../../config/sequelize.js";
-import { CartItem, Order, OrderItem, Product, ProductVariant, SellerProfile, BuyerProfile, } from "../../model/relations.js";
+import { CartItem, Order, OrderItem, Product, ProductVariant, User, SellerProfile, BuyerProfile, } from "../../model/relations.js";
 import { Op } from "sequelize";
+import { sendNewOrderEmail } from "../../utils/mailer.js";
 export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo, cartId) => {
     const t = await jiffy.transaction();
     try {
@@ -29,6 +30,7 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo,
             groups[sellerId].push(item);
         }
         const createdOrders = [];
+        const emailNotifications = [];
         // Create one order per seller
         for (const sellerIdStr of Object.keys(groups)) {
             const sellerId = Number(sellerIdStr);
@@ -46,10 +48,38 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo,
                 userId,
                 sellerId, // <-- REQUIRED FIELD FIX
                 total,
-                status: "pending",
+                status: "created",
                 shippingAddress,
                 paymentInfo,
             }, { transaction: t });
+            // Fetch seller details for notification
+            const sellerUser = await User.findByPk(sellerId, {
+                include: [{ model: SellerProfile, required: false }],
+                transaction: t,
+            });
+            const emailItems = groupItems.map((it) => ({
+                productName: it.product.name,
+                size: it.variant.size || "N/A",
+                qty: it.qty,
+                price: it.price || it.variant.price,
+            }));
+            const sellerEmail = sellerUser?.email || "";
+            const sellerName = sellerUser?.SellerProfile?.businessName ||
+                sellerUser?.phone_number ||
+                "Seller";
+            if (sellerEmail) {
+                emailNotifications.push({
+                    sellerEmail,
+                    sellerName,
+                    orderId: order.id,
+                    buyerName: shippingAddress.fullName || shippingAddress.name || "Customer",
+                    buyerPhone: shippingAddress.phone || "N/A",
+                    shippingCity: shippingAddress.city || "N/A",
+                    shippingState: shippingAddress.state || "N/A",
+                    items: emailItems,
+                    totalAmount: total,
+                });
+            }
             // create OrderItems + reduce stock
             for (const it of groupItems) {
                 await OrderItem.create({
@@ -69,6 +99,12 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo,
             transaction: t,
         });
         await t.commit();
+        // Trigger emails asynchronously to not block order completion response
+        for (const notification of emailNotifications) {
+            sendNewOrderEmail(notification).catch((err) => {
+                console.error(`Failed to send new order email to seller for order #${notification.orderId}:`, err);
+            });
+        }
         // reload orders
         return Promise.all(createdOrders.map((o) => Order.findByPk(o.id, {
             include: [{ model: OrderItem, as: "items" }],
@@ -260,12 +296,14 @@ export const getOrderById = async (orderId, userId, role) => {
  */
 export const updateOrderStatus = async (orderId, sellerId, status) => {
     const allowedStatuses = [
-        "pending",
+        "created",
         "confirmed",
         "processing",
         "shipped",
         "delivered",
         "cancelled",
+        "returned",
+        "refunded",
     ];
     if (!allowedStatuses.includes(status)) {
         throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);

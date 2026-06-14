@@ -355,4 +355,152 @@ export default class AdminController {
             return handleControllerError(res, error);
         }
     }
+    /**
+     * @swagger
+     * /api/admin/orders:
+     *   get:
+     *     summary: Get all sellers orders
+     *     description: Retrieve all orders across all sellers with pagination and optional filtering
+     *     tags: [Admin]
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: query
+     *         name: sellerId
+     *         schema:
+     *           type: integer
+     *         description: Filter orders by seller's user ID
+     *       - in: query
+     *         name: buyerId
+     *         schema:
+     *           type: integer
+     *         description: Filter orders by buyer's user ID
+     *       - in: query
+     *         name: status
+     *         schema:
+     *           type: string
+     *           enum: [created, confirmed, processing, shipped, delivered, cancelled, returned, refunded]
+     *         description: Filter orders by status
+     *       - in: query
+     *         name: startDate
+     *         schema:
+     *           type: string
+     *           format: date-time
+     *         description: Filter orders created on or after this ISO date-time
+     *       - in: query
+     *         name: endDate
+     *         schema:
+     *           type: string
+     *           format: date-time
+     *         description: Filter orders created on or before this ISO date-time
+     *       - in: query
+     *         name: page
+     *         schema:
+     *           type: integer
+     *           default: 1
+     *         description: Page number for pagination
+     *       - in: query
+     *         name: limit
+     *         schema:
+     *           type: integer
+     *           default: 20
+     *         description: Page limit for pagination
+     *     responses:
+     *       200:
+     *         description: List of orders retrieved successfully
+     *       400:
+     *         description: Bad request or validation error
+     *       401:
+     *         description: Unauthorized
+     *       403:
+     *         description: Forbidden - Admin role required
+     */
+    static async getSellersOrders(req, res) {
+        try {
+            const sellerId = req.query.sellerId ? Number(req.query.sellerId) : undefined;
+            const buyerId = req.query.buyerId ? Number(req.query.buyerId) : undefined;
+            const status = req.query.status;
+            const startDate = req.query.startDate;
+            const endDate = req.query.endDate;
+            const page = req.query.page ? Number(req.query.page) : 1;
+            const limit = req.query.limit ? Number(req.query.limit) : 20;
+            if (sellerId !== undefined && isNaN(sellerId)) {
+                return handleControllerError(res, new Error("Invalid sellerId"), 400);
+            }
+            if (buyerId !== undefined && isNaN(buyerId)) {
+                return handleControllerError(res, new Error("Invalid buyerId"), 400);
+            }
+            if (isNaN(page) || page < 1) {
+                return handleControllerError(res, new Error("Invalid page number"), 400);
+            }
+            if (isNaN(limit) || limit < 1) {
+                return handleControllerError(res, new Error("Invalid limit value"), 400);
+            }
+            const result = await AdminService.getSellersOrders({
+                sellerId,
+                buyerId,
+                status,
+                startDate,
+                endDate,
+                page,
+                limit,
+            });
+            return createResponse(res, {
+                status: 200,
+                message: "Sellers orders retrieved successfully",
+                response: result,
+            });
+        }
+        catch (error) {
+            return handleControllerError(res, error);
+        }
+    }
+    /**
+     * @swagger
+     * /api/admin/orders/{id}:
+     *   get:
+     *     summary: Get order details by ID
+     *     description: Retrieve detailed order information including items, buyer, and seller details
+     *     tags: [Admin]
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: integer
+     *         description: Order ID
+     *     responses:
+     *       200:
+     *         description: Detailed order retrieved successfully
+     *       400:
+     *         description: Invalid order ID
+     *       404:
+     *         description: Order not found
+     *       401:
+     *         description: Unauthorized
+     *       403:
+     *         description: Forbidden - Admin role required
+     */
+    static async getOrderDetail(req, res) {
+        try {
+            const id = Number(req.params.id);
+            if (isNaN(id)) {
+                return handleControllerError(res, new Error("Invalid order ID"), 400);
+            }
+            const order = await AdminService.getOrderDetail(id);
+            if (!order) {
+                return handleControllerError(res, new Error("Order not found"), 404);
+            }
+            return createResponse(res, {
+                status: 200,
+                message: "Order details retrieved successfully",
+                response: order,
+            });
+        }
+        catch (error) {
+            return handleControllerError(res, error);
+        }
+    }
 }

@@ -31,6 +31,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cors());
 import adminRouter from './routes/admin.js';
+import paymentRouter from './routes/payment.js';
 
 app.use('/api/auth', authRouter);
 app.use("/api/profile", profileRouter);
@@ -43,6 +44,7 @@ app.use("/api/location", locationRouter)
 app.use("/api/wishlist", wishlistRouter)
 app.use("/api/seller", sellerRouter)
 app.use("/api/admin", adminRouter)
+app.use("/api", paymentRouter)
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 app.use(globalErrorHandler);
 
