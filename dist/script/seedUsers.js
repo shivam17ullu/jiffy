@@ -64,6 +64,7 @@ async function seedUsers() {
                 await VerifiedSellers.create({
                     sellerId: sellerProfileRecord.id,
                     is_active: true,
+                    status: "approved",
                 }, { transaction: t });
                 // 4️⃣ Store
                 await Store.create({ sellerId: sellerProfileRecord.id, ...store }, { transaction: t });

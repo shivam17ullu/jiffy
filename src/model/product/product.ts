@@ -7,13 +7,14 @@ interface ProductAttributes {
   slug: string;
   description?: string;
   brand?: string;
+  details?: string;
   images?: string[];
   tags?: string[];
   isActive: boolean;
   sellerId: number;          // ⭐ NEW
 }
 
-type ProductCreation = Optional<ProductAttributes, "id" | "description" | "brand" | "images" | "tags" | "isActive">;
+type ProductCreation = Optional<ProductAttributes, "id" | "description" | "brand" | "details" | "images" | "tags" | "isActive">;
 
 class Product extends Model<ProductAttributes, ProductCreation> implements ProductAttributes {
   public id!: number;
@@ -21,6 +22,7 @@ class Product extends Model<ProductAttributes, ProductCreation> implements Produ
   public slug!: string;
   public description?: string;
   public brand?: string;
+  public details?: string;
   public images?: string[];
   public tags?: string[];
   public isActive!: boolean;
@@ -40,6 +42,7 @@ Product.init(
     slug: { type: DataTypes.STRING(300), allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: true },
     brand: { type: DataTypes.STRING(120), allowNull: true },
+    details: { type: DataTypes.TEXT, allowNull: true },
     images: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
     tags: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },

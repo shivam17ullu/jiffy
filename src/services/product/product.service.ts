@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, Sequelize } from "sequelize";
 import slugify from "slugify";
 import { jiffy } from "../../config/sequelize.js";
 import {
@@ -7,8 +7,13 @@ import {
 	ProductVariant,
 	SellerProfile,
 	Store,
-	Wishlist
+	Wishlist,
+	VerifiedSellers,
+	Document,
+	Cart,
+	CartItem
 } from "../../model/relations.js";
+
 
 // Helper function to generate a unique slug
 async function generateUniqueSlug(name: string, transaction?: any, excludeProductId?: number): Promise<string> {
@@ -218,7 +223,7 @@ export const listProducts = async (opts: any) => {
 						{
 							model: Store,
 							required: false,
-							attributes: ["storeName"],
+							attributes: ["storeName", "isSellerOpen"],
 						}
 					],
 				},
@@ -265,31 +270,60 @@ export const listProducts = async (opts: any) => {
 		});
 		wishlistProductIds = new Set(wishlistItems.map((item: any) => item.productId));
 	}
+	// Get cart quantity for all products if userId is provided
+	let cartVariantQtyMap: Map<number, number> = new Map();
+	if (userId) {
+		const cart = await Cart.findOne({ where: { userId } });
+		if (cart) {
+			const items = await CartItem.findAll({
+				where: { cartId: cart.id },
+				attributes: ['variantId', 'qty'],
+			});
+			for (const item of items) {
+				if (item.variantId) {
+					cartVariantQtyMap.set(item.variantId, item.qty);
+				}
+			}
+		}
+	}
 
-	// Transform products to include min/max price and wishlist status
+	// Transform products to include min/max price, wishlist status, and variant quantity in cart
 	const transformedProducts = products.rows.map((product: any) => {
 		const variants = product.variants || [];
 		const prices = variants.map((v: any) => v.price).filter((p: any) => p);
 		const minPrice = prices.length > 0 ? Math.min(...prices) : null;
 		const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
 
+		const sellerStores = product.seller?.SellerProfile?.Stores || [];
+		const isSellerOpen = sellerStores.length > 0 ? sellerStores[0].isSellerOpen : true;
+
+		const rawProduct = product.toJSON();
+		const mappedVariants = (rawProduct.variants || []).map((v: any) => ({
+			...v,
+			qty: cartVariantQtyMap.get(v.id) || 0,
+		}));
+
 		return {
-			...product.toJSON(),
+			...rawProduct,
+			variants: mappedVariants,
 			priceRange: {
 				min: minPrice,
 				max: maxPrice,
 			},
 			isWishlisted: userId ? wishlistProductIds.has(product.id) : false,
+			isSellerOpen,
 			seller: product.seller
 				? {
 					id: product.seller.id,
 					phone_number: product.seller.phone_number,
 					email: product.seller.email,
+					isSellerOpen,
 					profile: (product.seller as any).SellerProfile
 						? {
 							businessName: (product.seller as any).SellerProfile.businessName,
 							city: (product.seller as any).SellerProfile.city,
 							state: (product.seller as any).SellerProfile.state,
+							isSellerOpen,
 						}
 						: null,
 				}
@@ -352,6 +386,13 @@ export const getProductById = async (id: number, userId?: number) => {
 							"zipCode",
 							"phone",
 						],
+						include: [
+							{
+								model: Store,
+								required: false,
+								attributes: ["storeName", "isSellerOpen"],
+							}
+						]
 					},
 				],
 			},
@@ -372,24 +413,53 @@ export const getProductById = async (id: number, userId?: number) => {
 		isWishlisted = !!wishlistItem;
 	}
 
-	// Transform product to include price range, seller details, and wishlist status
+	// Get cart quantity if userId is provided
+	let cartVariantQtyMap: Map<number, number> = new Map();
+	if (userId) {
+		const cart = await Cart.findOne({ where: { userId } });
+		if (cart) {
+			const items = await CartItem.findAll({
+				where: { cartId: cart.id },
+				attributes: ['variantId', 'qty'],
+			});
+			for (const item of items) {
+				if (item.variantId) {
+					cartVariantQtyMap.set(item.variantId, item.qty);
+				}
+			}
+		}
+	}
+
+	// Transform product to include price range, seller details, wishlist status, and variant quantity in cart
 	const variants = (product as any).variants || [];
 	const prices = variants.map((v: any) => v.price).filter((p: any) => p);
 	const minPrice = prices.length > 0 ? Math.min(...prices) : null;
 	const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
 
+	const sellerStores = (product as any).seller?.SellerProfile?.Stores || [];
+	const isSellerOpen = sellerStores.length > 0 ? sellerStores[0].isSellerOpen : true;
+
+	const rawProduct = product.toJSON() as any;
+	const mappedVariants = (rawProduct.variants || []).map((v: any) => ({
+		...v,
+		qty: cartVariantQtyMap.get(v.id) || 0,
+	}));
+
 	return {
-		...product.toJSON(),
+		...rawProduct,
+		variants: mappedVariants,
 		priceRange: {
 			min: minPrice,
 			max: maxPrice,
 		},
 		isWishlisted,
+		isSellerOpen,
 		seller: (product as any).seller
 			? {
 				id: (product as any).seller.id,
 				phone_number: (product as any).seller.phone_number,
 				email: (product as any).seller.email,
+				isSellerOpen,
 				profile: (product as any).seller?.SellerProfile
 					? {
 						businessName: (product as any).seller.SellerProfile.businessName,
@@ -399,6 +469,7 @@ export const getProductById = async (id: number, userId?: number) => {
 						state: (product as any).seller.SellerProfile.state,
 						zipCode: (product as any).seller.SellerProfile.zipCode,
 						phone: (product as any).seller.SellerProfile.phone,
+						isSellerOpen,
 					}
 					: null,
 			}
@@ -620,3 +691,98 @@ export const toggleVariantStatus = async (productId: number, variantId: number, 
 
 	return await getProductById(productId);
 };
+
+export const searchAll = async (q: string) => {
+	const term = `%${q}%`;
+
+	// 1. Search products
+	const matchedProducts = await Product.findAll({
+		where: {
+			isActive: true,
+			[Op.or]: [
+				{ name: { [Op.like]: term } },
+				{ description: { [Op.like]: term } }
+			]
+		},
+		limit: 20
+	});
+
+	const productResults = matchedProducts.map((p: any) => ({
+		id: p.id,
+		name: p.name,
+		type: "product",
+		image: (p.images && p.images.length > 0) ? p.images[0] : null,
+		isSellerOpen: null
+	}));
+
+	// 2. Search stores
+	const matchedStores = await Store.findAll({
+		where: {
+			is_active: true,
+			[Op.or]: [
+				{ storeName: { [Op.like]: term } },
+				{ '$SellerProfile.businessName$': { [Op.like]: term } }
+			]
+		},
+		include: [
+			{
+				model: SellerProfile,
+				required: true,
+				include: [
+					{
+						model: VerifiedSellers,
+						where: { is_active: true },
+						required: true
+					},
+					{
+						model: Document,
+						attributes: ['storeImageUrl'],
+						required: false
+					}
+				]
+			}
+		],
+		limit: 20
+	});
+
+	const storeResults = matchedStores.map((store: any) => ({
+		id: store.id,
+		name: store.storeName,
+		type: "store",
+		image: store.SellerProfile?.Document?.storeImageUrl || null,
+		isSellerOpen: store.isSellerOpen
+	}));
+
+	// 3. Search brands
+	const productsWithBrands = await Product.findAll({
+		attributes: ['brand', 'images'],
+		where: {
+			brand: {
+				[Op.like]: term
+			},
+			isActive: true
+		},
+		limit: 100
+	});
+
+	const uniqueBrandsMap = new Map();
+	for (const p of productsWithBrands) {
+		const brandName = p.brand?.trim();
+		if (brandName) {
+			const lower = brandName.toLowerCase();
+			if (!uniqueBrandsMap.has(lower)) {
+				uniqueBrandsMap.set(lower, {
+					id: brandName,
+					name: brandName,
+					type: "brand",
+					image: (p.images && p.images.length > 0) ? p.images[0] : null,
+					isSellerOpen: null
+				});
+			}
+		}
+	}
+	const brandResults = Array.from(uniqueBrandsMap.values());
+
+	return [...productResults, ...storeResults, ...brandResults];
+};
+

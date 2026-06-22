@@ -3,49 +3,36 @@ import AdminService from "../services/admin.service.js";
 export default class AdminController {
     /**
      * @swagger
-     * /api/admin/sellers/active:
+     * /api/admin/sellers:
      *   get:
-     *     summary: Get active sellers
-     *     description: Retrieve a list of active sellers with basic details
+     *     summary: Get sellers list
+     *     description: Retrieve a list of sellers with basic details. Optionally filter by status.
      *     tags: [Admin]
      *     security:
      *       - bearerAuth: []
+     *     parameters:
+     *       - in: query
+     *         name: status
+     *         schema:
+     *           type: string
+     *           enum: [pending, approved, rejected]
+     *         description: Filter sellers by status
      *     responses:
      *       200:
-     *         description: List of active sellers
+     *         description: List of sellers
+     *       400:
+     *         description: Invalid status parameter
      */
-    static async getActiveSellers(req, res) {
+    static async getSellers(req, res) {
         try {
-            const sellers = await AdminService.getActiveSellers();
+            const status = req.query.status;
+            if (status && !["pending", "approved", "rejected"].includes(status)) {
+                return handleControllerError(res, new Error("Invalid status. Must be one of: pending, approved, rejected"), 400);
+            }
+            const sellers = await AdminService.getSellers(status);
             return createResponse(res, {
                 status: 200,
-                message: "Active sellers retrieved successfully",
-                response: sellers,
-            });
-        }
-        catch (error) {
-            return handleControllerError(res, error);
-        }
-    }
-    /**
-     * @swagger
-     * /api/admin/sellers/inactive:
-     *   get:
-     *     summary: Get inactive sellers
-     *     description: Retrieve a list of inactive sellers with basic details
-     *     tags: [Admin]
-     *     security:
-     *       - bearerAuth: []
-     *     responses:
-     *       200:
-     *         description: List of inactive sellers
-     */
-    static async getInactiveSellers(req, res) {
-        try {
-            const sellers = await AdminService.getInactiveSellers();
-            return createResponse(res, {
-                status: 200,
-                message: "Inactive sellers retrieved successfully",
+                message: "Sellers retrieved successfully",
                 response: sellers,
             });
         }
@@ -87,10 +74,15 @@ export default class AdminController {
             if (!sellerDetails) {
                 return handleControllerError(res, new Error("Seller not found"));
             }
+            const responseData = sellerDetails.toJSON();
+            const reasonMessage = responseData.VerifiedSeller?.rejection_reason || responseData.VerifiedSellers?.rejection_reason || null;
             return createResponse(res, {
                 status: 200,
                 message: "Seller details retrieved successfully",
-                response: sellerDetails,
+                response: {
+                    ...responseData,
+                    reason: reasonMessage
+                },
             });
         }
         catch (error) {
@@ -236,6 +228,9 @@ export default class AdminController {
      *                 type: string
      *                 enum: [accept, reject]
      *                 description: Action to perform on the seller
+     *               reason:
+     *                 type: string
+     *                 description: Optional reason for rejecting the seller
      *     responses:
      *       200:
      *         description: Seller status updated successfully
@@ -250,11 +245,12 @@ export default class AdminController {
             if (isNaN(id)) {
                 return handleControllerError(res, new Error("Invalid seller ID"), 400);
             }
-            const { action } = req.body;
+            const { action, reason } = req.body;
             if (action !== "accept" && action !== "reject") {
                 return handleControllerError(res, new Error("Invalid action. Must be 'accept' or 'reject'"), 400);
             }
-            const result = await AdminService.approveSeller(id, action);
+            const status = action === "accept" ? "approved" : "rejected";
+            const result = await AdminService.approveSeller(id, status, reason);
             if (!result) {
                 return handleControllerError(res, new Error("Seller not found or could not be updated"), 404);
             }
@@ -349,6 +345,154 @@ export default class AdminController {
             return createResponse(res, {
                 status: 200,
                 message: "Seller and all associated details deleted successfully",
+            });
+        }
+        catch (error) {
+            return handleControllerError(res, error);
+        }
+    }
+    /**
+     * @swagger
+     * /api/admin/orders:
+     *   get:
+     *     summary: Get all sellers orders
+     *     description: Retrieve all orders across all sellers with pagination and optional filtering
+     *     tags: [Admin]
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: query
+     *         name: sellerId
+     *         schema:
+     *           type: integer
+     *         description: Filter orders by seller's user ID
+     *       - in: query
+     *         name: buyerId
+     *         schema:
+     *           type: integer
+     *         description: Filter orders by buyer's user ID
+     *       - in: query
+     *         name: status
+     *         schema:
+     *           type: string
+     *           enum: [created, confirmed, processing, shipped, delivered, cancelled, returned, refunded]
+     *         description: Filter orders by status
+     *       - in: query
+     *         name: startDate
+     *         schema:
+     *           type: string
+     *           format: date-time
+     *         description: Filter orders created on or after this ISO date-time
+     *       - in: query
+     *         name: endDate
+     *         schema:
+     *           type: string
+     *           format: date-time
+     *         description: Filter orders created on or before this ISO date-time
+     *       - in: query
+     *         name: page
+     *         schema:
+     *           type: integer
+     *           default: 1
+     *         description: Page number for pagination
+     *       - in: query
+     *         name: limit
+     *         schema:
+     *           type: integer
+     *           default: 20
+     *         description: Page limit for pagination
+     *     responses:
+     *       200:
+     *         description: List of orders retrieved successfully
+     *       400:
+     *         description: Bad request or validation error
+     *       401:
+     *         description: Unauthorized
+     *       403:
+     *         description: Forbidden - Admin role required
+     */
+    static async getSellersOrders(req, res) {
+        try {
+            const sellerId = req.query.sellerId ? Number(req.query.sellerId) : undefined;
+            const buyerId = req.query.buyerId ? Number(req.query.buyerId) : undefined;
+            const status = req.query.status;
+            const startDate = req.query.startDate;
+            const endDate = req.query.endDate;
+            const page = req.query.page ? Number(req.query.page) : 1;
+            const limit = req.query.limit ? Number(req.query.limit) : 20;
+            if (sellerId !== undefined && isNaN(sellerId)) {
+                return handleControllerError(res, new Error("Invalid sellerId"), 400);
+            }
+            if (buyerId !== undefined && isNaN(buyerId)) {
+                return handleControllerError(res, new Error("Invalid buyerId"), 400);
+            }
+            if (isNaN(page) || page < 1) {
+                return handleControllerError(res, new Error("Invalid page number"), 400);
+            }
+            if (isNaN(limit) || limit < 1) {
+                return handleControllerError(res, new Error("Invalid limit value"), 400);
+            }
+            const result = await AdminService.getSellersOrders({
+                sellerId,
+                buyerId,
+                status,
+                startDate,
+                endDate,
+                page,
+                limit,
+            });
+            return createResponse(res, {
+                status: 200,
+                message: "Sellers orders retrieved successfully",
+                response: result,
+            });
+        }
+        catch (error) {
+            return handleControllerError(res, error);
+        }
+    }
+    /**
+     * @swagger
+     * /api/admin/orders/{id}:
+     *   get:
+     *     summary: Get order details by ID
+     *     description: Retrieve detailed order information including items, buyer, and seller details
+     *     tags: [Admin]
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: integer
+     *         description: Order ID
+     *     responses:
+     *       200:
+     *         description: Detailed order retrieved successfully
+     *       400:
+     *         description: Invalid order ID
+     *       404:
+     *         description: Order not found
+     *       401:
+     *         description: Unauthorized
+     *       403:
+     *         description: Forbidden - Admin role required
+     */
+    static async getOrderDetail(req, res) {
+        try {
+            const id = Number(req.params.id);
+            if (isNaN(id)) {
+                return handleControllerError(res, new Error("Invalid order ID"), 400);
+            }
+            const order = await AdminService.getOrderDetail(id);
+            if (!order) {
+                return handleControllerError(res, new Error("Order not found"), 404);
+            }
+            return createResponse(res, {
+                status: 200,
+                message: "Order details retrieved successfully",
+                response: order,
             });
         }
         catch (error) {

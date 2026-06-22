@@ -5,6 +5,7 @@ import { uploadMultiple } from '../middleware/upload.js';
 const productRouter = Router();
 // Public routes (with optional authentication for wishlist status)
 productRouter.get('/', optionalAuthenticate, ctrl.list); // Optional auth - will use userId if authenticated
+productRouter.get('/search-all', optionalAuthenticate, ctrl.searchAll);
 productRouter.get('/:id', optionalAuthenticate, ctrl.get); // Optional auth - will use userId if authenticated
 // Seller-only routes (require authentication + seller role)
 productRouter.get('/seller/me', authenticate, requireSeller, ctrl.getSellerProducts);

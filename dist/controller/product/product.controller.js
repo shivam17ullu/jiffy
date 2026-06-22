@@ -31,6 +31,9 @@ import { Product } from '../../model/relations.js';
  *               brand:
  *                 type: string
  *                 example: "Levis"
+ *               details:
+ *                 type: string
+ *                 example: "100% Cotton, Premium Quality"
  *               images:
  *                 type: array
  *                 items:
@@ -585,6 +588,64 @@ export const toggleVariantStatus = async (req, res) => {
             return sendError(res, 404, "Product/Variant not found or you are not authorized to update it");
         }
         res.json({ success: true, data: result, message: "Variant status updated successfully" });
+    }
+    catch (err) {
+        return handleControllerError(res, err);
+    }
+};
+/**
+ * @swagger
+ * /api/products/search-all:
+ *   get:
+ *     summary: Global search for products, stores, and brands
+ *     description: Retrieve list of search-related products, stores, and brands based on a query parameter.
+ *     tags: [Products]
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Search query string
+ *     responses:
+ *       200:
+ *         description: List of matched products, stores, and brands
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       type:
+ *                         type: string
+ *                         enum: [product, store, brand]
+ *                       image:
+ *                         type: string
+ *                         nullable: true
+ *                       isSellerOpen:
+ *                         type: boolean
+ *                         nullable: true
+ *       400:
+ *         description: Bad request
+ */
+export const searchAll = async (req, res) => {
+    try {
+        const q = req.query.q || req.query.query || '';
+        if (!q) {
+            return res.json({ success: true, data: [] });
+        }
+        const result = await service.searchAll(String(q).trim());
+        res.json({ success: true, data: result });
     }
     catch (err) {
         return handleControllerError(res, err);

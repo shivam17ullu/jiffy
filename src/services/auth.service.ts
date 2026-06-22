@@ -374,6 +374,7 @@ export default class AuthService {
 			const verified = await VerifiedSellers.create({
 				sellerId: seller.id!,
 				is_active: false,
+				status: "pending",
 			}, { transaction });
 
 			const store = await Store.create(

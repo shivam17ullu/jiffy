@@ -52,7 +52,11 @@ export const addToCart = async (userId: number, productId: number, variantId: nu
   } else {
     await CartItem.create({ cartId: cart.id, productId, variantId: finalVariantId, qty, price });
   }
-  return CartItem.findAll({ where: { cartId: cart.id }, include: [{ association: 'product' }]});
+  return CartItem.findAll({
+    where: { cartId: cart.id },
+    order: [["id", "DESC"]],
+    include: [{ association: "product" }],
+  });
 };
 
 export const getCart = async (userId: number) => {
@@ -60,6 +64,7 @@ export const getCart = async (userId: number) => {
   
   const items = await CartItem.findAll({
     where: { cartId: cart.id },
+    order: [["id", "DESC"]],
     include: [
       {
         association: "product",
@@ -128,6 +133,7 @@ export const getCart = async (userId: number) => {
               slug: product.slug,
               description: product.description,
               brand: product.brand,
+              details: product.details,
               images: product.images || [],
               tags: product.tags || [],
               categories: product.categories || [],

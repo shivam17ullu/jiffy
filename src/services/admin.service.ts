@@ -20,37 +20,24 @@ import {
 } from "../model/relations.js";
 import { Op, Sequelize } from "sequelize";
 import { jiffy } from "../config/sequelize.js";
-import { sendSellerApprovalEmail } from "../utils/mailer.js";
+import { sendSellerApprovalEmail, sendSellerRejectionEmail } from "../utils/mailer.js";
 
 
 export default class AdminService {
-	static async getActiveSellers() {
-		return await SellerProfile.findAll({
-			order: [["createdAt", "DESC"]],
-			attributes: ["id", "userId", "businessName", "phone", "address", "city", "state", "zipCode", "gstNumber", "createdAt"],
-			include: [
-				{
-					model: VerifiedSellers,
-					where: { is_active: true },
-					attributes: ["id", "is_active", "createdAt"],
-				},
-				{
-					model: User,
-					attributes: ["email"],
-				},
-			],
-		});
-	}
+	static async getSellers(status?: string) {
+		const whereCondition: any = {};
+		if (status) {
+			whereCondition.status = status;
+		}
 
-	static async getInactiveSellers() {
 		return await SellerProfile.findAll({
 			order: [["createdAt", "DESC"]],
 			attributes: ["id", "userId", "businessName", "phone", "address", "city", "state", "zipCode", "gstNumber", "createdAt"],
 			include: [
 				{
 					model: VerifiedSellers,
-					where: { is_active: false },
-					attributes: ["id", "is_active", "createdAt"],
+					where: whereCondition,
+					attributes: ["id", "is_active", "status", "createdAt"],
 				},
 				{
 					model: User,
@@ -129,7 +116,7 @@ export default class AdminService {
 		});
 	}
 
-	static async approveSeller(sellerId: number, action: "accept" | "reject") {
+	static async approveSeller(sellerId: number, status: "approved" | "rejected", reason?: string) {
 		const verifiedSeller = await VerifiedSellers.findOne({ 
 			where: { sellerId },
 			include: [{ model: SellerProfile }]
@@ -138,10 +125,18 @@ export default class AdminService {
 			return null;
 		}
 
-		verifiedSeller.is_active = action === "accept";
+		verifiedSeller.is_active = status === "approved";
+		verifiedSeller.status = status;
+		
+		if (status === "rejected" && reason) {
+			verifiedSeller.rejection_reason = reason;
+		} else if (status === "approved") {
+			verifiedSeller.rejection_reason = null;
+		}
+		
 		await verifiedSeller.save();
 
-		if (action === "accept" && (verifiedSeller as any).SellerProfile?.userId) {
+		if (status === "approved" && (verifiedSeller as any).SellerProfile?.userId) {
 			const userId = (verifiedSeller as any).SellerProfile.userId;
 			await User.update(
 				{ is_active: true },
@@ -162,6 +157,24 @@ export default class AdminService {
 				}
 			} catch (err) {
 				console.error("Error sending seller approval email:", err);
+			}
+		} else if (status === "rejected" && (verifiedSeller as any).SellerProfile?.userId) {
+			const userId = (verifiedSeller as any).SellerProfile.userId;
+
+			// Send rejection email to the seller asynchronously
+			try {
+				const user = await User.findByPk(Number(userId));
+				const userEmail = (user as any)?.email || "";
+				if (userEmail) {
+					const bankDetail = await BankDetail.findOne({ where: { sellerId } });
+					const sellerName = (bankDetail as any)?.accountHolderName || (bankDetail as any)?.account_holder_name || "Seller";
+					
+					sendSellerRejectionEmail(userEmail, sellerName, reason || "No specific reason provided.").catch(err => {
+						console.error("Seller rejection email failed:", err);
+					});
+				}
+			} catch (err) {
+				console.error("Error sending seller rejection email:", err);
 			}
 		}
 
@@ -358,6 +371,142 @@ export default class AdminService {
 			await transaction.rollback();
 			throw error;
 		}
+	}
+
+	static async getSellersOrders(filters: {
+		sellerId?: number;
+		buyerId?: number;
+		status?: string;
+		startDate?: string;
+		endDate?: string;
+		page?: number;
+		limit?: number;
+	}) {
+		const { sellerId, buyerId, status, startDate, endDate, page = 1, limit = 20 } = filters;
+		const where: any = {};
+
+		if (sellerId) {
+			where.sellerId = sellerId;
+		}
+
+		if (buyerId) {
+			where.userId = buyerId;
+		}
+
+		if (status) {
+			where.status = status;
+		}
+
+		if (startDate || endDate) {
+			where.createdAt = {};
+			if (startDate) {
+				where.createdAt[Op.gte] = new Date(startDate);
+			}
+			if (endDate) {
+				where.createdAt[Op.lte] = new Date(endDate);
+			}
+		}
+
+		const orders = await Order.findAndCountAll({
+			where,
+			include: [
+				{
+					association: "items",
+					include: [
+						{
+							association: "product",
+							include: [
+								{
+									association: "categories",
+								},
+							],
+						},
+					],
+				},
+				{
+					association: "buyer",
+					attributes: ["id", "phone_number", "email"],
+					include: [
+						{
+							model: BuyerProfile,
+							required: false,
+							attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
+						},
+					],
+				},
+				{
+					association: "seller",
+					attributes: ["id", "phone_number", "email"],
+					include: [
+						{
+							model: SellerProfile,
+							required: false,
+							attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone"],
+						},
+					],
+				},
+			],
+			limit: limit,
+			offset: (page - 1) * limit,
+			order: [["createdAt", "DESC"]],
+			distinct: true,
+		});
+
+		return {
+			items: orders.rows,
+			total: orders.count,
+			page,
+			limit,
+			totalPages: Math.ceil(orders.count / limit),
+		};
+	}
+
+	static async getOrderDetail(orderId: number) {
+		return await Order.findByPk(orderId, {
+			include: [
+				{
+					association: "items",
+					include: [
+						{
+							association: "product",
+							include: [
+								{
+									association: "categories",
+									include: [
+										{
+											association: "parent",
+											include: [{ association: "parent" }],
+										},
+									],
+								},
+							],
+						},
+					],
+				},
+				{
+					association: "buyer",
+					attributes: ["id", "phone_number", "email"],
+					include: [
+						{
+							model: BuyerProfile,
+							required: false,
+							attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
+						},
+					],
+				},
+				{
+					association: "seller",
+					attributes: ["id", "phone_number", "email"],
+					include: [
+						{
+							model: SellerProfile,
+							required: false,
+							attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone"],
+						},
+					],
+				},
+			],
+		});
 	}
 }
 

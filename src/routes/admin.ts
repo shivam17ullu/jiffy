@@ -7,8 +7,7 @@ const adminRouter = Router();
 adminRouter.use(authenticate);
 adminRouter.use(authorize(["admin"]));
 
-adminRouter.get("/sellers/active", AdminController.getActiveSellers);
-adminRouter.get("/sellers/inactive", AdminController.getInactiveSellers);
+adminRouter.get("/sellers", AdminController.getSellers);
 adminRouter.get("/sellers/:id", AdminController.getSellerDetails);
 adminRouter.delete("/sellers/:id", AdminController.deleteSeller);
 adminRouter.get("/sellers/:id/docs", AdminController.getSellerDocuments);
@@ -16,5 +15,7 @@ adminRouter.patch("/sellers/:id/approve", AdminController.approveSeller);
 adminRouter.get("/sellers/:sellerId/products", AdminController.getProducts);
 adminRouter.get("/products", AdminController.getProducts);
 adminRouter.patch("/products/:id/approve", AdminController.approveProduct);
+adminRouter.get("/orders", AdminController.getSellersOrders);
+adminRouter.get("/orders/:id", AdminController.getOrderDetail);
 
 export default adminRouter;
