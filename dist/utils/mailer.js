@@ -254,3 +254,56 @@ export const sendNewOrderEmail = async (details) => {
         console.error("Error sending new order email to seller:", error);
     }
 };
+export const sendSellerRejectionEmail = async (email, sellerName, reason) => {
+    try {
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST || 'smtp.gmail.com',
+            port: Number(process.env.SMTP_PORT) || 587,
+            secure: process.env.SMTP_SECURE === 'true',
+            auth: {
+                user: process.env.SMTP_USER || process.env.EMAIL_FROM,
+                pass: process.env.SMTP_PASS, // User must provide this in .env
+            },
+        });
+        const fromEmail = process.env.EMAIL_FROM || 'ranjitkumarbgs61@gmail.com';
+        const info = await transporter.sendMail({
+            from: `"Drapeit" <${fromEmail}>`,
+            to: email,
+            subject: "Action Required: Update Your Seller Profile on Drapeit",
+            text: `Dear ${sellerName},\n\nThank you for choosing Drapeit as your marketplace partner.\n\nWe have reviewed your seller profile and documents. Unfortunately, we are unable to approve your application at this time for the following reason:\n\n${reason}\n\nPlease log in to your Seller Portal to review and update your information or documents accordingly.\n\nLogin to Seller Portal: https://www.drapeit.in/\n\nIf you need any assistance, feel free to reach out to our support team.\n\nWarm regards,\nTeam Drapeit`,
+            html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; color: #334155;">
+                <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
+                    <h1 style="margin: 0; font-size: 24px;">Drapeit</h1>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;">Action Required</p>
+                </div>
+                
+                <div style="padding: 24px; line-height: 1.5;">
+                    <h2 style="color: #0f172a; font-size: 18px; margin-top: 0;">Dear ${sellerName},</h2>
+                    <p>Thank you for choosing <strong>Drapeit</strong> as your marketplace partner.</p>
+                    
+                    <p>We have reviewed your seller profile and documents. Unfortunately, we are unable to approve your application at this time for the following reason:</p>
+
+                    <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 12px; color: #7f1d1d; border-radius: 4px; margin-bottom: 20px;">
+                        <strong>Reason for Rejection:</strong><br>
+                        ${reason}
+                    </div>
+                    
+                    <p>Please log in to your Seller Portal to review and update your information or documents accordingly. Once updated, your profile will be re-evaluated by our team.</p>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="https://www.drapeit.in/" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Login to Seller Portal</a>
+                    </div>
+                    
+                    <p>If you need any assistance, feel free to reach out to our support team.</p>
+                    <p style="margin-bottom: 0;">Warm regards,<br><strong>Team Drapeit</strong></p>
+                </div>
+            </div>
+            `
+        });
+        console.log("Seller rejection email sent: %s", info.messageId);
+    }
+    catch (error) {
+        console.error("Error sending seller rejection email:", error);
+    }
+};

@@ -5,49 +5,37 @@ import AdminService from "../services/admin.service.js";
 export default class AdminController {
 	/**
 	 * @swagger
-	 * /api/admin/sellers/active:
+	 * /api/admin/sellers:
 	 *   get:
-	 *     summary: Get active sellers
-	 *     description: Retrieve a list of active sellers with basic details
+	 *     summary: Get sellers list
+	 *     description: Retrieve a list of sellers with basic details. Optionally filter by status.
 	 *     tags: [Admin]
 	 *     security:
 	 *       - bearerAuth: []
+	 *     parameters:
+	 *       - in: query
+	 *         name: status
+	 *         schema:
+	 *           type: string
+	 *           enum: [pending, approved, rejected]
+	 *         description: Filter sellers by status
 	 *     responses:
 	 *       200:
-	 *         description: List of active sellers
+	 *         description: List of sellers
+	 *       400:
+	 *         description: Invalid status parameter
 	 */
-	static async getActiveSellers(req: Request, res: Response) {
+	static async getSellers(req: Request, res: Response) {
 		try {
-			const sellers = await AdminService.getActiveSellers();
-			return createResponse(res, {
-				status: 200,
-				message: "Active sellers retrieved successfully",
-				response: sellers,
-			});
-		} catch (error: unknown) {
-			return handleControllerError(res, error);
-		}
-	}
+			const status = req.query.status as string;
+			if (status && !["pending", "approved", "rejected"].includes(status)) {
+				return handleControllerError(res, new Error("Invalid status. Must be one of: pending, approved, rejected"), 400);
+			}
 
-	/**
-	 * @swagger
-	 * /api/admin/sellers/inactive:
-	 *   get:
-	 *     summary: Get inactive sellers
-	 *     description: Retrieve a list of inactive sellers with basic details
-	 *     tags: [Admin]
-	 *     security:
-	 *       - bearerAuth: []
-	 *     responses:
-	 *       200:
-	 *         description: List of inactive sellers
-	 */
-	static async getInactiveSellers(req: Request, res: Response) {
-		try {
-			const sellers = await AdminService.getInactiveSellers();
+			const sellers = await AdminService.getSellers(status);
 			return createResponse(res, {
 				status: 200,
-				message: "Inactive sellers retrieved successfully",
+				message: "Sellers retrieved successfully",
 				response: sellers,
 			});
 		} catch (error: unknown) {
@@ -91,10 +79,16 @@ export default class AdminController {
 				return handleControllerError(res, new Error("Seller not found"));
 			}
 
+			const responseData = sellerDetails.toJSON() as any;
+			const reasonMessage = responseData.VerifiedSeller?.rejection_reason || responseData.VerifiedSellers?.rejection_reason || null;
+
 			return createResponse(res, {
 				status: 200,
 				message: "Seller details retrieved successfully",
-				response: sellerDetails,
+				response: {
+					...responseData,
+					reason: reasonMessage
+				},
 			});
 		} catch (error: unknown) {
 			return handleControllerError(res, error);
@@ -244,6 +238,9 @@ export default class AdminController {
 	 *                 type: string
 	 *                 enum: [accept, reject]
 	 *                 description: Action to perform on the seller
+	 *               reason:
+	 *                 type: string
+	 *                 description: Optional reason for rejecting the seller
 	 *     responses:
 	 *       200:
 	 *         description: Seller status updated successfully
@@ -259,12 +256,13 @@ export default class AdminController {
 				return handleControllerError(res, new Error("Invalid seller ID"), 400);
 			}
 
-			const { action } = req.body;
+			const { action, reason } = req.body;
 			if (action !== "accept" && action !== "reject") {
 				return handleControllerError(res, new Error("Invalid action. Must be 'accept' or 'reject'"), 400);
 			}
 
-			const result = await AdminService.approveSeller(id, action);
+			const status = action === "accept" ? "approved" : "rejected";
+			const result = await AdminService.approveSeller(id, status, reason);
 			if (!result) {
 				return handleControllerError(res, new Error("Seller not found or could not be updated"), 404);
 			}

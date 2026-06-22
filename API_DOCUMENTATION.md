@@ -470,6 +470,7 @@ Create a new product. **Requires Authentication**
   "name": "Blue Shirt",
   "description": "Premium cotton shirt",
   "brand": "Levis",
+  "details": "100% Cotton, Slim Fit",
   "images": ["https://example.com/image1.jpg"],
   "tags": ["shirt", "men"],
   "categories": [1, 2],

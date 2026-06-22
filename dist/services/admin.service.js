@@ -1,34 +1,21 @@
 import { SellerProfile, VerifiedSellers, User, Store, Document, BankDetail, Product, ProductVariant, ProductCategory, CartItem, Wishlist, Order, OrderItem, Location, RefreshToken, UserRole, BuyerProfile, OtpLogin, } from "../model/relations.js";
 import { Op, Sequelize } from "sequelize";
 import { jiffy } from "../config/sequelize.js";
-import { sendSellerApprovalEmail } from "../utils/mailer.js";
+import { sendSellerApprovalEmail, sendSellerRejectionEmail } from "../utils/mailer.js";
 export default class AdminService {
-    static async getActiveSellers() {
+    static async getSellers(status) {
+        const whereCondition = {};
+        if (status) {
+            whereCondition.status = status;
+        }
         return await SellerProfile.findAll({
             order: [["createdAt", "DESC"]],
             attributes: ["id", "userId", "businessName", "phone", "address", "city", "state", "zipCode", "gstNumber", "createdAt"],
             include: [
                 {
                     model: VerifiedSellers,
-                    where: { is_active: true },
-                    attributes: ["id", "is_active", "createdAt"],
-                },
-                {
-                    model: User,
-                    attributes: ["email"],
-                },
-            ],
-        });
-    }
-    static async getInactiveSellers() {
-        return await SellerProfile.findAll({
-            order: [["createdAt", "DESC"]],
-            attributes: ["id", "userId", "businessName", "phone", "address", "city", "state", "zipCode", "gstNumber", "createdAt"],
-            include: [
-                {
-                    model: VerifiedSellers,
-                    where: { is_active: false },
-                    attributes: ["id", "is_active", "createdAt"],
+                    where: whereCondition,
+                    attributes: ["id", "is_active", "status", "createdAt"],
                 },
                 {
                     model: User,
@@ -100,7 +87,7 @@ export default class AdminService {
             where: { sellerId },
         });
     }
-    static async approveSeller(sellerId, action) {
+    static async approveSeller(sellerId, status, reason) {
         const verifiedSeller = await VerifiedSellers.findOne({
             where: { sellerId },
             include: [{ model: SellerProfile }]
@@ -108,9 +95,16 @@ export default class AdminService {
         if (!verifiedSeller) {
             return null;
         }
-        verifiedSeller.is_active = action === "accept";
+        verifiedSeller.is_active = status === "approved";
+        verifiedSeller.status = status;
+        if (status === "rejected" && reason) {
+            verifiedSeller.rejection_reason = reason;
+        }
+        else if (status === "approved") {
+            verifiedSeller.rejection_reason = null;
+        }
         await verifiedSeller.save();
-        if (action === "accept" && verifiedSeller.SellerProfile?.userId) {
+        if (status === "approved" && verifiedSeller.SellerProfile?.userId) {
             const userId = verifiedSeller.SellerProfile.userId;
             await User.update({ is_active: true }, { where: { id: userId } });
             // Send welcome email to the approved seller asynchronously
@@ -127,6 +121,24 @@ export default class AdminService {
             }
             catch (err) {
                 console.error("Error sending seller approval email:", err);
+            }
+        }
+        else if (status === "rejected" && verifiedSeller.SellerProfile?.userId) {
+            const userId = verifiedSeller.SellerProfile.userId;
+            // Send rejection email to the seller asynchronously
+            try {
+                const user = await User.findByPk(Number(userId));
+                const userEmail = user?.email || "";
+                if (userEmail) {
+                    const bankDetail = await BankDetail.findOne({ where: { sellerId } });
+                    const sellerName = bankDetail?.accountHolderName || bankDetail?.account_holder_name || "Seller";
+                    sendSellerRejectionEmail(userEmail, sellerName, reason || "No specific reason provided.").catch(err => {
+                        console.error("Seller rejection email failed:", err);
+                    });
+                }
+            }
+            catch (err) {
+                console.error("Error sending seller rejection email:", err);
             }
         }
         return verifiedSeller;

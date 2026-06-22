@@ -20,37 +20,24 @@ import {
 } from "../model/relations.js";
 import { Op, Sequelize } from "sequelize";
 import { jiffy } from "../config/sequelize.js";
-import { sendSellerApprovalEmail } from "../utils/mailer.js";
+import { sendSellerApprovalEmail, sendSellerRejectionEmail } from "../utils/mailer.js";
 
 
 export default class AdminService {
-	static async getActiveSellers() {
-		return await SellerProfile.findAll({
-			order: [["createdAt", "DESC"]],
-			attributes: ["id", "userId", "businessName", "phone", "address", "city", "state", "zipCode", "gstNumber", "createdAt"],
-			include: [
-				{
-					model: VerifiedSellers,
-					where: { is_active: true },
-					attributes: ["id", "is_active", "createdAt"],
-				},
-				{
-					model: User,
-					attributes: ["email"],
-				},
-			],
-		});
-	}
+	static async getSellers(status?: string) {
+		const whereCondition: any = {};
+		if (status) {
+			whereCondition.status = status;
+		}
 
-	static async getInactiveSellers() {
 		return await SellerProfile.findAll({
 			order: [["createdAt", "DESC"]],
 			attributes: ["id", "userId", "businessName", "phone", "address", "city", "state", "zipCode", "gstNumber", "createdAt"],
 			include: [
 				{
 					model: VerifiedSellers,
-					where: { is_active: false },
-					attributes: ["id", "is_active", "createdAt"],
+					where: whereCondition,
+					attributes: ["id", "is_active", "status", "createdAt"],
 				},
 				{
 					model: User,
@@ -129,7 +116,7 @@ export default class AdminService {
 		});
 	}
 
-	static async approveSeller(sellerId: number, action: "accept" | "reject") {
+	static async approveSeller(sellerId: number, status: "approved" | "rejected", reason?: string) {
 		const verifiedSeller = await VerifiedSellers.findOne({ 
 			where: { sellerId },
 			include: [{ model: SellerProfile }]
@@ -138,10 +125,18 @@ export default class AdminService {
 			return null;
 		}
 
-		verifiedSeller.is_active = action === "accept";
+		verifiedSeller.is_active = status === "approved";
+		verifiedSeller.status = status;
+		
+		if (status === "rejected" && reason) {
+			verifiedSeller.rejection_reason = reason;
+		} else if (status === "approved") {
+			verifiedSeller.rejection_reason = null;
+		}
+		
 		await verifiedSeller.save();
 
-		if (action === "accept" && (verifiedSeller as any).SellerProfile?.userId) {
+		if (status === "approved" && (verifiedSeller as any).SellerProfile?.userId) {
 			const userId = (verifiedSeller as any).SellerProfile.userId;
 			await User.update(
 				{ is_active: true },
@@ -162,6 +157,24 @@ export default class AdminService {
 				}
 			} catch (err) {
 				console.error("Error sending seller approval email:", err);
+			}
+		} else if (status === "rejected" && (verifiedSeller as any).SellerProfile?.userId) {
+			const userId = (verifiedSeller as any).SellerProfile.userId;
+
+			// Send rejection email to the seller asynchronously
+			try {
+				const user = await User.findByPk(Number(userId));
+				const userEmail = (user as any)?.email || "";
+				if (userEmail) {
+					const bankDetail = await BankDetail.findOne({ where: { sellerId } });
+					const sellerName = (bankDetail as any)?.accountHolderName || (bankDetail as any)?.account_holder_name || "Seller";
+					
+					sendSellerRejectionEmail(userEmail, sellerName, reason || "No specific reason provided.").catch(err => {
+						console.error("Seller rejection email failed:", err);
+					});
+				}
+			} catch (err) {
+				console.error("Error sending seller rejection email:", err);
 			}
 		}
 

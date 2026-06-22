@@ -93,6 +93,7 @@ async function seedUsers() {
 					{
 						sellerId: sellerProfileRecord.id,
 						is_active: true,
+						status: "approved",
 					},
 					{ transaction: t }
 				);

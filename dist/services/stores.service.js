@@ -28,7 +28,7 @@ export default class StoreService {
             include: [
                 {
                     model: VerifiedSellers,
-                    where: { is_active: 1 }, // INNER JOIN condition
+                    where: { is_active: true, status: "approved" }, // INNER JOIN condition
                 },
                 storeInclude,
                 {

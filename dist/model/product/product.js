@@ -8,6 +8,7 @@ Product.init({
     slug: { type: DataTypes.STRING(300), allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: true },
     brand: { type: DataTypes.STRING(120), allowNull: true },
+    details: { type: DataTypes.TEXT, allowNull: true },
     images: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
     tags: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
