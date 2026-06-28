@@ -153,11 +153,11 @@ export const listProducts = async (opts) => {
         {
             association: "seller",
             attributes: ["id", "phone_number", "email"],
-            required: false,
+            required: true,
             include: [
                 {
                     model: SellerProfile,
-                    required: false,
+                    required: true,
                     attributes: [
                         "businessName",
                         "gstNumber",
@@ -172,6 +172,11 @@ export const listProducts = async (opts) => {
                             model: Store,
                             required: false,
                             attributes: ["storeName", "isSellerOpen"],
+                        },
+                        {
+                            model: VerifiedSellers,
+                            where: { is_active: true, status: "approved" },
+                            required: true,
                         }
                     ],
                 },
@@ -292,7 +297,34 @@ async function getCategoryDescendants(categoryId) {
     }
     return categoryIds;
 }
-export const getProductById = async (id, userId) => {
+export const getProductById = async (id, userId, checkSellerStatus = false) => {
+    const sellerProfileInclude = {
+        model: SellerProfile,
+        required: checkSellerStatus,
+        attributes: [
+            "businessName",
+            "gstNumber",
+            "address",
+            "city",
+            "state",
+            "zipCode",
+            "phone",
+        ],
+        include: [
+            {
+                model: Store,
+                required: false,
+                attributes: ["storeName", "isSellerOpen"],
+            }
+        ]
+    };
+    if (checkSellerStatus) {
+        sellerProfileInclude.include.push({
+            model: VerifiedSellers,
+            where: { is_active: true, status: "approved" },
+            required: true,
+        });
+    }
     const product = await Product.findByPk(id, {
         include: [
             {
@@ -310,28 +342,8 @@ export const getProductById = async (id, userId) => {
             {
                 association: "seller",
                 attributes: ["id", "phone_number", "email"],
-                include: [
-                    {
-                        model: SellerProfile,
-                        required: false,
-                        attributes: [
-                            "businessName",
-                            "gstNumber",
-                            "address",
-                            "city",
-                            "state",
-                            "zipCode",
-                            "phone",
-                        ],
-                        include: [
-                            {
-                                model: Store,
-                                required: false,
-                                attributes: ["storeName", "isSellerOpen"],
-                            }
-                        ]
-                    },
-                ],
+                required: checkSellerStatus,
+                include: [sellerProfileInclude],
             },
         ],
     });
@@ -600,6 +612,25 @@ export const searchAll = async (q) => {
                 { description: { [Op.like]: term } }
             ]
         },
+        include: [
+            {
+                association: "seller",
+                required: true,
+                include: [
+                    {
+                        model: SellerProfile,
+                        required: true,
+                        include: [
+                            {
+                                model: VerifiedSellers,
+                                where: { is_active: true, status: "approved" },
+                                required: true,
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
         limit: 20
     });
     const productResults = matchedProducts.map((p) => ({
@@ -625,7 +656,7 @@ export const searchAll = async (q) => {
                 include: [
                     {
                         model: VerifiedSellers,
-                        where: { is_active: true },
+                        where: { is_active: true, status: "approved" },
                         required: true
                     },
                     {
@@ -654,6 +685,25 @@ export const searchAll = async (q) => {
             },
             isActive: true
         },
+        include: [
+            {
+                association: "seller",
+                required: true,
+                include: [
+                    {
+                        model: SellerProfile,
+                        required: true,
+                        include: [
+                            {
+                                model: VerifiedSellers,
+                                where: { is_active: true, status: "approved" },
+                                required: true,
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
         limit: 100
     });
     const uniqueBrandsMap = new Map();

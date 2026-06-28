@@ -390,7 +390,7 @@ export const getSellerProducts = async (req: any, res: Response) => {
 export const get = async (req: any, res: Response) => {
   const productId = +req.params.id;
   const userId = req.userId || undefined; // Include userId if authenticated
-  const product = await service.getProductById(productId, userId);
+  const product = await service.getProductById(productId, userId, true);
   if (!product) {
     return sendError(res, 404, "Product not found");
   }

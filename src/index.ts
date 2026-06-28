@@ -25,9 +25,19 @@ import { globalErrorHandler } from './middleware/errorHandler.js';
 // Load environment variables first
 dotenv.config();
 
-app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.json({
+	limit: '50mb',
+	verify: (req: any, res, buf) => {
+		req.rawBody = buf;
+	}
+}));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({
+	limit: '50mb',
+	verify: (req: any, res, buf) => {
+		req.rawBody = buf;
+	}
+}));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cors());
 import adminRouter from './routes/admin.js';

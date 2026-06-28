@@ -5,6 +5,7 @@ import {
   Category,
   User,
   SellerProfile,
+  VerifiedSellers,
 } from "../../model/relations.js";
 
 /**
@@ -57,6 +58,7 @@ export const getWishlist = async (userId: number, opts: any = {}) => {
     include: [
       {
         association: "product",
+        required: true,
         include: [
           {
             association: "variants",
@@ -73,10 +75,11 @@ export const getWishlist = async (userId: number, opts: any = {}) => {
           {
             association: "seller",
             attributes: ["id", "phone_number", "email"],
+            required: true,
             include: [
               {
                 model: SellerProfile,
-                required: false,
+                required: true,
                 attributes: [
                   "businessName",
                   "gstNumber",
@@ -85,6 +88,13 @@ export const getWishlist = async (userId: number, opts: any = {}) => {
                   "state",
                   "zipCode",
                   "phone",
+                ],
+                include: [
+                  {
+                    model: VerifiedSellers,
+                    where: { is_active: true, status: "approved" },
+                    required: true,
+                  }
                 ],
               },
             ],

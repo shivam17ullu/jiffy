@@ -82,3 +82,70 @@ export const getStats = async (req: any, res: Response) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/seller/revenue/monthly:
+ *   get:
+ *     summary: Get seller monthly-wise revenue
+ *     description: Retrieve the monthly-wise revenue for the authenticated seller
+ *     tags: [Seller]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: year
+ *         schema:
+ *           type: integer
+ *         description: Optional year to filter the monthly revenue
+ *     responses:
+ *       200:
+ *         description: Monthly revenue retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       year:
+ *                         type: integer
+ *                       month:
+ *                         type: integer
+ *                       revenue:
+ *                         type: number
+ *                       orderCount:
+ *                         type: integer
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Not a seller
+ */
+export const getMonthlyRevenue = async (req: any, res: Response) => {
+  try {
+    const sellerId = req.userId;
+    const yearQuery = req.query.year;
+    let year: number | undefined = undefined;
+
+    if (yearQuery) {
+      year = parseInt(yearQuery as string, 10);
+      if (isNaN(year)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid year parameter. It must be a valid integer."
+        });
+      }
+    }
+
+    const data = await service.getSellerMonthlyRevenue(sellerId, year);
+    res.json({ success: true, data });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
+};
+
+
