@@ -43,6 +43,10 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo,
                     throw new Error("Insufficient stock for variant: " + variant.id);
                 total += (it.price || variant.price) * it.qty;
             }
+            const enrichedPaymentInfo = {
+                ...(paymentInfo || {}),
+                method: "Online"
+            };
             // FIXED — added sellerId in Order.create()
             const order = await Order.create({
                 userId,
@@ -50,7 +54,7 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo,
                 total,
                 status: "created",
                 shippingAddress,
-                paymentInfo,
+                paymentInfo: enrichedPaymentInfo,
             }, { transaction: t });
             // Fetch seller details for notification
             const sellerUser = await User.findByPk(sellerId, {

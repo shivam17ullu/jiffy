@@ -205,11 +205,11 @@ export const listProducts = async (opts: any) => {
 		{
 			association: "seller",
 			attributes: ["id", "phone_number", "email"],
-			required: false,
+			required: true,
 			include: [
 				{
 					model: SellerProfile,
-					required: false,
+					required: true,
 					attributes: [
 						"businessName",
 						"gstNumber",
@@ -224,6 +224,11 @@ export const listProducts = async (opts: any) => {
 							model: Store,
 							required: false,
 							attributes: ["storeName", "isSellerOpen"],
+						},
+						{
+							model: VerifiedSellers,
+							where: { is_active: true, status: "approved" },
+							required: true,
 						}
 					],
 				},
@@ -355,7 +360,36 @@ async function getCategoryDescendants(categoryId: number): Promise<number[]> {
 	return categoryIds;
 }
 
-export const getProductById = async (id: number, userId?: number) => {
+export const getProductById = async (id: number, userId?: number, checkSellerStatus = false) => {
+	const sellerProfileInclude: any = {
+		model: SellerProfile,
+		required: checkSellerStatus,
+		attributes: [
+			"businessName",
+			"gstNumber",
+			"address",
+			"city",
+			"state",
+			"zipCode",
+			"phone",
+		],
+		include: [
+			{
+				model: Store,
+				required: false,
+				attributes: ["storeName", "isSellerOpen"],
+			}
+		]
+	};
+
+	if (checkSellerStatus) {
+		sellerProfileInclude.include.push({
+			model: VerifiedSellers,
+			where: { is_active: true, status: "approved" },
+			required: true,
+		});
+	}
+
 	const product = await Product.findByPk(id, {
 		include: [
 			{
@@ -373,28 +407,8 @@ export const getProductById = async (id: number, userId?: number) => {
 			{
 				association: "seller",
 				attributes: ["id", "phone_number", "email"],
-				include: [
-					{
-						model: SellerProfile,
-						required: false,
-						attributes: [
-							"businessName",
-							"gstNumber",
-							"address",
-							"city",
-							"state",
-							"zipCode",
-							"phone",
-						],
-						include: [
-							{
-								model: Store,
-								required: false,
-								attributes: ["storeName", "isSellerOpen"],
-							}
-						]
-					},
-				],
+				required: checkSellerStatus,
+				include: [sellerProfileInclude],
 			},
 		],
 	});
@@ -704,6 +718,25 @@ export const searchAll = async (q: string) => {
 				{ description: { [Op.like]: term } }
 			]
 		},
+		include: [
+			{
+				association: "seller",
+				required: true,
+				include: [
+					{
+						model: SellerProfile,
+						required: true,
+						include: [
+							{
+								model: VerifiedSellers,
+								where: { is_active: true, status: "approved" },
+								required: true,
+							}
+						]
+					}
+				]
+			}
+		],
 		limit: 20
 	});
 
@@ -731,7 +764,7 @@ export const searchAll = async (q: string) => {
 				include: [
 					{
 						model: VerifiedSellers,
-						where: { is_active: true },
+						where: { is_active: true, status: "approved" },
 						required: true
 					},
 					{
@@ -762,6 +795,25 @@ export const searchAll = async (q: string) => {
 			},
 			isActive: true
 		},
+		include: [
+			{
+				association: "seller",
+				required: true,
+				include: [
+					{
+						model: SellerProfile,
+						required: true,
+						include: [
+							{
+								model: VerifiedSellers,
+								where: { is_active: true, status: "approved" },
+								required: true,
+							}
+						]
+					}
+				]
+			}
+		],
 		limit: 100
 	});
 

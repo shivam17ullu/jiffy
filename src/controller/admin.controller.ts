@@ -520,5 +520,77 @@ export default class AdminController {
 			return handleControllerError(res, error);
 		}
 	}
+
+	/**
+	 * @swagger
+	 * /api/admin/revenue:
+	 *   get:
+	 *     summary: Get global platform revenue
+	 *     description: Retrieve total platform revenue and breakdown by each seller
+	 *     tags: [Admin]
+	 *     security:
+	 *       - bearerAuth: []
+	 *     responses:
+	 *       200:
+	 *         description: Platform revenue stats retrieved successfully
+	 */
+	static async getPlatformRevenue(req: Request, res: Response) {
+		try {
+			const revenueStats = await AdminService.getPlatformRevenue();
+			return createResponse(res, {
+				status: 200,
+				message: "Platform revenue statistics retrieved successfully",
+				response: revenueStats,
+			});
+		} catch (error: unknown) {
+			return handleControllerError(res, error);
+		}
+	}
+
+	/**
+	 * @swagger
+	 * /api/admin/revenue/sellers/{id}:
+	 *   get:
+	 *     summary: Get specific seller revenue details
+	 *     description: Retrieve total revenue, total orders, and monthly-wise breakdown for a specific seller
+	 *     tags: [Admin]
+	 *     security:
+	 *       - bearerAuth: []
+	 *     parameters:
+	 *       - in: path
+	 *         name: id
+	 *         required: true
+	 *         schema:
+	 *           type: integer
+	 *         description: Seller profile ID
+	 *     responses:
+	 *       200:
+	 *         description: Seller revenue details retrieved successfully
+	 *       400:
+	 *         description: Invalid seller ID
+	 *       404:
+	 *         description: Seller not found
+	 */
+	static async getParticularSellerRevenue(req: Request, res: Response) {
+		try {
+			const id = Number(req.params.id);
+			if (isNaN(id)) {
+				return handleControllerError(res, new Error("Invalid seller ID"), 400);
+			}
+
+			const sellerRevenue = await AdminService.getParticularSellerRevenue(id);
+			if (!sellerRevenue) {
+				return handleControllerError(res, new Error("Seller not found"), 404);
+			}
+
+			return createResponse(res, {
+				status: 200,
+				message: "Seller revenue details retrieved successfully",
+				response: sellerRevenue,
+			});
+		} catch (error: unknown) {
+			return handleControllerError(res, error);
+		}
+	}
 }
 

@@ -4,7 +4,10 @@ import { authenticate } from "../middleware/auth.js";
 
 const paymentRouter = Router();
 
-// Secure both checkout payment endpoints
+// Public webhook route (not protected by JWT authentication)
+paymentRouter.post("/webhook/razorpay", ctrl.razorpayWebhook);
+
+// Secure subsequent checkout payment endpoints
 paymentRouter.use(authenticate);
 
 paymentRouter.post("/create-order", ctrl.createOrder);

@@ -1180,6 +1180,26 @@
         }
       }
     },
+    "/api/seller/revenue/monthly": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
     "/api/seller/docs": {
       "get": {
         "description": "",
@@ -1189,6 +1209,16 @@
           },
           "404": {
             "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/seller/reupload-docs": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
           }
         }
       }
@@ -1438,6 +1468,66 @@
         }
       }
     },
+    "/api/admin/revenue": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/admin/revenue/sellers/{id}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/webhook/razorpay": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "x-razorpay-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "event": {
+                  "example": "any"
+                },
+                "payload": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/create-order": {
       "post": {
         "description": "",
@@ -1491,6 +1581,9 @@
                   "example": "any"
                 },
                 "razorpay_signature": {
+                  "example": "any"
+                },
+                "receipt": {
                   "example": "any"
                 }
               }

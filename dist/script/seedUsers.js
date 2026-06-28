@@ -39,7 +39,37 @@ async function seedUsers() {
         // ----------------------------------------------------------------
         // SELLERS LIST
         // ----------------------------------------------------------------
-        const sellers = [];
+        const sellers = [
+            {
+                phone_number: "9876543210",
+                email: "seller1@jiffy.com",
+                sellerProfile: {
+                    businessName: "Fashion Hub",
+                    gstNumber: "GST123456789",
+                    address: "123 Fashion Street",
+                    city: "Mumbai",
+                    state: "Maharashtra",
+                    zipCode: "400001",
+                    phone: "9876543210",
+                },
+                store: {
+                    storeName: "Fashion Hub Main Store",
+                    storeAddress: "123 Fashion Street, Mumbai",
+                    pincode: "400001",
+                },
+                bankDetails: {
+                    accountHolderName: "Fashion Hub",
+                    accountNumber: "123456789012",
+                    ifscCode: "HDFC0001234",
+                    termsAccepted: true,
+                },
+                documents: {
+                    aadhaarUrl: "https://example.com/aadhaar1.pdf",
+                    panUrl: "https://example.com/pan1.pdf",
+                    gstUrl: "https://example.com/gst1.pdf",
+                },
+            },
+        ];
         for (const sellerData of sellers) {
             const { sellerProfile, store, bankDetails, documents, ...userData } = sellerData;
             // 1️⃣ Create/find user

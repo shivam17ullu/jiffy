@@ -14,6 +14,13 @@ async function seedProducts() {
   const t = await jiffy.transaction();
 
   try {
+    console.log("⏳ Truncating product and variant tables...");
+    await jiffy.query("SET FOREIGN_KEY_CHECKS = 0;", { transaction: t });
+    await jiffy.query("TRUNCATE TABLE product_categories;", { transaction: t });
+    await jiffy.query("TRUNCATE TABLE product_variants;", { transaction: t });
+    await jiffy.query("TRUNCATE TABLE products;", { transaction: t });
+    await jiffy.query("SET FOREIGN_KEY_CHECKS = 1;", { transaction: t });
+
     console.log("⏳ Seeding dummy products...");
 
     // ------------------------------

@@ -90,3 +90,44 @@ export const getSellerStats = async (sellerId) => {
         })),
     };
 };
+/**
+ * Get monthly revenue for a seller
+ */
+export const getSellerMonthlyRevenue = async (sellerId, year) => {
+    const whereClause = {
+        sellerId,
+        status: { [Op.ne]: "cancelled" },
+    };
+    if (year) {
+        const startDate = new Date(year, 0, 1);
+        const endDate = new Date(year + 1, 0, 1);
+        whereClause.createdAt = {
+            [Op.gte]: startDate,
+            [Op.lt]: endDate,
+        };
+    }
+    const monthlyRevenue = await Order.findAll({
+        where: whereClause,
+        attributes: [
+            [fn("YEAR", col("createdAt")), "year"],
+            [fn("MONTH", col("createdAt")), "month"],
+            [fn("SUM", col("total")), "revenue"],
+            [fn("COUNT", col("id")), "orderCount"],
+        ],
+        group: [
+            fn("YEAR", col("createdAt")),
+            fn("MONTH", col("createdAt")),
+        ],
+        order: [
+            [fn("YEAR", col("createdAt")), "DESC"],
+            [fn("MONTH", col("createdAt")), "DESC"],
+        ],
+        raw: true,
+    });
+    return monthlyRevenue.map((item) => ({
+        year: parseInt(item.year) || 0,
+        month: parseInt(item.month) || 0,
+        revenue: parseFloat(item.revenue) || 0,
+        orderCount: parseInt(item.orderCount) || 0,
+    }));
+};

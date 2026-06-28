@@ -1,6 +1,7 @@
 import { Category } from "../model/relations.js";
 import slugify from "slugify";
 import { fileURLToPath } from "url";
+import { jiffy } from "../config/sequelize.js";
 const categories = [
     {
         name: "Men",
@@ -10,19 +11,55 @@ const categories = [
                 name: "Clothing",
                 level: 1,
                 children: [
-                    "T-Shirts & Polos",
+                    "T-Shirts",
                     "Shirts",
                     "Jeans",
-                    "Trousers / Chinos",
+                    "Trousers",
+                    "Pants",
                     "Shorts",
-                ],
+                    "Ethnic Wear",
+                    "Suits & Blazers",
+                    "Jackets",
+                    "Hoodies & Sweatshirts",
+                    "Sweaters",
+                    "Innerwear",
+                    "Sleepwear",
+                    "Activewear"
+                ]
             },
             {
                 name: "Footwear",
                 level: 1,
-                children: ["Casual Shoes", "Formal Shoes", "Sneakers"],
+                children: [
+                    "Sneakers",
+                    "Sports Shoes",
+                    "Formal Shoes",
+                    "Casual Shoes",
+                    "Sandals",
+                    "Slippers & Flip-Flops",
+                    "Boots",
+                    "Ethnic Footwear"
+                ]
             },
-        ],
+            {
+                name: "Accessories",
+                level: 1,
+                children: [
+                    "Watches",
+                    "Wallets",
+                    "Belts",
+                    "Sunglasses",
+                    "Bags",
+                    "Caps & Hats",
+                    "Ties",
+                    "Cufflinks",
+                    "Jewellery",
+                    "Socks",
+                    "Scarves",
+                    "Handkerchiefs"
+                ]
+            }
+        ]
     },
     {
         name: "Women",
@@ -31,29 +68,169 @@ const categories = [
             {
                 name: "Clothing",
                 level: 1,
-                children: ["Tops & Tees", "Dresses", "Kurtas & Kurtis"],
+                children: [
+                    "Tops",
+                    "T-Shirts",
+                    "Shirts",
+                    "Kurtis",
+                    "Kurtas & Sets",
+                    "Dresses",
+                    "Jumpsuits",
+                    "Jeans",
+                    "Trousers",
+                    "Leggings",
+                    "Jeggings",
+                    "Palazzos",
+                    "Skirts",
+                    "Shorts",
+                    "Ethnic Wear",
+                    "Sarees",
+                    "Lehengas",
+                    "Blouses",
+                    "Salwar Suits",
+                    "Co-ord Sets",
+                    "Jackets",
+                    "Blazers",
+                    "Hoodies & Sweatshirts",
+                    "Sweaters",
+                    "Innerwear",
+                    "Lingerie",
+                    "Sleepwear",
+                    "Activewear",
+                    "Maternity Wear"
+                ]
             },
-            { name: "Footwear", level: 1, children: ["Flats", "Heels", "Sandals"] },
-        ],
+            {
+                name: "Footwear",
+                level: 1,
+                children: [
+                    "Heels",
+                    "Pumps",
+                    "Stilettos",
+                    "Wedges",
+                    "Flats",
+                    "Ballet Flats",
+                    "Loafers",
+                    "Sneakers",
+                    "Sports Shoes",
+                    "Sandals",
+                    "Slippers & Flip-Flops",
+                    "Boots",
+                    "Ethnic Footwear",
+                    "Mules",
+                    "Clogs"
+                ]
+            },
+            {
+                name: "Accessories",
+                level: 1,
+                children: [
+                    "Watches",
+                    "Handbags",
+                    "Wallets",
+                    "Belts",
+                    "Sunglasses",
+                    "Jewellery",
+                    "Earrings",
+                    "Necklaces",
+                    "Bracelets",
+                    "Rings",
+                    "Anklets",
+                    "Scarves",
+                    "Caps & Hats",
+                    "Hair Accessories",
+                    "Clutches",
+                    "Totes",
+                    "Backpacks",
+                    "Socks",
+                    "Handkerchiefs"
+                ]
+            }
+        ]
     },
     {
         name: "Kids",
         level: 0,
         children: [
             {
-                name: "Boys Clothing",
+                name: "Clothing",
                 level: 1,
-                children: ["T-Shirts & Shirts", "Jeans & Trousers"],
+                children: [
+                    "T-Shirts",
+                    "Shirts",
+                    "Tops",
+                    "Dresses",
+                    "Frocks",
+                    "Jeans",
+                    "Trousers",
+                    "Shorts",
+                    "Leggings",
+                    "Joggers",
+                    "Tracksuits",
+                    "Hoodies & Sweatshirts",
+                    "Sweaters",
+                    "Jackets",
+                    "Ethnic Wear",
+                    "Kurtas & Sets",
+                    "Nightwear",
+                    "Innerwear",
+                    "School Uniforms",
+                    "Rompers",
+                    "Dungarees",
+                    "Co-ord Sets"
+                ]
             },
             {
-                name: "Girls Clothing",
+                name: "Footwear",
                 level: 1,
-                children: ["Dresses & Frocks", "Tops & T-Shirts"],
+                children: [
+                    "Sneakers",
+                    "Sports Shoes",
+                    "Casual Shoes",
+                    "School Shoes",
+                    "Sandals",
+                    "Slippers & Flip-Flops",
+                    "Boots",
+                    "Ethnic Footwear",
+                    "Rain Boots"
+                ]
             },
-        ],
-    },
+            {
+                name: "Accessories",
+                level: 1,
+                children: [
+                    "School Bags",
+                    "Backpacks",
+                    "Watches",
+                    "Caps & Hats",
+                    "Sunglasses",
+                    "Socks",
+                    "Belts",
+                    "Hair Accessories",
+                    "Scarves",
+                    "Gloves",
+                    "Lunch Bags",
+                    "Water Bottles"
+                ]
+            }
+        ]
+    }
 ];
 export const seed = async () => {
+    try {
+        console.log("⏳ Truncating category and product tables...");
+        await jiffy.query("SET FOREIGN_KEY_CHECKS = 0;");
+        await jiffy.query("TRUNCATE TABLE product_categories;");
+        await jiffy.query("TRUNCATE TABLE product_variants;");
+        await jiffy.query("TRUNCATE TABLE products;");
+        await jiffy.query("TRUNCATE TABLE categories;");
+        await jiffy.query("SET FOREIGN_KEY_CHECKS = 1;");
+        console.log("✅ Tables truncated successfully.");
+    }
+    catch (error) {
+        console.error("❌ Error truncating tables:", error);
+        throw error;
+    }
     for (const g of categories) {
         let gender = await Category.findOne({ where: { name: g.name, level: 0 } });
         if (!gender)

@@ -18,7 +18,7 @@ export const sendSellerOnboardEmail = async (details) => {
             from: `"Drapeit Admin" <${fromEmail}>`,
             to: adminEmails,
             subject: "New Seller Onboarded to Drapeit",
-            text: `A new seller has just onboarded successfully to Drapeit.\n\nDetails:\nSeller Name: ${details.sellerName}\nStore Name: ${details.storeName}\nEmail: ${details.email || 'N/A'}\nPhone: ${details.phone || 'N/A'}\nAddress: ${details.address || 'N/A'}\n\nPlease review their details in the admin panel: https://www.drapeit.in/`,
+            text: `A new seller has just onboarded successfully to Drapeit.\n\nDetails:\nSeller Name: ${details.sellerName}\nStore Name: ${details.storeName}\nEmail: ${details.email || 'N/A'}\nPhone: ${details.phone || 'N/A'}\nAddress: ${details.address || 'N/A'}\n\nPlease review their details in the admin panel: https://www.drapeit.in/admin/login`,
             html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; color: #334155; padding: 24px; line-height: 1.5;">
                 <p>A new seller has just onboarded successfully to Drapeit.</p>
@@ -30,7 +30,7 @@ export const sendSellerOnboardEmail = async (details) => {
                     <li style="margin-bottom: 8px;"><strong>Address:</strong> ${details.address || 'N/A'}</li>
                 </ul>
                 <div style="text-align: center; margin: 24px 0;">
-                    <a href="https://www.drapeit.in/" style="background-color: #0f172a; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Go to Portal</a>
+                    <a href="https://www.drapeit.in/admin/login" style="background-color: #0f172a; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Go to Portal</a>
                 </div>
             </div>
             `,
@@ -57,7 +57,7 @@ export const sendSellerWelcomeEmail = async (email, sellerName) => {
             from: `"Drapeit" <${fromEmail}>`,
             to: email,
             subject: "Welcome to Drapeit – Let's Grow Together",
-            text: `Dear ${sellerName},\n\nWe're thrilled to welcome you to Drapeit!\n\nYour onboarding has been successfully completed, and your documents are under review by our team. Your review process will be completed within 2 working days.\n\nAt Drapeit, we're building more than just a marketplace—we're creating a platform where brands, businesses, and customers connect through trust, quality, and innovation. We are excited to have your brand join us on this journey.\n\nAs a valued seller partner, you now have access to a growing customer base, powerful selling tools, and a dedicated team committed to helping your business succeed.\n\nHere's what you can do next:\n• Upload and showcase your products\n• Manage inventory and pricing effortlessly\n• Track orders and business performance in real time\n• Engage with customers and build lasting relationships\n\nLogin to Seller Portal: https://www.drapeit.in/\n\nWarm regards,\nTeam DrapeIt`,
+            text: `Dear ${sellerName},\n\nWe're thrilled to welcome you to Drapeit!\n\nYour onboarding has been successfully completed, and your documents are under review by our team. Your review process will be completed within 2 working days.\n\nAt Drapeit, we're building more than just a marketplace—we're creating a platform where brands, businesses, and customers connect through trust, quality, and innovation. We are excited to have your brand join us on this journey.\n\nAs a valued seller partner, you now have access to a growing customer base, powerful selling tools, and a dedicated team committed to helping your business succeed.\n\nHere's what you can do next:\n• Upload and showcase your products\n• Manage inventory and pricing effortlessly\n• Track orders and business performance in real time\n• Engage with customers and build lasting relationships\n\nLogin to Seller Portal: https://www.drapeit.in/login\n\nWarm regards,\nTeam DrapeIt`,
             html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; color: #334155;">
                 <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
@@ -84,7 +84,7 @@ export const sendSellerWelcomeEmail = async (email, sellerName) => {
                     </ul>
                     
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://www.drapeit.in/" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Login to Seller Portal</a>
+                        <a href="https://www.drapeit.in/login" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Login to Seller Portal</a>
                     </div>
                     
                     <p>Thank you for placing your trust in Drapeit. We're excited to have you onboard.</p>
@@ -115,7 +115,7 @@ export const sendSellerApprovalEmail = async (email, sellerName) => {
             from: `"Drapeit" <${fromEmail}>`,
             to: email,
             subject: "Welcome to Drapeit – Your Store is Now Live!",
-            text: `Dear ${sellerName},\n\nWelcome to Drapeit!\n\nWe are excited to have you join our growing community of trusted sellers. Your review process has been successfully completed, and your store is now part of the Drapeit marketplace.\n\nAt Drapeit, our mission is to connect quality products with customers through a seamless shopping experience.\n\nWhat's Next?\n• Start uploading and managing your products through the seller dashboard.\n• Keep your inventory and pricing updated to maximize visibility and sales.\n• Monitor orders, performance metrics, and customer feedback in real time.\n• Reach out to our support team whenever you need assistance.\n\nLogin to Seller Portal: https://www.drapeit.in/\n\nWarm regards,\nTeam Drapeit`,
+            text: `Dear ${sellerName},\n\nWelcome to Drapeit!\n\nWe are excited to have you join our growing community of trusted sellers. Your review process has been successfully completed, and your store is now part of the Drapeit marketplace.\n\nAt Drapeit, our mission is to connect quality products with customers through a seamless shopping experience.\n\nWhat's Next?\n• Start uploading and managing your products through the seller dashboard.\n• Keep your inventory and pricing updated to maximize visibility and sales.\n• Monitor orders, performance metrics, and customer feedback in real time.\n• Reach out to our support team whenever you need assistance.\n\nLogin to Seller Portal: https://www.drapeit.in/login\n\nWarm regards,\nTeam Drapeit`,
             html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; color: #334155;">
                 <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
@@ -142,7 +142,7 @@ export const sendSellerApprovalEmail = async (email, sellerName) => {
                     </ul>
                     
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://www.drapeit.in/" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Login to Seller Portal</a>
+                        <a href="https://www.drapeit.in/login" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Login to Seller Portal</a>
                     </div>
                     
                     <p>Thank you for choosing Drapeit as your marketplace partner. We look forward to achieving great milestones together.</p>
@@ -186,7 +186,7 @@ export const sendNewOrderEmail = async (details) => {
             from: `"Drapeit" <${fromEmail}>`,
             to: details.sellerEmail,
             subject: `New Order Received - Order #${details.orderId}`,
-            text: `Dear ${details.sellerName},\n\nYou have received a new order!\n\nOrder ID: #${details.orderId}\nTotal Amount: ₹${details.totalAmount}\nCustomer: ${details.buyerName} (${details.buyerPhone})\nShipping Destination: ${details.shippingCity}, ${details.shippingState}\n\nPlease log in to the Seller Portal to manage this order: https://www.drapeit.in/\n\nWarm regards,\nTeam Drapeit`,
+            text: `Dear ${details.sellerName},\n\nYou have received a new order!\n\nOrder ID: #${details.orderId}\nTotal Amount: ₹${details.totalAmount}\nCustomer: ${details.buyerName} (${details.buyerPhone})\nShipping Destination: ${details.shippingCity}, ${details.shippingState}\n\nPlease log in to the Seller Portal to manage this order: https://www.drapeit.in/login\n\nWarm regards,\nTeam Drapeit`,
             html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; color: #334155;">
         <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
@@ -239,7 +239,7 @@ export const sendNewOrderEmail = async (details) => {
           </table>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="https://www.drapeit.in/" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Login to Seller Portal</a>
+            <a href="https://www.drapeit.in/login" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Login to Seller Portal</a>
           </div>
           
           <p>Please process this order promptly to maintain high merchant quality standards.</p>
@@ -270,7 +270,7 @@ export const sendSellerRejectionEmail = async (email, sellerName, reason) => {
             from: `"Drapeit" <${fromEmail}>`,
             to: email,
             subject: "Action Required: Update Your Seller Profile on Drapeit",
-            text: `Dear ${sellerName},\n\nThank you for choosing Drapeit as your marketplace partner.\n\nWe have reviewed your seller profile and documents. Unfortunately, we are unable to approve your application at this time for the following reason:\n\n${reason}\n\nPlease log in to your Seller Portal to review and update your information or documents accordingly.\n\nLogin to Seller Portal: https://www.drapeit.in/\n\nIf you need any assistance, feel free to reach out to our support team.\n\nWarm regards,\nTeam Drapeit`,
+            text: `Dear ${sellerName},\n\nThank you for choosing Drapeit as your marketplace partner.\n\nWe have reviewed your seller profile and documents. Unfortunately, we are unable to approve your application at this time for the following reason:\n\n${reason}\n\nPlease log in to your Seller Portal to review and update your information or documents accordingly.\n\nLogin to Seller Portal: https://www.drapeit.in/login\n\nIf you need any assistance, feel free to reach out to our support team.\n\nWarm regards,\nTeam Drapeit`,
             html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; color: #334155;">
                 <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
@@ -283,7 +283,7 @@ export const sendSellerRejectionEmail = async (email, sellerName, reason) => {
                     <p>Thank you for choosing <strong>Drapeit</strong> as your marketplace partner.</p>
                     
                     <p>We have reviewed your seller profile and documents. Unfortunately, we are unable to approve your application at this time for the following reason:</p>
-
+ 
                     <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 12px; color: #7f1d1d; border-radius: 4px; margin-bottom: 20px;">
                         <strong>Reason for Rejection:</strong><br>
                         ${reason}
@@ -292,7 +292,7 @@ export const sendSellerRejectionEmail = async (email, sellerName, reason) => {
                     <p>Please log in to your Seller Portal to review and update your information or documents accordingly. Once updated, your profile will be re-evaluated by our team.</p>
                     
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://www.drapeit.in/" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Login to Seller Portal</a>
+                        <a href="https://www.drapeit.in/login" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Login to Seller Portal</a>
                     </div>
                     
                     <p>If you need any assistance, feel free to reach out to our support team.</p>

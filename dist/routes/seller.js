@@ -8,6 +8,8 @@ const sellerRouter = Router();
 sellerRouter.use(authenticate);
 sellerRouter.use(requireSeller);
 sellerRouter.get('/stats', statsCtrl.getStats);
+sellerRouter.get('/revenue/monthly', statsCtrl.getMonthlyRevenue);
 sellerRouter.get('/docs', docsCtrl.getDocs);
+sellerRouter.post('/reupload-docs', docsCtrl.reuploadDocs);
 sellerRouter.get('/status', profileCtrl.getStatus);
 export default sellerRouter;

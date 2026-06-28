@@ -68,6 +68,11 @@ export const createOrdersFromCart = async (
         total += (it.price || variant.price) * it.qty;
       }
 
+      const enrichedPaymentInfo = {
+        ...(paymentInfo || {}),
+        method: "Online"
+      };
+
       // FIXED — added sellerId in Order.create()
       const order = await Order.create(
         {
@@ -76,7 +81,7 @@ export const createOrdersFromCart = async (
           total,
           status: "created",
           shippingAddress,
-          paymentInfo,
+          paymentInfo: enrichedPaymentInfo,
         },
         { transaction: t }
       );
