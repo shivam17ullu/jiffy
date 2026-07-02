@@ -69,8 +69,8 @@ export const createOrdersFromCart = async (
       }
 
       const enrichedPaymentInfo = {
+        method: "Online",
         ...(paymentInfo || {}),
-        method: "Online"
       };
 
       // FIXED — added sellerId in Order.create()
@@ -79,7 +79,7 @@ export const createOrdersFromCart = async (
           userId,
           sellerId,       // <-- REQUIRED FIELD FIX
           total,
-          status: "created",
+          status: "Created",
           shippingAddress,
           paymentInfo: enrichedPaymentInfo,
         },
@@ -372,14 +372,14 @@ export const updateOrderStatus = async (
   status: string
 ) => {
   const allowedStatuses = [
-    "created",
-    "confirmed",
-    "processing",
-    "shipped",
-    "delivered",
-    "cancelled",
-    "returned",
-    "refunded",
+    "Created",
+    "Confirmed",
+    "Out For Delivery",
+    "Delivered",
+    "Return Processed",
+    "Return Accepted",
+    "Return Rejected",
+    "Refund Successful",
   ];
 
   if (!allowedStatuses.includes(status)) {

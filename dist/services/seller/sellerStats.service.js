@@ -39,6 +39,15 @@ export const getSellerStats = async (sellerId) => {
         raw: true,
     });
     const totalRevenue = revenueResult[0]?.totalRevenue || 0;
+    // Total refund amount (sum of refunded order totals)
+    const refundResult = await Order.findAll({
+        where: { sellerId, status: "Refund Successful" },
+        attributes: [
+            [fn("SUM", col("total")), "totalRefund"],
+        ],
+        raw: true,
+    });
+    const totalRefundAmount = refundResult[0]?.totalRefund || 0;
     // Recent orders (last 5)
     const recentOrders = await Order.findAll({
         where: { sellerId },
@@ -70,6 +79,7 @@ export const getSellerStats = async (sellerId) => {
             inactiveProducts: totalProducts - activeProducts,
             totalOrders,
             totalRevenue: parseFloat(totalRevenue) || 0,
+            totalRefundAmount: parseFloat(totalRefundAmount) || 0,
         },
         ordersByStatus,
         recentOrders: recentOrders.map((order) => ({
@@ -130,4 +140,41 @@ export const getSellerMonthlyRevenue = async (sellerId, year) => {
         revenue: parseFloat(item.revenue) || 0,
         orderCount: parseInt(item.orderCount) || 0,
     }));
+};
+/**
+ * Get refunded orders for a seller
+ */
+export const getRefundedOrders = async (sellerId, page = 1, limit = 20) => {
+    const offset = (page - 1) * limit;
+    const orders = await Order.findAndCountAll({
+        where: {
+            sellerId,
+            status: "Refund Successful",
+        },
+        include: [
+            {
+                association: "items",
+                include: [
+                    {
+                        association: "product",
+                    },
+                ],
+            },
+            {
+                association: "buyer",
+                attributes: ["id", "phone_number", "email"],
+            },
+        ],
+        limit,
+        offset,
+        order: [["updatedAt", "DESC"]],
+        distinct: true,
+    });
+    return {
+        items: orders.rows,
+        total: orders.count,
+        page,
+        limit,
+        totalPages: Math.ceil(orders.count / limit),
+    };
 };

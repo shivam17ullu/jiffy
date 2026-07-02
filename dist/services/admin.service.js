@@ -312,7 +312,19 @@ export default class AdminService {
         const { sellerId, buyerId, status, startDate, endDate, page = 1, limit = 20 } = filters;
         const where = {};
         if (sellerId) {
-            where.sellerId = sellerId;
+            const sellerProfile = await SellerProfile.findByPk(sellerId);
+            if (sellerProfile) {
+                where.sellerId = sellerProfile.userId;
+            }
+            else {
+                const profileByUserId = await SellerProfile.findOne({ where: { userId: sellerId } });
+                if (profileByUserId) {
+                    where.sellerId = sellerId;
+                }
+                else {
+                    where.sellerId = sellerId;
+                }
+            }
         }
         if (buyerId) {
             where.userId = buyerId;
@@ -594,5 +606,112 @@ export default class AdminService {
             },
             monthlyRevenue,
         };
+    }
+    static async getSellerDashboard(sellerProfileId) {
+        // 1. Fetch seller profile details (along with user/email)
+        const sellerProfile = await SellerProfile.findByPk(sellerProfileId, {
+            include: [
+                {
+                    model: User,
+                    attributes: ["email"],
+                },
+            ],
+        });
+        if (!sellerProfile) {
+            return null;
+        }
+        const profileData = sellerProfile.toJSON();
+        const sellerUserId = Number(profileData.userId);
+        // 2. Calculate Total Revenue: sum of 'total' where status is not 'cancelled'
+        const revenueResult = await Order.findAll({
+            where: { sellerId: sellerUserId, status: { [Op.ne]: "cancelled" } },
+            attributes: [
+                [Sequelize.fn("SUM", Sequelize.col("total")), "totalRevenue"],
+                [Sequelize.fn("COUNT", Sequelize.col("id")), "totalOrders"],
+            ],
+            raw: true,
+        });
+        const totalRevenue = parseFloat(revenueResult[0]?.totalRevenue) || 0;
+        const totalOrders = parseInt(revenueResult[0]?.totalOrders) || 0;
+        // 3. Calculate Total Refunded Amount: sum of 'total' where status is 'Refund Successful'
+        const refundResult = await Order.findAll({
+            where: { sellerId: sellerUserId, status: "Refund Successful" },
+            attributes: [
+                [Sequelize.fn("SUM", Sequelize.col("total")), "totalRefund"],
+            ],
+            raw: true,
+        });
+        const totalRefundedAmount = parseFloat(refundResult[0]?.totalRefund) || 0;
+        // 4. Fetch 10 recent orders
+        const recentOrders = await Order.findAll({
+            where: { sellerId: sellerUserId },
+            limit: 10,
+            order: [["createdAt", "DESC"]],
+            include: [
+                {
+                    association: "buyer",
+                    attributes: ["id", "phone_number", "email"],
+                    include: [
+                        {
+                            model: BuyerProfile,
+                            required: false,
+                            attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
+                        },
+                    ],
+                },
+                {
+                    association: "items",
+                    include: [
+                        {
+                            association: "product",
+                        },
+                    ],
+                },
+            ],
+        });
+        return {
+            seller: {
+                id: profileData.id,
+                userId: sellerUserId,
+                businessName: profileData.businessName,
+                phone: profileData.phone || null,
+                email: profileData.User?.email || null,
+            },
+            stats: {
+                totalRevenue,
+                totalRefundedAmount,
+                totalOrders,
+            },
+            recentOrders: recentOrders.map((order) => ({
+                id: order.id,
+                total: order.total,
+                status: order.status,
+                createdAt: order.createdAt,
+                buyer: order.buyer,
+                items: order.items,
+            })),
+        };
+    }
+    static async updateOrderStatus(orderId, status) {
+        const allowedStatuses = [
+            "Created",
+            "Confirmed",
+            "Out For Delivery",
+            "Delivered",
+            "Return Processed",
+            "Return Accepted",
+            "Return Rejected",
+            "Refund Successful",
+        ];
+        if (!allowedStatuses.includes(status)) {
+            throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);
+        }
+        const [updatedCount] = await Order.update({ status }, {
+            where: { id: orderId },
+        });
+        if (updatedCount === 0) {
+            throw new Error("Order not found");
+        }
+        return await Order.findByPk(orderId);
     }
 }

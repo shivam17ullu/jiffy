@@ -375,7 +375,7 @@ export default class AdminController {
      *         name: status
      *         schema:
      *           type: string
-     *           enum: [created, confirmed, processing, shipped, delivered, cancelled, returned, refunded]
+     *           enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful']
      *         description: Filter orders by status
      *       - in: query
      *         name: startDate
@@ -563,6 +563,111 @@ export default class AdminController {
                 status: 200,
                 message: "Seller revenue details retrieved successfully",
                 response: sellerRevenue,
+            });
+        }
+        catch (error) {
+            return handleControllerError(res, error);
+        }
+    }
+    /**
+     * @swagger
+     * /api/admin/sellers/{sellerId}/dashboard:
+     *   get:
+     *     summary: Get seller dashboard statistics and recent orders
+     *     description: Retrieve total revenue, total refunded amount, order count, and the 10 most recent orders for a specific seller
+     *     tags: [Admin]
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: sellerId
+     *         required: true
+     *         schema:
+     *           type: integer
+     *         description: Seller profile ID
+     *     responses:
+     *       200:
+     *         description: Seller dashboard details retrieved successfully
+     *       400:
+     *         description: Invalid seller ID
+     *       404:
+     *         description: Seller not found
+     */
+    static async getSellerDashboard(req, res) {
+        try {
+            const sellerId = Number(req.params.sellerId);
+            if (isNaN(sellerId)) {
+                return handleControllerError(res, new Error("Invalid seller ID"), 400);
+            }
+            const dashboardData = await AdminService.getSellerDashboard(sellerId);
+            if (!dashboardData) {
+                return handleControllerError(res, new Error("Seller not found"), 404);
+            }
+            return createResponse(res, {
+                status: 200,
+                message: "Seller dashboard retrieved successfully",
+                response: dashboardData,
+            });
+        }
+        catch (error) {
+            return handleControllerError(res, error);
+        }
+    }
+    /**
+     * @swagger
+     * /api/admin/orders/{id}/status:
+     *   patch:
+     *     summary: Update order status (Admin only)
+     *     description: Update the status of any order
+     *     tags: [Admin]
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: integer
+     *         description: Order ID
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - status
+     *             properties:
+     *               status:
+     *                 type: string
+     *                 enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful']
+     *     responses:
+     *       200:
+     *         description: Order status updated successfully
+     *       400:
+     *         description: Bad request
+     *       401:
+     *         description: Unauthorized
+     *       403:
+     *         description: Forbidden - Admin role required
+     *       404:
+     *         description: Order not found
+     */
+    static async updateOrderStatus(req, res) {
+        try {
+            const id = Number(req.params.id);
+            const { status } = req.body;
+            if (isNaN(id)) {
+                return handleControllerError(res, new Error("Invalid order ID"), 400);
+            }
+            if (!status) {
+                return handleControllerError(res, new Error("Status is required"), 400);
+            }
+            const updatedOrder = await AdminService.updateOrderStatus(id, status);
+            return createResponse(res, {
+                status: 200,
+                message: "Order status updated successfully",
+                response: updatedOrder,
             });
         }
         catch (error) {

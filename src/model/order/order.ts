@@ -46,7 +46,7 @@ Order.init(
     status: {
       type: DataTypes.STRING(40),
       allowNull: false,
-      defaultValue: "created",
+      defaultValue: "Created",
     },
     shippingAddress: { type: DataTypes.JSON, allowNull: false },
     paymentInfo: { type: DataTypes.JSON, allowNull: true },
