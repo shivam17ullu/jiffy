@@ -35,6 +35,8 @@ import { handleControllerError } from "../../middleware/responseHandler.js";
  *                           type: integer
  *                         totalRevenue:
  *                           type: number
+ *                         totalRefundAmount:
+ *                           type: number
  *                     ordersByStatus:
  *                       type: object
  *                       additionalProperties:
@@ -139,6 +141,48 @@ export const getMonthlyRevenue = async (req, res) => {
         }
         const data = await service.getSellerMonthlyRevenue(sellerId, year);
         res.json({ success: true, data });
+    }
+    catch (err) {
+        return handleControllerError(res, err);
+    }
+};
+/**
+ * @swagger
+ * /api/seller/refunds:
+ *   get:
+ *     summary: Get refunded orders list
+ *     description: Retrieve list of successful refunded orders for the seller with pagination
+ *     tags: [Seller]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Items per page
+ *     responses:
+ *       200:
+ *         description: List of refunded orders
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Not a seller
+ */
+export const getRefundedOrders = async (req, res) => {
+    try {
+        const sellerId = req.userId;
+        const page = parseInt(req.query.page, 10) || 1;
+        const limit = parseInt(req.query.limit, 10) || 20;
+        const data = await service.getRefundedOrders(sellerId, page, limit);
+        res.json({ success: true, ...data });
     }
     catch (err) {
         return handleControllerError(res, err);

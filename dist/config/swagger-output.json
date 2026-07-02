@@ -1200,6 +1200,28 @@
                 }
             }
         },
+        "/api/seller/refunds": {
+            "get": {
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
         "/api/seller/docs": {
             "get": {
                 "description": "",
@@ -1272,6 +1294,24 @@
                 "parameters": [
                     {
                         "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/admin/sellers/{sellerId}/dashboard": {
+            "get": {
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "sellerId",
                         "in": "path",
                         "required": true,
                         "type": "string"
@@ -1459,6 +1499,36 @@
                         "in": "path",
                         "required": true,
                         "type": "string"
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/admin/orders/{id}/status": {
+            "patch": {
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "status": {
+                                    "example": "any"
+                                }
+                            }
+                        }
                     }
                 ],
                 "responses": {

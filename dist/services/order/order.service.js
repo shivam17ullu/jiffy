@@ -44,15 +44,15 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo,
                 total += (it.price || variant.price) * it.qty;
             }
             const enrichedPaymentInfo = {
+                method: "Online",
                 ...(paymentInfo || {}),
-                method: "Online"
             };
             // FIXED — added sellerId in Order.create()
             const order = await Order.create({
                 userId,
                 sellerId, // <-- REQUIRED FIELD FIX
                 total,
-                status: "created",
+                status: "Created",
                 shippingAddress,
                 paymentInfo: enrichedPaymentInfo,
             }, { transaction: t });
@@ -300,14 +300,14 @@ export const getOrderById = async (orderId, userId, role) => {
  */
 export const updateOrderStatus = async (orderId, sellerId, status) => {
     const allowedStatuses = [
-        "created",
-        "confirmed",
-        "processing",
-        "shipped",
-        "delivered",
-        "cancelled",
-        "returned",
-        "refunded",
+        "Created",
+        "Confirmed",
+        "Out For Delivery",
+        "Delivered",
+        "Return Processed",
+        "Return Accepted",
+        "Return Rejected",
+        "Refund Successful",
     ];
     if (!allowedStatuses.includes(status)) {
         throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);
