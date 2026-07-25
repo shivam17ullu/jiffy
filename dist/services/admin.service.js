@@ -702,6 +702,8 @@ export default class AdminService {
             "Return Accepted",
             "Return Rejected",
             "Refund Successful",
+            "Rejected",
+            "Cancelled",
         ];
         if (!allowedStatuses.includes(status)) {
             throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);

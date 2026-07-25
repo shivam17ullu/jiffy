@@ -19,6 +19,8 @@ import ProductVariant from "./product/productVariant.js";
 import { ProductCategory } from "./product/product.js";
 import Location from "./profile/location.js";
 import Wishlist from "./wishlist/wishlist.js";
+import UserDevice from "./auth/userDevice.js";
+import Notification from "./notification/notification.js";
 // ---------------- Associations ----------------
 // Users ↔ Roles (Many-to-Many)
 User.belongsToMany(Role, { through: UserRole, foreignKey: "user_id" });
@@ -26,6 +28,12 @@ Role.belongsToMany(User, { through: UserRole, foreignKey: "role_id" });
 // User ↔ RefreshToken (1:M)
 User.hasMany(RefreshToken, { foreignKey: "user_id" });
 RefreshToken.belongsTo(User, { foreignKey: "user_id" });
+// User ↔ UserDevice (1:M)
+User.hasMany(UserDevice, { foreignKey: "userId", as: "devices" });
+UserDevice.belongsTo(User, { foreignKey: "userId", as: "user" });
+// User ↔ Notification (1:M)
+User.hasMany(Notification, { foreignKey: "userId", as: "notifications" });
+Notification.belongsTo(User, { foreignKey: "userId", as: "user" });
 // User ↔ SellerProfile (1:1)
 User.hasOne(SellerProfile, { foreignKey: "userId" });
 SellerProfile.belongsTo(User, { foreignKey: "userId" });
@@ -97,4 +105,4 @@ User.hasMany(Wishlist, { foreignKey: "userId", as: "wishlist" });
 Wishlist.belongsTo(Product, { foreignKey: "productId", as: "product" });
 Product.hasMany(Wishlist, { foreignKey: "productId", as: "wishlists" });
 // EXPORTS
-export { User, Role, UserRole, OtpLogin, RefreshToken, BuyerProfile, SellerProfile, Store, Document, BankDetail, VerifiedSellers, Product, Cart, CartItem, Category, Order, OrderItem, ProductVariant, ProductCategory, Location, Wishlist };
+export { User, Role, UserRole, OtpLogin, RefreshToken, BuyerProfile, SellerProfile, Store, Document, BankDetail, VerifiedSellers, Product, Cart, CartItem, Category, Order, OrderItem, ProductVariant, ProductCategory, Location, Wishlist, UserDevice, Notification };

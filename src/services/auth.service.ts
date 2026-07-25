@@ -14,6 +14,7 @@ import {
 	Store,
 	User,
 	UserRole,
+	UserDevice,
 } from "../model/relations.js";
 import VerifiedSellers from "../model/seller/verified_sellers.js";
 import { SellerFirstStepBody, SellerOnboardingBody } from "../types/auth.js";
@@ -521,5 +522,57 @@ export default class AuthService {
 		console.timeEnd("3. Generate Refresh Token");
 
 		return { adminId: user.id, accessToken, refreshToken };
+	}
+
+	static async saveDeviceToken(data: {
+		userId: number;
+		deviceId: string;
+		platform: string;
+		fcmToken: string;
+		appVersion?: string;
+		role: string;
+	}) {
+		const { userId, deviceId, platform, fcmToken, appVersion, role } = data;
+
+		// 1. Verify that the user exists
+		const user = await User.findByPk(userId);
+		if (!user) {
+			throw ApiError.notFound("User not found", "userId");
+		}
+
+		// 2. Clean up any existing devices for different users or roles that are using this deviceId
+		// to prevent sending push notifications of user A to user B when logging in on the same device.
+		await UserDevice.destroy({
+			where: {
+				deviceId,
+				[Op.or]: [
+					{ userId: { [Op.ne]: userId } },
+					{ role: { [Op.ne]: role } }
+				]
+			}
+		});
+
+		// 3. Find or create the device mapping for this user, device, and role
+		const [device, created] = await UserDevice.findOrCreate({
+			where: { userId, deviceId, role },
+			defaults: {
+				userId,
+				deviceId,
+				role,
+				platform,
+				fcmToken,
+				appVersion,
+			},
+		});
+
+		// 4. If not created, update the tokens & details
+		if (!created) {
+			device.platform = platform;
+			device.fcmToken = fcmToken;
+			device.appVersion = appVersion;
+			await device.save();
+		}
+
+		return device;
 	}
 }

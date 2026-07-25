@@ -526,4 +526,93 @@ export default class AuthController {
 			return handleControllerError(res, error);
 		}
 	}
+
+	/**
+	 * @swagger
+	 * /api/auth/device-token:
+	 *   post:
+	 *     summary: Register or update device push notification token
+	 *     description: Stores the device push token and details for push notifications. Usable for both buyers and sellers.
+	 *     tags: [Authentication]
+	 *     requestBody:
+	 *       required: true
+	 *       content:
+	 *         application/json:
+	 *           schema:
+	 *             type: object
+	 *             required:
+	 *               - userId
+	 *               - deviceId
+	 *               - platform
+	 *               - fcmToken
+	 *               - role
+	 *             properties:
+	 *               userId:
+	 *                 type: integer
+	 *                 example: 12
+	 *               deviceId:
+	 *                 type: string
+	 *                 example: "abc123"
+	 *               platform:
+	 *                 type: string
+	 *                 example: "android"
+	 *               fcmToken:
+	 *                 type: string
+	 *                 example: "xxxxx"
+	 *               appVersion:
+	 *                 type: string
+	 *                 example: "1.0.0"
+	 *               role:
+	 *                 type: string
+	 *                 example: "buyer"
+	 *     responses:
+	 *       200:
+	 *         description: Device token registered successfully
+	 *       400:
+	 *         description: Validation error
+	 *       404:
+	 *         description: User not found
+	 */
+	static async registerDevice(req: Request, res: Response) {
+		try {
+			const { userId, deviceId, platform, fcmToken, appVersion, role } = req.body;
+
+			if (!userId) {
+				return sendValidationError(res, "userId is required", "userId");
+			}
+			if (!deviceId) {
+				return sendValidationError(res, "deviceId is required", "deviceId");
+			}
+			if (!platform) {
+				return sendValidationError(res, "platform is required", "platform");
+			}
+			if (!fcmToken) {
+				return sendValidationError(res, "fcmToken is required", "fcmToken");
+			}
+			if (!role) {
+				return sendValidationError(res, "role is required", "role");
+			}
+			if (role !== "buyer" && role !== "seller") {
+				return sendValidationError(res, "role must be either 'buyer' or 'seller'", "role");
+			}
+
+			const device = await AuthService.saveDeviceToken({
+				userId: Number(userId),
+				deviceId,
+				platform,
+				fcmToken,
+				appVersion,
+				role,
+			});
+
+			return createResponse(res, {
+				status: 200,
+				message: "Device token registered successfully",
+				response: device,
+			});
+		} catch (error: unknown) {
+			return handleControllerError(res, error);
+		}
+	}
 }
+

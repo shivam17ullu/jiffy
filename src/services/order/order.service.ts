@@ -14,6 +14,8 @@ import {
 } from "../../model/relations.js";
 import { Op } from "sequelize";
 import { sendNewOrderEmail } from "../../utils/mailer.js";
+import { createAndSendNotification } from "../notification/notification.service.js";
+import { emitToUser } from "../socket/socket.service.js";
 
 export const createOrdersFromCart = async (
   userId: number,
@@ -156,6 +158,37 @@ export const createOrdersFromCart = async (
           `Failed to send new order email to seller for order #${notification.orderId}:`,
           err
         );
+      });
+    }
+
+    // Trigger seller push and database notifications asynchronously
+    for (const order of createdOrders) {
+      createAndSendNotification(
+        order.sellerId,
+        "New Order Received",
+        `You have received a new order #${order.id} of ₹${order.total.toFixed(2)}.`,
+        "new_order",
+        order.id,
+        "seller"
+      ).catch((err) => {
+        console.error(`Failed to send new order notification to seller #${order.sellerId}:`, err);
+      });
+
+      // Emit real-time update via WebSocket
+      const orderItems = groups[order.sellerId] || [];
+      const itemsPayload = orderItems.map((it: any) => ({
+        productId: String(it.productId),
+        productName: it.product.name,
+        quantity: it.qty,
+        price: Number(it.price || it.variant.price),
+        imageUrl: it.product.images?.[0] || ""
+      }));
+
+      emitToUser(order.sellerId, "new_order", {
+        orderId: String(order.id),
+        total: Number(order.total),
+        message: `You have received a new order #${order.id} of ₹${order.total.toFixed(2)}.`,
+        items: itemsPayload,
       });
     }
 
@@ -380,6 +413,8 @@ export const updateOrderStatus = async (
     "Return Accepted",
     "Return Rejected",
     "Refund Successful",
+    "Rejected",
+    "Cancelled",
   ];
 
   if (!allowedStatuses.includes(status)) {
@@ -400,5 +435,75 @@ export const updateOrderStatus = async (
     throw new Error("Order not found or you don't have permission to update it");
   }
 
-  return await Order.findByPk(orderId);
+  const order = await Order.findByPk(orderId);
+  if (order) {
+    // Send status update notification to the buyer
+    createAndSendNotification(
+      order.userId,
+      "Order Status Updated",
+      `Your order #${order.id} status has been updated to ${status}.`,
+      "order_status_update",
+      order.id,
+      "buyer"
+    ).catch((err) => {
+      console.error(
+        `Failed to send status update notification to buyer #${order.userId} for order #${order.id}:`,
+        err
+      );
+    });
+  }
+
+  return order;
+};
+
+/**
+ * Cancel order by buyer
+ * @param orderId - Order ID
+ * @param userId - Buyer User ID
+ */
+export const cancelOrder = async (orderId: number, userId: number) => {
+  const order = await Order.findByPk(orderId);
+  if (!order) {
+    throw new Error("Order not found");
+  }
+  if (order.userId != userId) {
+    throw new Error("You don't have permission to cancel this order");
+  }
+
+  const cancellableStatuses = ["Created", "Confirmed", "Pending", "Processing"];
+  const statusLower = order.status.toLowerCase();
+  if (
+    statusLower !== "created" &&
+    statusLower !== "confirmed" &&
+    statusLower !== "pending" &&
+    statusLower !== "processing"
+  ) {
+    throw new Error(`Order cannot be cancelled in status ${order.status}`);
+  }
+
+  await Order.update(
+    { status: "Cancelled" },
+    { where: { id: orderId } }
+  );
+
+  const updatedOrder = await Order.findByPk(orderId);
+
+  // Send cancellation notification to the seller
+  if (updatedOrder) {
+    createAndSendNotification(
+      updatedOrder.sellerId,
+      "Order Cancelled",
+      `Order #${updatedOrder.id} has been cancelled by the buyer.`,
+      "order_cancelled",
+      updatedOrder.id,
+      "seller"
+    ).catch((err) => {
+      console.error(
+        `Failed to send order cancellation notification to seller #${updatedOrder.sellerId} for order #${updatedOrder.id}:`,
+        err
+      );
+    });
+  }
+
+  return updatedOrder;
 };

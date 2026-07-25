@@ -19,6 +19,8 @@ import ProductVariant from "./product/productVariant.js";
 import { ProductCategory } from "./product/product.js";
 import Location from "./profile/location.js";
 import Wishlist from "./wishlist/wishlist.js";
+import UserDevice from "./auth/userDevice.js";
+import Notification from "./notification/notification.js";
 
 // ---------------- Associations ----------------
 
@@ -29,6 +31,14 @@ Role.belongsToMany(User, { through: UserRole, foreignKey: "role_id" });
 // User ↔ RefreshToken (1:M)
 User.hasMany(RefreshToken, { foreignKey: "user_id" });
 RefreshToken.belongsTo(User, { foreignKey: "user_id" });
+
+// User ↔ UserDevice (1:M)
+User.hasMany(UserDevice, { foreignKey: "userId", as: "devices" });
+UserDevice.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+// User ↔ Notification (1:M)
+User.hasMany(Notification, { foreignKey: "userId", as: "notifications" });
+Notification.belongsTo(User, { foreignKey: "userId", as: "user" });
 
 // User ↔ SellerProfile (1:1)
 User.hasOne(SellerProfile, { foreignKey: "userId" });
@@ -143,5 +153,7 @@ export {
   ProductVariant,
   ProductCategory,
   Location,
-  Wishlist
+  Wishlist,
+  UserDevice,
+  Notification
 };

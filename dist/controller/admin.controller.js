@@ -375,7 +375,7 @@ export default class AdminController {
      *         name: status
      *         schema:
      *           type: string
-     *           enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful']
+     *           enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful', Rejected, Cancelled]
      *         description: Filter orders by status
      *       - in: query
      *         name: startDate
@@ -640,7 +640,7 @@ export default class AdminController {
      *             properties:
      *               status:
      *                 type: string
-     *                 enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful']
+     *                 enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful', Rejected, Cancelled]
      *     responses:
      *       200:
      *         description: Order status updated successfully

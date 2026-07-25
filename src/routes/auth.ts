@@ -13,5 +13,7 @@ authRouter.post("/verify-seller-otp", AuthController.verifySellerOtp);
 authRouter.post("/onboard-seller", AuthController.onboardSeller);
 authRouter.post("/admin-login", AuthController.adminLogin);
 authRouter.post("/admin-logout", AuthController.adminLogout);
+authRouter.post("/device-token", AuthController.registerDevice);
+
 
 export default authRouter;

@@ -1,6 +1,6 @@
 import * as service from '../../services/order/order.service.js';
 import { Response } from "express";
-import { User, Role } from "../../model/relations.js";
+import { User, Role, Order } from "../../model/relations.js";
 import {
   handleControllerError,
   sendError,
@@ -253,7 +253,7 @@ export const getOrderById = async (req: any, res: Response) => {
  * /api/orders/{id}/status:
  *   patch:
  *     summary: Update order status
- *     description: Update the status of an order (Seller only)
+ *     description: Update the status of an order (Sellers can change to allowed statuses; Buyers can cancel)
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
@@ -275,7 +275,7 @@ export const getOrderById = async (req: any, res: Response) => {
  *             properties:
  *               status:
  *                 type: string
- *                 enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful']
+ *                 enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful', Rejected, Cancelled]
  *     responses:
  *       200:
  *         description: Order status updated
@@ -302,13 +302,24 @@ export const updateStatus = async (req: any, res: Response) => {
     }
 
     const roles = (user as any).Roles.map((r: any) => r.name);
-    if (!roles.includes("seller")) {
-      return sendError(res, 403, "Only sellers can update order status");
+
+    const order = await Order.findByPk(orderId);
+    if (!order) {
+      return sendError(res, 404, "Order not found");
     }
 
-    const updatedOrder = await service.updateOrderStatus(orderId, userId, status);
-    
-    res.json({ success: true, data: updatedOrder });
+    if (order.userId == userId) {
+      if (status !== "Cancelled") {
+        return sendError(res, 403, "Buyers can only update order status to Cancelled");
+      }
+      const updatedOrder = await service.cancelOrder(orderId, userId);
+      return res.json({ success: true, data: updatedOrder });
+    } else if (order.sellerId == userId && roles.includes("seller")) {
+      const updatedOrder = await service.updateOrderStatus(orderId, userId, status);
+      return res.json({ success: true, data: updatedOrder });
+    } else {
+      return sendError(res, 403, "You do not have permission to update this order");
+    }
   } catch (err: unknown) {
     return handleControllerError(res, err);
   }
