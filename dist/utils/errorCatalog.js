@@ -178,7 +178,7 @@ export const resolveError = (error) => {
     if (rawMessage.startsWith("Invalid status.")) {
         return {
             status: 400,
-            message: "Invalid order status. Allowed values: Created, Confirmed, Out For Delivery, Delivered, Return Processed, Return Accepted, Return Rejected, Refund Successful, Rejected, Cancelled",
+            message: "Invalid order status. Allowed values: Created, Confirmed, Out For Delivery, Delivered, Return Processed, Return Accepted, Return Rejected, Refund Successful, Exchange Processed, Exchange Accepted, Exchange Rejected, Rejected, Cancelled",
             errors: [
                 {
                     field: "status",

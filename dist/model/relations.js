@@ -21,6 +21,10 @@ import Location from "./profile/location.js";
 import Wishlist from "./wishlist/wishlist.js";
 import UserDevice from "./auth/userDevice.js";
 import Notification from "./notification/notification.js";
+import Wallet from "./wallet/wallet.js";
+import WalletTransaction from "./wallet/walletTransaction.js";
+import ReturnExchangeRequest from "./order/returnExchangeRequest.js";
+import ReturnExchangeItem from "./order/returnExchangeItem.js";
 // ---------------- Associations ----------------
 // Users ↔ Roles (Many-to-Many)
 User.belongsToMany(Role, { through: UserRole, foreignKey: "user_id" });
@@ -104,5 +108,17 @@ Wishlist.belongsTo(User, { foreignKey: "userId", as: "user" });
 User.hasMany(Wishlist, { foreignKey: "userId", as: "wishlist" });
 Wishlist.belongsTo(Product, { foreignKey: "productId", as: "product" });
 Product.hasMany(Wishlist, { foreignKey: "productId", as: "wishlists" });
+// Wallet relations
+User.hasOne(Wallet, { foreignKey: "userId", as: "wallet" });
+Wallet.belongsTo(User, { foreignKey: "userId", as: "user" });
+Wallet.hasMany(WalletTransaction, { foreignKey: "walletId", as: "transactions" });
+WalletTransaction.belongsTo(Wallet, { foreignKey: "walletId", as: "wallet" });
+// Return and Exchange relations
+Order.hasMany(ReturnExchangeRequest, { foreignKey: "orderId", as: "returnRequests" });
+ReturnExchangeRequest.belongsTo(Order, { foreignKey: "orderId", as: "order" });
+ReturnExchangeRequest.hasMany(ReturnExchangeItem, { foreignKey: "requestId", as: "items" });
+ReturnExchangeItem.belongsTo(ReturnExchangeRequest, { foreignKey: "requestId", as: "request" });
+ReturnExchangeItem.belongsTo(ProductVariant, { as: "originalVariant", foreignKey: "variantId" });
+ReturnExchangeItem.belongsTo(ProductVariant, { as: "exchangeVariant", foreignKey: "exchangeVariantId" });
 // EXPORTS
-export { User, Role, UserRole, OtpLogin, RefreshToken, BuyerProfile, SellerProfile, Store, Document, BankDetail, VerifiedSellers, Product, Cart, CartItem, Category, Order, OrderItem, ProductVariant, ProductCategory, Location, Wishlist, UserDevice, Notification };
+export { User, Role, UserRole, OtpLogin, RefreshToken, BuyerProfile, SellerProfile, Store, Document, BankDetail, VerifiedSellers, Product, Cart, CartItem, Category, Order, OrderItem, ProductVariant, ProductCategory, Location, Wishlist, UserDevice, Notification, Wallet, WalletTransaction, ReturnExchangeRequest, ReturnExchangeItem };

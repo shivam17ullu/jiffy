@@ -921,6 +921,12 @@
                                 },
                                 "paymentInfo": {
                                     "example": "any"
+                                },
+                                "isFullWalletPay": {
+                                    "example": "any"
+                                },
+                                "walletAmount": {
+                                    "example": "any"
                                 }
                             }
                         }
@@ -1673,6 +1679,70 @@
                 "responses": {
                     "default": {
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/admin/wallets": {
+            "get": {
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "isActive",
+                        "in": "query",
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/wallet/": {
+            "get": {
+                "description": "",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/wallet/transactions": {
+            "get": {
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "type": "string"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
                     }
                 }
             }

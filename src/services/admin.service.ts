@@ -17,10 +17,13 @@ import {
 	UserRole,
 	BuyerProfile,
 	OtpLogin,
+	Wallet,
 } from "../model/relations.js";
 import { Op, Sequelize } from "sequelize";
 import { jiffy } from "../config/sequelize.js";
 import { sendSellerApprovalEmail, sendSellerRejectionEmail } from "../utils/mailer.js";
+import { creditWallet } from "./wallet/wallet.service.js";
+import { createAndSendNotification } from "./notification/notification.service.js";
 
 
 export default class AdminService {
@@ -418,57 +421,73 @@ export default class AdminService {
 			}
 		}
 
-		const orders = await Order.findAndCountAll({
+		// 1. Get count and paginated IDs first to avoid ER_OUT_OF_SORTMEMORY with large JOINs
+		const { count, rows: idRows } = await Order.findAndCountAll({
 			where,
-			include: [
-				{
-					association: "items",
-					include: [
-						{
-							association: "product",
-							include: [
-								{
-									association: "categories",
-								},
-							],
-						},
-					],
-				},
-				{
-					association: "buyer",
-					attributes: ["id", "phone_number", "email"],
-					include: [
-						{
-							model: BuyerProfile,
-							required: false,
-							attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
-						},
-					],
-				},
-				{
-					association: "seller",
-					attributes: ["id", "phone_number", "email"],
-					include: [
-						{
-							model: SellerProfile,
-							required: false,
-							attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone"],
-						},
-					],
-				},
-			],
+			attributes: ["id"],
 			limit: limit,
 			offset: (page - 1) * limit,
 			order: [["createdAt", "DESC"]],
-			distinct: true,
 		});
 
+		const ids = idRows.map((row) => row.id);
+
+		let fullRows: any[] = [];
+		if (ids.length > 0) {
+			// 2. Fetch full relations for those specific IDs without an SQL ORDER BY
+			fullRows = await Order.findAll({
+				where: { id: { [Op.in]: ids } },
+				include: [
+					{
+						association: "items",
+						include: [
+							{
+								association: "product",
+								include: [
+									{
+										association: "categories",
+									},
+								],
+							},
+						],
+					},
+					{
+						association: "buyer",
+						attributes: ["id", "phone_number", "email"],
+						include: [
+							{
+								model: BuyerProfile,
+								required: false,
+								attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
+							},
+						],
+					},
+					{
+						association: "seller",
+						attributes: ["id", "phone_number", "email"],
+						include: [
+							{
+								model: SellerProfile,
+								required: false,
+								attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone"],
+							},
+						],
+					},
+				],
+			});
+
+			// 3. Sort the joined results in JavaScript to match the paginated ID order
+			fullRows.sort((a, b) => {
+				return ids.indexOf(a.id) - ids.indexOf(b.id);
+			});
+		}
+
 		return {
-			items: orders.rows,
-			total: orders.count,
+			items: fullRows,
+			total: count,
 			page,
 			limit,
-			totalPages: Math.ceil(orders.count / limit),
+			totalPages: Math.ceil(count / limit),
 		};
 	}
 
@@ -808,6 +827,9 @@ export default class AdminService {
 			"Return Accepted",
 			"Return Rejected",
 			"Refund Successful",
+			"Exchange Processed",
+			"Exchange Accepted",
+			"Exchange Rejected",
 			"Rejected",
 			"Cancelled",
 		];
@@ -816,18 +838,136 @@ export default class AdminService {
 			throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);
 		}
 
-		const [updatedCount] = await Order.update(
-			{ status },
-			{
-				where: { id: orderId },
-			}
-		);
+		const t = await jiffy.transaction();
+		try {
+			const lockedOrder = await Order.findByPk(orderId, {
+				transaction: t,
+				lock: t.LOCK.UPDATE,
+			});
 
-		if (updatedCount === 0) {
-			throw new Error("Order not found");
+			if (!lockedOrder) {
+				throw new Error("Order not found");
+			}
+
+			const isRefunding = (status === "Refund Successful" || status === "Return Accepted") &&
+								(lockedOrder.status !== "Refund Successful" && lockedOrder.status !== "Return Accepted");
+
+			let cancellationRefundAmount = 0;
+			if (status === "Cancelled" && lockedOrder.status !== "Cancelled") {
+				const pInfo = lockedOrder.paymentInfo || {};
+				if (lockedOrder.status.toLowerCase() === "confirmed") {
+					cancellationRefundAmount = lockedOrder.total;
+				} else if (lockedOrder.status.toLowerCase() === "created" && pInfo.walletAmount > 0) {
+					cancellationRefundAmount = Number(pInfo.walletAmount);
+				}
+			}
+
+			await lockedOrder.update({ status }, { transaction: t });
+
+			if (isRefunding) {
+				await creditWallet(
+					{
+						userId: lockedOrder.userId,
+						amount: lockedOrder.total,
+						referenceId: `order_refund_${orderId}`,
+						referenceType: "ORDER",
+						category: "REFUND",
+						description: `Refund for returned order #${orderId}`,
+					},
+					t
+				);
+			}
+
+			if (cancellationRefundAmount > 0) {
+				await creditWallet(
+					{
+						userId: lockedOrder.userId,
+						amount: cancellationRefundAmount,
+						referenceId: `order_cancel_${orderId}`,
+						referenceType: "ORDER",
+						category: "REFUND",
+						description: `Refund for cancelled order #${orderId}`,
+					},
+					t
+				);
+			}
+
+			await t.commit();
+		} catch (err) {
+			await t.rollback();
+			throw err;
 		}
 
-		return await Order.findByPk(orderId);
+		const order = await Order.findByPk(orderId);
+		if (order) {
+			createAndSendNotification(
+				order.userId,
+				"Order Status Updated",
+				`Your order #${order.id} status has been updated to ${status}.`,
+				"order_status_update",
+				order.id,
+				"buyer"
+			).catch((err) => {
+				console.error(
+					`Failed to send status update notification to buyer #${order.userId} for order #${order.id}:`,
+					err
+				);
+			});
+		}
+
+		return order;
+	}
+
+	static async getWallets(options: {
+		page: number;
+		limit: number;
+		search?: string;
+		isActive?: boolean;
+	}) {
+		const { page, limit, search, isActive } = options;
+		const offset = (page - 1) * limit;
+
+		const where: any = {};
+		if (isActive !== undefined) {
+			where.isActive = isActive;
+		}
+
+		if (search) {
+			where[Op.or] = [
+				{ "$user.email$": { [Op.like]: `%${search}%` } },
+				{ "$user.phone_number$": { [Op.like]: `%${search}%` } },
+				{ "$user.BuyerProfile.fullName$": { [Op.like]: `%${search}%` } },
+			];
+		}
+
+		const result = await Wallet.findAndCountAll({
+			where,
+			include: [
+				{
+					association: "user",
+					required: true,
+					attributes: ["id", "phone_number", "email"],
+					include: [
+						{
+							model: BuyerProfile,
+							required: false,
+							attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
+						},
+					],
+				},
+			],
+			limit: Number(limit),
+			offset: Number(offset),
+			order: [["createdAt", "DESC"]],
+		});
+
+		return {
+			wallets: result.rows,
+			total: result.count,
+			page: Number(page),
+			limit: Number(limit),
+			totalPages: Math.ceil(result.count / Number(limit)),
+		};
 	}
 }
 

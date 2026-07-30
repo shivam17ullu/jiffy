@@ -1,18 +1,14 @@
 // src/services/order/order.service.ts
 import { jiffy } from "../../config/sequelize.js";
-import { CartItem, Order, OrderItem, Product, ProductVariant, User, SellerProfile, BuyerProfile, } from "../../model/relations.js";
+import { CartItem, Order, OrderItem, Product, ProductVariant, User, SellerProfile, BuyerProfile, WalletTransaction, } from "../../model/relations.js";
 import { Op } from "sequelize";
 import { sendNewOrderEmail } from "../../utils/mailer.js";
 import { createAndSendNotification } from "../notification/notification.service.js";
 import { emitToUser } from "../socket/socket.service.js";
-export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo, cartId) => {
+import { creditWallet, debitWallet } from "../wallet/wallet.service.js";
+export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo, cartId, isFullWalletPay, walletAmount) => {
     const t = await jiffy.transaction();
     try {
-        // const cart = await Cart.findOne({
-        //   where: { userId },
-        //   transaction: t,
-        // });
-        // if (!cart) throw new Error("Cart not found");
         const items = await CartItem.findAll({
             where: { cartId: cartId },
             include: [
@@ -23,6 +19,35 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo,
         });
         if (!items.length)
             throw new Error("Cart is empty");
+        // Calculate overall cart total first and verify stock
+        let overallCartTotal = 0;
+        for (const item of items) {
+            const variant = item.variant;
+            if (variant.stock < item.qty) {
+                throw new Error("Insufficient stock for variant: " + variant.id);
+            }
+            overallCartTotal += (item.price || variant.price) * item.qty;
+        }
+        let finalWalletDeduction = 0;
+        if (isFullWalletPay) {
+            finalWalletDeduction = overallCartTotal;
+        }
+        else if (walletAmount && walletAmount > 0) {
+            if (walletAmount >= overallCartTotal) {
+                throw new Error("Partial wallet payment amount must be less than the total order amount.");
+            }
+            finalWalletDeduction = walletAmount;
+        }
+        if (finalWalletDeduction > 0) {
+            await debitWallet({
+                userId,
+                amount: finalWalletDeduction,
+                referenceId: `cart_${cartId}`,
+                referenceType: "ORDER",
+                category: "ORDER_PAYMENT",
+                description: `Payment for cart checkout (Cart #${cartId})`,
+            }, t);
+        }
         // Group by seller
         const groups = {};
         for (const item of items) {
@@ -33,28 +58,47 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo,
         }
         const createdOrders = [];
         const emailNotifications = [];
+        const sellerIds = Object.keys(groups);
+        let allocatedWallet = 0;
         // Create one order per seller
-        for (const sellerIdStr of Object.keys(groups)) {
-            const sellerId = Number(sellerIdStr);
+        for (let i = 0; i < sellerIds.length; i++) {
+            const sellerId = Number(sellerIds[i]);
             const groupItems = groups[sellerId];
+            const isLastOrder = i === sellerIds.length - 1;
             let total = 0;
-            // stock check + total calculation
             for (const it of groupItems) {
                 const variant = it.variant;
-                if (variant.stock < it.qty)
-                    throw new Error("Insufficient stock for variant: " + variant.id);
                 total += (it.price || variant.price) * it.qty;
             }
+            let orderWalletShare = 0;
+            if (finalWalletDeduction > 0) {
+                if (isFullWalletPay) {
+                    orderWalletShare = total;
+                }
+                else {
+                    orderWalletShare = isLastOrder
+                        ? Number((finalWalletDeduction - allocatedWallet).toFixed(2))
+                        : Number(((total / overallCartTotal) * finalWalletDeduction).toFixed(2));
+                    allocatedWallet += orderWalletShare;
+                }
+            }
+            const orderStatus = isFullWalletPay ? "Confirmed" : "Created";
             const enrichedPaymentInfo = {
-                method: "Online",
+                method: isFullWalletPay
+                    ? "Wallet"
+                    : orderWalletShare > 0
+                        ? "Partial (Wallet + Online)"
+                        : "Online",
+                status: isFullWalletPay ? "captured" : "pending",
+                walletAmount: orderWalletShare,
+                razorpayAmount: Number((total - orderWalletShare).toFixed(2)),
                 ...(paymentInfo || {}),
             };
-            // FIXED — added sellerId in Order.create()
             const order = await Order.create({
                 userId,
-                sellerId, // <-- REQUIRED FIELD FIX
+                sellerId,
                 total,
-                status: "Created",
+                status: orderStatus,
                 shippingAddress,
                 paymentInfo: enrichedPaymentInfo,
             }, { transaction: t });
@@ -98,6 +142,17 @@ export const createOrdersFromCart = async (userId, shippingAddress, paymentInfo,
                 await it.variant.update({ stock: it.variant.stock - it.qty }, { transaction: t });
             }
             createdOrders.push(order);
+        }
+        // Update wallet ledger transaction with the actual order ID(s)
+        if (finalWalletDeduction > 0 && createdOrders.length > 0) {
+            const orderIdsStr = createdOrders.map((o) => o.id).join(", ");
+            await WalletTransaction.update({
+                referenceId: String(createdOrders[0].id),
+                description: `Payment for checkout: Jiffy Order(s) #${orderIdsStr}`,
+            }, {
+                where: { referenceId: `cart_${cartId}`, userId },
+                transaction: t,
+            });
         }
         // clear cart
         await CartItem.destroy({
@@ -331,20 +386,68 @@ export const updateOrderStatus = async (orderId, sellerId, status) => {
         "Return Accepted",
         "Return Rejected",
         "Refund Successful",
+        "Exchange Processed",
+        "Exchange Accepted",
+        "Exchange Rejected",
         "Rejected",
         "Cancelled",
     ];
     if (!allowedStatuses.includes(status)) {
         throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);
     }
-    const [updatedCount] = await Order.update({ status }, {
-        where: {
-            id: orderId,
-            sellerId: sellerId,
-        },
-    });
-    if (updatedCount === 0) {
-        throw new Error("Order not found or you don't have permission to update it");
+    const originalOrder = await Order.findByPk(orderId);
+    if (!originalOrder) {
+        throw new Error("Order not found");
+    }
+    const isRefunding = (status === "Refund Successful" || status === "Return Accepted") &&
+        (originalOrder.status !== "Refund Successful" && originalOrder.status !== "Return Accepted");
+    let cancellationRefundAmount = 0;
+    if (status === "Cancelled" && originalOrder.status !== "Cancelled") {
+        const pInfo = originalOrder.paymentInfo || {};
+        if (originalOrder.status.toLowerCase() === "confirmed") {
+            cancellationRefundAmount = originalOrder.total;
+        }
+        else if (originalOrder.status.toLowerCase() === "created" && pInfo.walletAmount > 0) {
+            cancellationRefundAmount = Number(pInfo.walletAmount);
+        }
+    }
+    const t = await jiffy.transaction();
+    try {
+        const [updatedCount] = await Order.update({ status }, {
+            where: {
+                id: orderId,
+                sellerId: sellerId,
+            },
+            transaction: t,
+        });
+        if (updatedCount === 0) {
+            throw new Error("Order not found or you don't have permission to update it");
+        }
+        if (isRefunding) {
+            await creditWallet({
+                userId: originalOrder.userId,
+                amount: originalOrder.total,
+                referenceId: String(orderId),
+                referenceType: "ORDER",
+                category: "REFUND",
+                description: `Refund for returned order #${orderId}`,
+            }, t);
+        }
+        if (cancellationRefundAmount > 0) {
+            await creditWallet({
+                userId: originalOrder.userId,
+                amount: cancellationRefundAmount,
+                referenceId: String(orderId),
+                referenceType: "ORDER",
+                category: "REFUND",
+                description: `Refund for cancelled order #${orderId}`,
+            }, t);
+        }
+        await t.commit();
+    }
+    catch (err) {
+        await t.rollback();
+        throw err;
     }
     const order = await Order.findByPk(orderId);
     if (order) {
@@ -376,7 +479,33 @@ export const cancelOrder = async (orderId, userId) => {
         statusLower !== "processing") {
         throw new Error(`Order cannot be cancelled in status ${order.status}`);
     }
-    await Order.update({ status: "Cancelled" }, { where: { id: orderId } });
+    let refundAmount = 0;
+    const pInfo = order.paymentInfo || {};
+    if (order.status.toLowerCase() === "confirmed") {
+        refundAmount = order.total;
+    }
+    else if (order.status.toLowerCase() === "created" && pInfo.walletAmount > 0) {
+        refundAmount = Number(pInfo.walletAmount);
+    }
+    const t = await jiffy.transaction();
+    try {
+        await Order.update({ status: "Cancelled" }, { where: { id: orderId }, transaction: t });
+        if (refundAmount > 0) {
+            await creditWallet({
+                userId,
+                amount: refundAmount,
+                referenceId: String(orderId),
+                referenceType: "ORDER",
+                category: "REFUND",
+                description: `Refund for cancelled order #${orderId}`,
+            }, t);
+        }
+        await t.commit();
+    }
+    catch (err) {
+        await t.rollback();
+        throw err;
+    }
     const updatedOrder = await Order.findByPk(orderId);
     // Send cancellation notification to the seller
     if (updatedOrder) {

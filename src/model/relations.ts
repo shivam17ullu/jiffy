@@ -21,6 +21,12 @@ import Location from "./profile/location.js";
 import Wishlist from "./wishlist/wishlist.js";
 import UserDevice from "./auth/userDevice.js";
 import Notification from "./notification/notification.js";
+import Wallet from "./wallet/wallet.js";
+import WalletTransaction from "./wallet/walletTransaction.js";
+import ReturnExchangeRequest from "./order/returnExchangeRequest.js";
+import ReturnExchangeItem from "./order/returnExchangeItem.js";
+
+
 
 // ---------------- Associations ----------------
 
@@ -131,6 +137,27 @@ User.hasMany(Wishlist, { foreignKey: "userId", as: "wishlist" });
 Wishlist.belongsTo(Product, { foreignKey: "productId", as: "product" });
 Product.hasMany(Wishlist, { foreignKey: "productId", as: "wishlists" });
 
+// Wallet relations
+User.hasOne(Wallet, { foreignKey: "userId", as: "wallet" });
+Wallet.belongsTo(User, { foreignKey: "userId", as: "user" });
+Wallet.hasMany(WalletTransaction, { foreignKey: "walletId", as: "transactions" });
+WalletTransaction.belongsTo(Wallet, { foreignKey: "walletId", as: "wallet" });
+
+// Return and Exchange relations
+Order.hasMany(ReturnExchangeRequest, { foreignKey: "orderId", as: "returnRequests" });
+ReturnExchangeRequest.belongsTo(Order, { foreignKey: "orderId", as: "order" });
+
+ReturnExchangeRequest.hasMany(ReturnExchangeItem, { foreignKey: "requestId", as: "items" });
+ReturnExchangeItem.belongsTo(ReturnExchangeRequest, { foreignKey: "requestId", as: "request" });
+
+ReturnExchangeRequest.belongsTo(User, { foreignKey: "sellerId", as: "seller" });
+ReturnExchangeRequest.belongsTo(User, { foreignKey: "userId", as: "buyer" });
+
+ReturnExchangeItem.belongsTo(ProductVariant, { as: "originalVariant", foreignKey: "variantId" });
+ReturnExchangeItem.belongsTo(ProductVariant, { as: "exchangeVariant", foreignKey: "exchangeVariantId" });
+
+
+
 // EXPORTS
 export {
   User,
@@ -155,5 +182,10 @@ export {
   Location,
   Wishlist,
   UserDevice,
-  Notification
+  Notification,
+  Wallet,
+  WalletTransaction,
+  ReturnExchangeRequest,
+  ReturnExchangeItem
 };
+

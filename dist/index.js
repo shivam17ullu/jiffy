@@ -19,6 +19,8 @@ import sellerRouter from './routes/seller.js';
 import storeRouter from './routes/store.js';
 import wishlistRouter from './routes/wishlist.js';
 import notificationRouter from './routes/notification.js';
+import walletRouter from './routes/wallet.js';
+import returnExchangeRouter from './routes/returnExchange.js';
 import { globalErrorHandler } from './middleware/errorHandler.js';
 // Increase body size limits for JSON and URL-encoded data
 // Load environment variables first
@@ -52,6 +54,8 @@ app.use("/api/wishlist", wishlistRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/seller", sellerRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/wallet", walletRouter);
+app.use("/api/return-exchange", returnExchangeRouter);
 app.use("/api", paymentRouter);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 app.use(globalErrorHandler);

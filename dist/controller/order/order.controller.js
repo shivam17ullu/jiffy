@@ -48,11 +48,11 @@ export const createOrder = async (req, res) => {
     try {
         const userId = req.userId || req.user?.id;
         const cartId = req.body.cartId;
-        const { shippingAddress, paymentInfo } = req.body;
+        const { shippingAddress, paymentInfo, isFullWalletPay, walletAmount } = req.body;
         if (!shippingAddress) {
             return sendValidationError(res, "Shipping address is required", "shippingAddress");
         }
-        const order = await service.createOrdersFromCart(userId, shippingAddress, paymentInfo, cartId);
+        const order = await service.createOrdersFromCart(userId, shippingAddress, paymentInfo, cartId, isFullWalletPay, walletAmount);
         res.status(201).json({ success: true, data: order });
     }
     catch (err) {
@@ -264,29 +264,12 @@ export const updateStatus = async (req, res) => {
         if (!status) {
             return sendValidationError(res, "Order status is required", "status");
         }
-        const user = await User.findByPk(userId, { include: [Role] });
-        if (!user) {
-            return sendError(res, 404, "User account not found");
-        }
-        const roles = user.Roles.map((r) => r.name);
         const order = await Order.findByPk(orderId);
         if (!order) {
             return sendError(res, 404, "Order not found");
         }
-        if (order.userId == userId) {
-            if (status !== "Cancelled") {
-                return sendError(res, 403, "Buyers can only update order status to Cancelled");
-            }
-            const updatedOrder = await service.cancelOrder(orderId, userId);
-            return res.json({ success: true, data: updatedOrder });
-        }
-        else if (order.sellerId == userId && roles.includes("seller")) {
-            const updatedOrder = await service.updateOrderStatus(orderId, userId, status);
-            return res.json({ success: true, data: updatedOrder });
-        }
-        else {
-            return sendError(res, 403, "You do not have permission to update this order");
-        }
+        const updatedOrder = await service.updateOrderStatus(orderId, order.sellerId, status);
+        return res.json({ success: true, data: updatedOrder });
     }
     catch (err) {
         return handleControllerError(res, err);
