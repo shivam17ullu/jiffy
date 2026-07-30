@@ -18,4 +18,5 @@ adminRouter.get("/orders/:id", AdminController.getOrderDetail);
 adminRouter.patch("/orders/:id/status", AdminController.updateOrderStatus);
 adminRouter.get("/revenue", AdminController.getPlatformRevenue);
 adminRouter.get("/revenue/sellers/:id", AdminController.getParticularSellerRevenue);
+adminRouter.get("/wallets", AdminController.getWallets);
 export default adminRouter;

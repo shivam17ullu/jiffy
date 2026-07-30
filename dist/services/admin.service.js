@@ -1,7 +1,9 @@
-import { SellerProfile, VerifiedSellers, User, Store, Document, BankDetail, Product, ProductVariant, ProductCategory, CartItem, Wishlist, Order, OrderItem, Location, RefreshToken, UserRole, BuyerProfile, OtpLogin, } from "../model/relations.js";
+import { SellerProfile, VerifiedSellers, User, Store, Document, BankDetail, Product, ProductVariant, ProductCategory, CartItem, Wishlist, Order, OrderItem, Location, RefreshToken, UserRole, BuyerProfile, OtpLogin, Wallet, } from "../model/relations.js";
 import { Op, Sequelize } from "sequelize";
 import { jiffy } from "../config/sequelize.js";
 import { sendSellerApprovalEmail, sendSellerRejectionEmail } from "../utils/mailer.js";
+import { creditWallet } from "./wallet/wallet.service.js";
+import { createAndSendNotification } from "./notification/notification.service.js";
 export default class AdminService {
     static async getSellers(status) {
         const whereCondition = {};
@@ -702,16 +704,114 @@ export default class AdminService {
             "Return Accepted",
             "Return Rejected",
             "Refund Successful",
+            "Exchange Processed",
+            "Exchange Accepted",
+            "Exchange Rejected",
+            "Rejected",
+            "Cancelled",
         ];
         if (!allowedStatuses.includes(status)) {
             throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);
         }
-        const [updatedCount] = await Order.update({ status }, {
-            where: { id: orderId },
-        });
-        if (updatedCount === 0) {
+        const originalOrder = await Order.findByPk(orderId);
+        if (!originalOrder) {
             throw new Error("Order not found");
         }
-        return await Order.findByPk(orderId);
+        const isRefunding = (status === "Refund Successful" || status === "Return Accepted") &&
+            (originalOrder.status !== "Refund Successful" && originalOrder.status !== "Return Accepted");
+        let cancellationRefundAmount = 0;
+        if (status === "Cancelled" && originalOrder.status !== "Cancelled") {
+            const pInfo = originalOrder.paymentInfo || {};
+            if (originalOrder.status.toLowerCase() === "confirmed") {
+                cancellationRefundAmount = originalOrder.total;
+            }
+            else if (originalOrder.status.toLowerCase() === "created" && pInfo.walletAmount > 0) {
+                cancellationRefundAmount = Number(pInfo.walletAmount);
+            }
+        }
+        const t = await jiffy.transaction();
+        try {
+            const [updatedCount] = await Order.update({ status }, {
+                where: { id: orderId },
+                transaction: t,
+            });
+            if (updatedCount === 0) {
+                throw new Error("Order not found");
+            }
+            if (isRefunding) {
+                await creditWallet({
+                    userId: originalOrder.userId,
+                    amount: originalOrder.total,
+                    referenceId: String(orderId),
+                    referenceType: "ORDER",
+                    category: "REFUND",
+                    description: `Refund for returned order #${orderId}`,
+                }, t);
+            }
+            if (cancellationRefundAmount > 0) {
+                await creditWallet({
+                    userId: originalOrder.userId,
+                    amount: cancellationRefundAmount,
+                    referenceId: String(orderId),
+                    referenceType: "ORDER",
+                    category: "REFUND",
+                    description: `Refund for cancelled order #${orderId}`,
+                }, t);
+            }
+            await t.commit();
+        }
+        catch (err) {
+            await t.rollback();
+            throw err;
+        }
+        const order = await Order.findByPk(orderId);
+        if (order) {
+            createAndSendNotification(order.userId, "Order Status Updated", `Your order #${order.id} status has been updated to ${status}.`, "order_status_update", order.id, "buyer").catch((err) => {
+                console.error(`Failed to send status update notification to buyer #${order.userId} for order #${order.id}:`, err);
+            });
+        }
+        return order;
+    }
+    static async getWallets(options) {
+        const { page, limit, search, isActive } = options;
+        const offset = (page - 1) * limit;
+        const where = {};
+        if (isActive !== undefined) {
+            where.isActive = isActive;
+        }
+        if (search) {
+            where[Op.or] = [
+                { "$user.email$": { [Op.like]: `%${search}%` } },
+                { "$user.phone_number$": { [Op.like]: `%${search}%` } },
+                { "$user.BuyerProfile.fullName$": { [Op.like]: `%${search}%` } },
+            ];
+        }
+        const result = await Wallet.findAndCountAll({
+            where,
+            include: [
+                {
+                    association: "user",
+                    required: true,
+                    attributes: ["id", "phone_number", "email"],
+                    include: [
+                        {
+                            model: BuyerProfile,
+                            required: false,
+                            attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
+                        },
+                    ],
+                },
+            ],
+            limit: Number(limit),
+            offset: Number(offset),
+            order: [["createdAt", "DESC"]],
+        });
+        return {
+            wallets: result.rows,
+            total: result.count,
+            page: Number(page),
+            limit: Number(limit),
+            totalPages: Math.ceil(result.count / Number(limit)),
+        };
     }
 }

@@ -300,7 +300,7 @@ async function getCategoryDescendants(categoryId) {
 export const getProductById = async (id, userId, checkSellerStatus = false) => {
     const sellerProfileInclude = {
         model: SellerProfile,
-        required: checkSellerStatus,
+        required: false,
         attributes: [
             "businessName",
             "gstNumber",
@@ -318,13 +318,10 @@ export const getProductById = async (id, userId, checkSellerStatus = false) => {
             }
         ]
     };
-    if (checkSellerStatus) {
-        sellerProfileInclude.include.push({
-            model: VerifiedSellers,
-            where: { is_active: true, status: "approved" },
-            required: true,
-        });
-    }
+    sellerProfileInclude.include.push({
+        model: VerifiedSellers,
+        required: false,
+    });
     const product = await Product.findByPk(id, {
         include: [
             {
@@ -342,13 +339,23 @@ export const getProductById = async (id, userId, checkSellerStatus = false) => {
             {
                 association: "seller",
                 attributes: ["id", "phone_number", "email"],
-                required: checkSellerStatus,
+                required: false,
                 include: [sellerProfileInclude],
             },
         ],
     });
     if (!product)
         return null;
+    if (checkSellerStatus) {
+        const isOwner = userId !== undefined && Number(userId) === Number(product.sellerId);
+        if (!isOwner) {
+            const verifiedSeller = product.seller?.SellerProfile?.VerifiedSeller || product.seller?.SellerProfile?.VerifiedSellers;
+            const isApproved = verifiedSeller && (verifiedSeller.is_active === true || verifiedSeller.is_active === 1) && verifiedSeller.status === "approved";
+            if (!isApproved) {
+                return null;
+            }
+        }
+    }
     // Check if product is in wishlist
     let isWishlisted = false;
     if (userId) {

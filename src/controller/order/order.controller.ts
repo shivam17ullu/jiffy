@@ -1,6 +1,6 @@
 import * as service from '../../services/order/order.service.js';
 import { Response } from "express";
-import { User, Role } from "../../model/relations.js";
+import { User, Role, Order } from "../../model/relations.js";
 import {
   handleControllerError,
   sendError,
@@ -55,7 +55,7 @@ export const createOrder = async (req: any, res: Response) => {
   try {
     const userId = req.userId || req.user?.id;
     const cartId = req.body.cartId;
-    const { shippingAddress, paymentInfo } = req.body;
+    const { shippingAddress, paymentInfo, isFullWalletPay, walletAmount } = req.body;
     if (!shippingAddress) {
       return sendValidationError(
         res,
@@ -67,7 +67,9 @@ export const createOrder = async (req: any, res: Response) => {
       userId,
       shippingAddress,
       paymentInfo,
-      cartId
+      cartId,
+      isFullWalletPay,
+      walletAmount
     );
     res.status(201).json({ success: true, data: order });
   } catch (err: unknown) {
@@ -253,7 +255,7 @@ export const getOrderById = async (req: any, res: Response) => {
  * /api/orders/{id}/status:
  *   patch:
  *     summary: Update order status
- *     description: Update the status of an order (Seller only)
+ *     description: Update the status of an order (Sellers can change to allowed statuses; Buyers can cancel)
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
@@ -275,7 +277,7 @@ export const getOrderById = async (req: any, res: Response) => {
  *             properties:
  *               status:
  *                 type: string
- *                 enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful']
+ *                 enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful', Rejected, Cancelled]
  *     responses:
  *       200:
  *         description: Order status updated
@@ -296,19 +298,13 @@ export const updateStatus = async (req: any, res: Response) => {
       return sendValidationError(res, "Order status is required", "status");
     }
 
-    const user = await User.findByPk(userId, { include: [Role] });
-    if (!user) {
-      return sendError(res, 404, "User account not found");
+    const order = await Order.findByPk(orderId);
+    if (!order) {
+      return sendError(res, 404, "Order not found");
     }
 
-    const roles = (user as any).Roles.map((r: any) => r.name);
-    if (!roles.includes("seller")) {
-      return sendError(res, 403, "Only sellers can update order status");
-    }
-
-    const updatedOrder = await service.updateOrderStatus(orderId, userId, status);
-    
-    res.json({ success: true, data: updatedOrder });
+    const updatedOrder = await service.updateOrderStatus(orderId, order.sellerId, status);
+    return res.json({ success: true, data: updatedOrder });
   } catch (err: unknown) {
     return handleControllerError(res, err);
   }

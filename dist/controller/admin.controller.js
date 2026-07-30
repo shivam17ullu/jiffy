@@ -375,7 +375,7 @@ export default class AdminController {
      *         name: status
      *         schema:
      *           type: string
-     *           enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful']
+     *           enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful', Rejected, Cancelled]
      *         description: Filter orders by status
      *       - in: query
      *         name: startDate
@@ -640,7 +640,7 @@ export default class AdminController {
      *             properties:
      *               status:
      *                 type: string
-     *                 enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful']
+     *                 enum: [Created, Confirmed, 'Out For Delivery', Delivered, 'Return Processed', 'Return Accepted', 'Return Rejected', 'Refund Successful', Rejected, Cancelled]
      *     responses:
      *       200:
      *         description: Order status updated successfully
@@ -668,6 +668,86 @@ export default class AdminController {
                 status: 200,
                 message: "Order status updated successfully",
                 response: updatedOrder,
+            });
+        }
+        catch (error) {
+            return handleControllerError(res, error);
+        }
+    }
+    /**
+     * @swagger
+     * /api/admin/wallets:
+     *   get:
+     *     summary: Get all wallets
+     *     description: Retrieve a list of all buyer wallets with their active status and current balances. Supports search and filtering.
+     *     tags: [Admin]
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: query
+     *         name: page
+     *         schema:
+     *           type: integer
+     *           default: 1
+     *         description: Page number
+     *       - in: query
+     *         name: limit
+     *         schema:
+     *           type: integer
+     *           default: 20
+     *         description: Number of items per page
+     *       - in: query
+     *         name: search
+     *         schema:
+     *           type: string
+     *         description: Search query matching buyer email, phone number, or fullName
+     *       - in: query
+     *         name: isActive
+     *         schema:
+     *           type: boolean
+     *         description: Filter wallets by active status (true/false)
+     *     responses:
+     *       200:
+     *         description: List of wallets retrieved successfully
+     *       400:
+     *         description: Invalid query parameters
+     *       401:
+     *         description: Unauthorized
+     *       403:
+     *         description: Forbidden (Admin access only)
+     */
+    static async getWallets(req, res) {
+        try {
+            const page = req.query.page ? Number(req.query.page) : 1;
+            const limit = req.query.limit ? Number(req.query.limit) : 20;
+            const search = req.query.search;
+            const isActiveStr = req.query.isActive;
+            let isActive = undefined;
+            if (isActiveStr !== undefined) {
+                if (isActiveStr === "true")
+                    isActive = true;
+                else if (isActiveStr === "false")
+                    isActive = false;
+                else {
+                    return handleControllerError(res, new Error("Invalid isActive filter value (must be true or false)"), 400);
+                }
+            }
+            if (isNaN(page) || page < 1) {
+                return handleControllerError(res, new Error("Invalid page number"), 400);
+            }
+            if (isNaN(limit) || limit < 1) {
+                return handleControllerError(res, new Error("Invalid limit value"), 400);
+            }
+            const result = await AdminService.getWallets({
+                page,
+                limit,
+                search,
+                isActive,
+            });
+            return createResponse(res, {
+                status: 200,
+                message: "Wallets retrieved successfully",
+                response: result,
             });
         }
         catch (error) {

@@ -2,7 +2,9 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+import { createServer } from 'http';
 import { jiffy } from './config/sequelize.js';
+import { initSocket } from './services/socket/socket.service.js';
 import authRouter from './routes/auth.js';
 const app = express();
 import swaggerUi from "swagger-ui-express";
@@ -16,6 +18,9 @@ import profileRouter from "./routes/profile.js";
 import sellerRouter from './routes/seller.js';
 import storeRouter from './routes/store.js';
 import wishlistRouter from './routes/wishlist.js';
+import notificationRouter from './routes/notification.js';
+import walletRouter from './routes/wallet.js';
+import returnExchangeRouter from './routes/returnExchange.js';
 import { globalErrorHandler } from './middleware/errorHandler.js';
 // Increase body size limits for JSON and URL-encoded data
 // Load environment variables first
@@ -46,8 +51,11 @@ app.use("/api/products", productRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/location", locationRouter);
 app.use("/api/wishlist", wishlistRouter);
+app.use("/api/notifications", notificationRouter);
 app.use("/api/seller", sellerRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/wallet", walletRouter);
+app.use("/api/return-exchange", returnExchangeRouter);
 app.use("/api", paymentRouter);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 app.use(globalErrorHandler);
@@ -57,8 +65,10 @@ const startServer = async () => {
         await jiffy.sync({ alter: true });
         console.log('Connection to both databases has been established successfully.');
         const port = process.env.PORT || 3000;
-        app.listen(port, () => {
-            console.log(`PORT is running on ${port}`);
+        const server = createServer(app);
+        initSocket(server);
+        server.listen(port, () => {
+            console.log(`PORT is running on ${port} with WebSockets enabled`);
         });
     }
     catch (error) {

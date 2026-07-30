@@ -9,7 +9,7 @@ orderRouter.post('/', authenticate, ctrl.createOrder);
 orderRouter.get('/', authenticate, ctrl.listOrders);
 orderRouter.get('/:id', authenticate, ctrl.getOrderById);
 
-// Only sellers can update order status
-orderRouter.patch('/:id/status', authenticate, requireSeller, ctrl.updateStatus);
+// Sellers can update order status; Buyers can cancel their orders
+orderRouter.patch('/:id/status', authenticate, ctrl.updateStatus);
 
 export default orderRouter;
