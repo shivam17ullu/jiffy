@@ -42,6 +42,21 @@ export const creditWallet = async (params, transaction) => {
     if (!wallet.isActive) {
         throw new Error("Wallet is inactive.");
     }
+    // Idempotency check: prevent duplicate credits for the exact same reference
+    const existingTx = await WalletTransaction.findOne({
+        where: {
+            userId,
+            referenceId: String(referenceId),
+            referenceType,
+            category,
+            type: "CREDIT",
+            status: "SUCCESS"
+        },
+        transaction,
+    });
+    if (existingTx) {
+        throw new Error("Double Spend Prevented: A successful credit transaction for this reference already exists.");
+    }
     const currentBalance = Number(wallet.balance);
     const newBalance = currentBalance + amount;
     // Update balance

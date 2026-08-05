@@ -220,54 +220,67 @@ export const listOrders = async (userId, role, opts) => {
     if (status) {
         where.status = status;
     }
-    const orders = await Order.findAndCountAll({
+    // 1. Get count and paginated IDs first to avoid ER_OUT_OF_SORTMEMORY with large JOINs
+    const { count, rows: idRows } = await Order.findAndCountAll({
         where,
-        include: [
-            {
-                association: "items",
-                include: [
-                    {
-                        association: "product",
-                        include: [
-                            {
-                                association: "categories",
-                            },
-                        ],
-                    },
-                ],
-            },
-            {
-                association: "buyer",
-                attributes: ["id", "phone_number", "email"],
-            },
-            {
-                association: "seller",
-                attributes: ["id", "phone_number", "email"],
-                include: [
-                    {
-                        model: SellerProfile,
-                        required: false,
-                        attributes: [
-                            "businessName",
-                            "city",
-                            "state",
-                            "phone",
-                        ],
-                    },
-                ],
-            },
-        ],
+        attributes: ["id"],
         limit: parseInt(limit),
         offset: (parseInt(page) - 1) * parseInt(limit),
         order: [["createdAt", "DESC"]],
-        distinct: true,
     });
+    const ids = idRows.map((row) => row.id);
+    let fullRows = [];
+    if (ids.length > 0) {
+        // 2. Fetch full relations for those specific IDs without an SQL ORDER BY
+        fullRows = await Order.findAll({
+            where: { id: { [Op.in]: ids } },
+            include: [
+                {
+                    association: "items",
+                    include: [
+                        {
+                            association: "product",
+                            include: [
+                                {
+                                    association: "categories",
+                                },
+                            ],
+                        },
+                    ],
+                },
+                {
+                    association: "buyer",
+                    attributes: ["id", "phone_number", "email"],
+                },
+                {
+                    association: "seller",
+                    attributes: ["id", "phone_number", "email"],
+                    include: [
+                        {
+                            model: SellerProfile,
+                            required: false,
+                            attributes: [
+                                "businessName",
+                                "city",
+                                "state",
+                                "phone",
+                            ],
+                        },
+                    ],
+                },
+            ],
+        });
+        // 3. Sort the joined results in JavaScript to match the paginated ID order
+        fullRows.sort((a, b) => {
+            return ids.indexOf(a.id) - ids.indexOf(b.id);
+        });
+    }
     return {
-        items: orders.rows,
-        total: orders.count,
+        items: fullRows,
+        total: count,
         page: parseInt(page),
         limit: parseInt(limit),
-        totalPages: Math.ceil(orders.count / parseInt(limit)),
+        totalPages: Math.ceil(count / parseInt(limit)),
     };
 };
 /**
@@ -395,39 +408,37 @@ export const updateOrderStatus = async (orderId, sellerId, status) => {
     if (!allowedStatuses.includes(status)) {
         throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);
     }
-    const originalOrder = await Order.findByPk(orderId);
-    if (!originalOrder) {
-        throw new Error("Order not found");
-    }
-    const isRefunding = (status === "Refund Successful" || status === "Return Accepted") &&
-        (originalOrder.status !== "Refund Successful" && originalOrder.status !== "Return Accepted");
-    let cancellationRefundAmount = 0;
-    if (status === "Cancelled" && originalOrder.status !== "Cancelled") {
-        const pInfo = originalOrder.paymentInfo || {};
-        if (originalOrder.status.toLowerCase() === "confirmed") {
-            cancellationRefundAmount = originalOrder.total;
-        }
-        else if (originalOrder.status.toLowerCase() === "created" && pInfo.walletAmount > 0) {
-            cancellationRefundAmount = Number(pInfo.walletAmount);
-        }
-    }
     const t = await jiffy.transaction();
     try {
-        const [updatedCount] = await Order.update({ status }, {
+        const lockedOrder = await Order.findOne({
             where: {
                 id: orderId,
                 sellerId: sellerId,
             },
             transaction: t,
+            lock: t.LOCK.UPDATE,
         });
-        if (updatedCount === 0) {
+        if (!lockedOrder) {
             throw new Error("Order not found or you don't have permission to update it");
         }
+        const isRefunding = (status === "Refund Successful" || status === "Return Accepted") &&
+            (lockedOrder.status !== "Refund Successful" && lockedOrder.status !== "Return Accepted");
+        let cancellationRefundAmount = 0;
+        if (status === "Cancelled" && lockedOrder.status !== "Cancelled") {
+            const pInfo = lockedOrder.paymentInfo || {};
+            if (lockedOrder.status.toLowerCase() === "confirmed") {
+                cancellationRefundAmount = lockedOrder.total;
+            }
+            else if (lockedOrder.status.toLowerCase() === "created" && pInfo.walletAmount > 0) {
+                cancellationRefundAmount = Number(pInfo.walletAmount);
+            }
+        }
+        await lockedOrder.update({ status }, { transaction: t });
         if (isRefunding) {
             await creditWallet({
-                userId: originalOrder.userId,
-                amount: originalOrder.total,
-                referenceId: String(orderId),
+                userId: lockedOrder.userId,
+                amount: lockedOrder.total,
+                referenceId: `order_refund_${orderId}`,
                 referenceType: "ORDER",
                 category: "REFUND",
                 description: `Refund for returned order #${orderId}`,
@@ -435,9 +446,9 @@ export const updateOrderStatus = async (orderId, sellerId, status) => {
         }
         if (cancellationRefundAmount > 0) {
             await creditWallet({
-                userId: originalOrder.userId,
+                userId: lockedOrder.userId,
                 amount: cancellationRefundAmount,
-                referenceId: String(orderId),
+                referenceId: `order_cancel_${orderId}`,
                 referenceType: "ORDER",
                 category: "REFUND",
                 description: `Refund for cancelled order #${orderId}`,
@@ -471,30 +482,36 @@ export const cancelOrder = async (orderId, userId) => {
     if (order.userId != userId) {
         throw new Error("You don't have permission to cancel this order");
     }
-    const cancellableStatuses = ["Created", "Confirmed", "Pending", "Processing"];
-    const statusLower = order.status.toLowerCase();
-    if (statusLower !== "created" &&
-        statusLower !== "confirmed" &&
-        statusLower !== "pending" &&
-        statusLower !== "processing") {
-        throw new Error(`Order cannot be cancelled in status ${order.status}`);
-    }
-    let refundAmount = 0;
-    const pInfo = order.paymentInfo || {};
-    if (order.status.toLowerCase() === "confirmed") {
-        refundAmount = order.total;
-    }
-    else if (order.status.toLowerCase() === "created" && pInfo.walletAmount > 0) {
-        refundAmount = Number(pInfo.walletAmount);
-    }
     const t = await jiffy.transaction();
     try {
-        await Order.update({ status: "Cancelled" }, { where: { id: orderId }, transaction: t });
+        const lockedOrder = await Order.findByPk(orderId, {
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+        });
+        if (!lockedOrder) {
+            throw new Error("Order not found");
+        }
+        const currentStatus = lockedOrder.status.toLowerCase();
+        if (currentStatus !== "created" &&
+            currentStatus !== "confirmed" &&
+            currentStatus !== "pending" &&
+            currentStatus !== "processing") {
+            throw new Error(`Order cannot be cancelled in status ${lockedOrder.status}`);
+        }
+        let refundAmount = 0;
+        const pInfo = lockedOrder.paymentInfo || {};
+        if (currentStatus === "confirmed") {
+            refundAmount = lockedOrder.total;
+        }
+        else if (currentStatus === "created" && pInfo.walletAmount > 0) {
+            refundAmount = Number(pInfo.walletAmount);
+        }
+        await lockedOrder.update({ status: "Cancelled" }, { transaction: t });
         if (refundAmount > 0) {
             await creditWallet({
                 userId,
                 amount: refundAmount,
-                referenceId: String(orderId),
+                referenceId: `order_cancel_${orderId}`,
                 referenceType: "ORDER",
                 category: "REFUND",
                 description: `Refund for cancelled order #${orderId}`,

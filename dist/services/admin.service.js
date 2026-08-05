@@ -343,56 +343,69 @@ export default class AdminService {
                 where.createdAt[Op.lte] = new Date(endDate);
             }
         }
-        const orders = await Order.findAndCountAll({
+        // 1. Get count and paginated IDs first to avoid ER_OUT_OF_SORTMEMORY with large JOINs
+        const { count, rows: idRows } = await Order.findAndCountAll({
             where,
-            include: [
-                {
-                    association: "items",
-                    include: [
-                        {
-                            association: "product",
-                            include: [
-                                {
-                                    association: "categories",
-                                },
-                            ],
-                        },
-                    ],
-                },
-                {
-                    association: "buyer",
-                    attributes: ["id", "phone_number", "email"],
-                    include: [
-                        {
-                            model: BuyerProfile,
-                            required: false,
-                            attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
-                        },
-                    ],
-                },
-                {
-                    association: "seller",
-                    attributes: ["id", "phone_number", "email"],
-                    include: [
-                        {
-                            model: SellerProfile,
-                            required: false,
-                            attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone"],
-                        },
-                    ],
-                },
-            ],
+            attributes: ["id"],
             limit: limit,
             offset: (page - 1) * limit,
             order: [["createdAt", "DESC"]],
-            distinct: true,
         });
+        const ids = idRows.map((row) => row.id);
+        let fullRows = [];
+        if (ids.length > 0) {
+            // 2. Fetch full relations for those specific IDs without an SQL ORDER BY
+            fullRows = await Order.findAll({
+                where: { id: { [Op.in]: ids } },
+                include: [
+                    {
+                        association: "items",
+                        include: [
+                            {
+                                association: "product",
+                                include: [
+                                    {
+                                        association: "categories",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        association: "buyer",
+                        attributes: ["id", "phone_number", "email"],
+                        include: [
+                            {
+                                model: BuyerProfile,
+                                required: false,
+                                attributes: ["fullName", "phone", "address", "city", "state", "zipCode"],
+                            },
+                        ],
+                    },
+                    {
+                        association: "seller",
+                        attributes: ["id", "phone_number", "email"],
+                        include: [
+                            {
+                                model: SellerProfile,
+                                required: false,
+                                attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone"],
+                            },
+                        ],
+                    },
+                ],
+            });
+            // 3. Sort the joined results in JavaScript to match the paginated ID order
+            fullRows.sort((a, b) => {
+                return ids.indexOf(a.id) - ids.indexOf(b.id);
+            });
+        }
         return {
-            items: orders.rows,
-            total: orders.count,
+            items: fullRows,
+            total: count,
             page,
             limit,
-            totalPages: Math.ceil(orders.count / limit),
+            totalPages: Math.ceil(count / limit),
         };
     }
     static async getOrderDetail(orderId) {
@@ -713,36 +726,33 @@ export default class AdminService {
         if (!allowedStatuses.includes(status)) {
             throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(", ")}`);
         }
-        const originalOrder = await Order.findByPk(orderId);
-        if (!originalOrder) {
-            throw new Error("Order not found");
-        }
-        const isRefunding = (status === "Refund Successful" || status === "Return Accepted") &&
-            (originalOrder.status !== "Refund Successful" && originalOrder.status !== "Return Accepted");
-        let cancellationRefundAmount = 0;
-        if (status === "Cancelled" && originalOrder.status !== "Cancelled") {
-            const pInfo = originalOrder.paymentInfo || {};
-            if (originalOrder.status.toLowerCase() === "confirmed") {
-                cancellationRefundAmount = originalOrder.total;
-            }
-            else if (originalOrder.status.toLowerCase() === "created" && pInfo.walletAmount > 0) {
-                cancellationRefundAmount = Number(pInfo.walletAmount);
-            }
-        }
         const t = await jiffy.transaction();
         try {
-            const [updatedCount] = await Order.update({ status }, {
-                where: { id: orderId },
+            const lockedOrder = await Order.findByPk(orderId, {
                 transaction: t,
+                lock: t.LOCK.UPDATE,
             });
-            if (updatedCount === 0) {
+            if (!lockedOrder) {
                 throw new Error("Order not found");
             }
+            const isRefunding = (status === "Refund Successful" || status === "Return Accepted") &&
+                (lockedOrder.status !== "Refund Successful" && lockedOrder.status !== "Return Accepted");
+            let cancellationRefundAmount = 0;
+            if (status === "Cancelled" && lockedOrder.status !== "Cancelled") {
+                const pInfo = lockedOrder.paymentInfo || {};
+                if (lockedOrder.status.toLowerCase() === "confirmed") {
+                    cancellationRefundAmount = lockedOrder.total;
+                }
+                else if (lockedOrder.status.toLowerCase() === "created" && pInfo.walletAmount > 0) {
+                    cancellationRefundAmount = Number(pInfo.walletAmount);
+                }
+            }
+            await lockedOrder.update({ status }, { transaction: t });
             if (isRefunding) {
                 await creditWallet({
-                    userId: originalOrder.userId,
-                    amount: originalOrder.total,
-                    referenceId: String(orderId),
+                    userId: lockedOrder.userId,
+                    amount: lockedOrder.total,
+                    referenceId: `order_refund_${orderId}`,
                     referenceType: "ORDER",
                     category: "REFUND",
                     description: `Refund for returned order #${orderId}`,
@@ -750,9 +760,9 @@ export default class AdminService {
             }
             if (cancellationRefundAmount > 0) {
                 await creditWallet({
-                    userId: originalOrder.userId,
+                    userId: lockedOrder.userId,
                     amount: cancellationRefundAmount,
-                    referenceId: String(orderId),
+                    referenceId: `order_cancel_${orderId}`,
                     referenceType: "ORDER",
                     category: "REFUND",
                     description: `Refund for cancelled order #${orderId}`,
