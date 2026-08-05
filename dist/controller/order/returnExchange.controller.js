@@ -1,6 +1,7 @@
 import * as service from "../../services/order/returnExchange.service.js";
 import { User, Role } from "../../model/relations.js";
 import { handleControllerError, sendError, sendValidationError, } from "../../middleware/responseHandler.js";
+import { uploadMultipleBase64ToS3 } from "../../utils/s3Upload.js";
 /**
  * Helper to determine a user's role (buyer, seller, or admin)
  */
@@ -78,6 +79,19 @@ const getUserRole = async (userId, reqRoleQuery) => {
 export const createRequest = async (req, res) => {
     try {
         const userId = req.userId || req.user?.id;
+        // Process base64 image uploads if present
+        if (req.body.images && Array.isArray(req.body.images)) {
+            // Check if image is base64 (either has data:image prefix or doesn't start with http/https)
+            const isBase64 = (img) => !img.startsWith("http://") && !img.startsWith("https://");
+            const base64Images = req.body.images.filter(isBase64);
+            const existingUrls = req.body.images.filter((img) => !isBase64(img));
+            let allImages = [...existingUrls];
+            if (base64Images.length > 0) {
+                const uploadedUrls = await uploadMultipleBase64ToS3(base64Images, "returns");
+                allImages = [...allImages, ...uploadedUrls];
+            }
+            req.body.images = allImages;
+        }
         const request = await service.createReturnExchangeRequest(userId, req.body);
         res.status(201).json({ success: true, data: request });
     }

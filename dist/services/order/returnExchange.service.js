@@ -167,32 +167,55 @@ export const listRequests = async (userId, role, opts) => {
     if (type) {
         where.type = type;
     }
-    const results = await ReturnExchangeRequest.findAndCountAll({
+    // 1. Get count and paginated IDs first to avoid ER_OUT_OF_SORTMEMORY with large JOINs
+    const { count, rows: idRows } = await ReturnExchangeRequest.findAndCountAll({
         where,
-        include: [
-            {
-                association: "items",
-                include: [
-                    { association: "originalVariant", attributes: ["size", "color", "price"] },
-                    { association: "exchangeVariant", attributes: ["size", "color", "price"] },
-                ],
-            },
-            {
-                association: "order",
-                attributes: ["id", "total", "status", "createdAt"],
-            },
-        ],
+        attributes: ["id"],
         limit: parseInt(limit),
         offset: (parseInt(page) - 1) * parseInt(limit),
         order: [["createdAt", "DESC"]],
-        distinct: true,
     });
+    const ids = idRows.map((row) => row.id);
+    let fullRows = [];
+    if (ids.length > 0) {
+        // 2. Fetch full relations for those specific IDs
+        fullRows = await ReturnExchangeRequest.findAll({
+            where: { id: { [Op.in]: ids } },
+            include: [
+                {
+                    association: "items",
+                    include: [
+                        { association: "originalVariant", attributes: ["size", "color", "price"] },
+                        { association: "exchangeVariant", attributes: ["size", "color", "price"] },
+                    ],
+                },
+                {
+                    association: "order",
+                    attributes: ["id", "total", "status", "createdAt"],
+                },
+                {
+                    association: "seller",
+                    attributes: ["id", "email"],
+                    include: [
+                        {
+                            association: "SellerProfile",
+                            attributes: ["businessName"],
+                        },
+                    ],
+                },
+            ],
+        });
+        // Sort the joined results in JavaScript to avoid MySQL sort_buffer exhaustion
+        fullRows.sort((a, b) => {
+            return ids.indexOf(a.id) - ids.indexOf(b.id);
+        });
+    }
     return {
-        items: results.rows,
-        total: results.count,
+        items: fullRows,
+        total: count,
         page: parseInt(page),
         limit: parseInt(limit),
-        totalPages: Math.ceil(results.count / parseInt(limit)),
+        totalPages: Math.ceil(count / parseInt(limit)),
     };
 };
 /**
@@ -245,9 +268,6 @@ export const updateRequestStatus = async (requestId, userId, role, newStatus) =>
         if (newStatus !== "CANCELLED") {
             throw new Error("Buyers can only cancel their return/exchange requests.");
         }
-        if (request.status !== "PENDING" && request.status !== "APPROVED") {
-            throw new Error(`Cannot cancel a request that is already ${request.status}.`);
-        }
     }
     else if (role === "seller") {
         if (request.sellerId != userId) {
@@ -256,8 +276,20 @@ export const updateRequestStatus = async (requestId, userId, role, newStatus) =>
     }
     const t = await jiffy.transaction();
     try {
-        const prevStatus = request.status;
+        // Lock the request row to prevent race conditions during status update
+        const lockedRequest = await ReturnExchangeRequest.findByPk(requestId, {
+            include: [{ association: "items" }],
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+        });
+        if (!lockedRequest) {
+            throw new Error("Return/Exchange request not found.");
+        }
+        const prevStatus = lockedRequest.status;
         // Transition logical validation
+        if (newStatus === "CANCELLED" && prevStatus !== "PENDING" && prevStatus !== "APPROVED") {
+            throw new Error(`Cannot cancel a request in ${prevStatus} state.`);
+        }
         if (newStatus === "APPROVED" && prevStatus !== "PENDING") {
             throw new Error(`Cannot approve a request in ${prevStatus} state.`);
         }
@@ -268,24 +300,24 @@ export const updateRequestStatus = async (requestId, userId, role, newStatus) =>
             throw new Error(`Cannot mark a request as completed without approval first.`);
         }
         // Update status in the database
-        await ReturnExchangeRequest.update({ status: newStatus }, { where: { id: requestId }, transaction: t });
+        await lockedRequest.update({ status: newStatus }, { transaction: t });
         // Sync order status for accepted / rejected / cancelled states
         if (newStatus === "APPROVED") {
-            const orderStatus = request.type === "RETURN" ? "Return Accepted" : "Exchange Accepted";
-            await Order.update({ status: orderStatus }, { where: { id: request.orderId }, transaction: t });
+            const orderStatus = lockedRequest.type === "RETURN" ? "Return Accepted" : "Exchange Accepted";
+            await Order.update({ status: orderStatus }, { where: { id: lockedRequest.orderId }, transaction: t });
         }
         else if (newStatus === "REJECTED") {
-            const orderStatus = request.type === "RETURN" ? "Return Rejected" : "Exchange Rejected";
-            await Order.update({ status: orderStatus }, { where: { id: request.orderId }, transaction: t });
+            const orderStatus = lockedRequest.type === "RETURN" ? "Return Rejected" : "Exchange Rejected";
+            await Order.update({ status: orderStatus }, { where: { id: lockedRequest.orderId }, transaction: t });
         }
         else if (newStatus === "CANCELLED") {
             // Restore overall order status to Delivered if it was return/exchange accepted
-            await Order.update({ status: "Delivered" }, { where: { id: request.orderId }, transaction: t });
+            await Order.update({ status: "Delivered" }, { where: { id: lockedRequest.orderId }, transaction: t });
         }
         // Trigger business processes on completion
         if (newStatus === "COMPLETED") {
-            const items = request.items || [];
-            if (request.type === "RETURN") {
+            const items = lockedRequest.items || [];
+            if (lockedRequest.type === "RETURN") {
                 let totalRefund = 0;
                 for (const item of items) {
                     totalRefund += item.price * item.qty;
@@ -297,17 +329,17 @@ export const updateRequestStatus = async (requestId, userId, role, newStatus) =>
                 }
                 // Credit to wallet
                 await creditWallet({
-                    userId: request.userId,
+                    userId: lockedRequest.userId,
                     amount: totalRefund,
-                    referenceId: String(request.orderId),
+                    referenceId: `return_${lockedRequest.id}`,
                     referenceType: "ORDER",
                     category: "REFUND",
-                    description: `Refund for Return Request #${request.id} on Order #${request.orderId}`,
+                    description: `Refund for Return Request #${lockedRequest.id} on Order #${lockedRequest.orderId}`,
                 }, t);
                 // Update overall Order status
-                await Order.update({ status: "Refund Successful" }, { where: { id: request.orderId }, transaction: t });
+                await Order.update({ status: "Refund Successful" }, { where: { id: lockedRequest.orderId }, transaction: t });
             }
-            else if (request.type === "EXCHANGE") {
+            else if (lockedRequest.type === "EXCHANGE") {
                 for (const item of items) {
                     // Decrement stock of the exchange variant
                     const variant = await ProductVariant.findByPk(item.exchangeVariantId, { transaction: t });
@@ -320,7 +352,7 @@ export const updateRequestStatus = async (requestId, userId, role, newStatus) =>
                     await variant.update({ stock: variant.stock - item.qty }, { transaction: t });
                 }
                 // Update overall Order status
-                await Order.update({ status: "Exchange Processed" }, { where: { id: request.orderId }, transaction: t });
+                await Order.update({ status: "Exchange Processed" }, { where: { id: lockedRequest.orderId }, transaction: t });
             }
         }
         await t.commit();

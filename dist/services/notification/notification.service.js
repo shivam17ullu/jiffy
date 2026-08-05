@@ -4,9 +4,11 @@ import axios from "axios";
 import { initializeApp, cert } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { readFileSync } from "fs";
+import path from "path";
 let sellerApp;
 try {
-    const sellerServiceAccount = JSON.parse(readFileSync(new URL("../../config/sellerServiceAccountKey.json", import.meta.url), "utf8"));
+    const keyPath = path.resolve(process.cwd(), "src/config/sellerServiceAccountKey.json");
+    const sellerServiceAccount = JSON.parse(readFileSync(keyPath, "utf8"));
     sellerApp = initializeApp({
         credential: cert(sellerServiceAccount),
     }, 'seller');
@@ -126,6 +128,7 @@ export const createAndSendNotification = async (userId, title, message, type, re
             const dataPayload = {
                 type,
                 relatedId: relatedId ? String(relatedId) : "",
+                order_id: relatedId ? String(relatedId) : "",
             };
             await sendFcmPushNotification(fcmTokens, title, message, dataPayload, role);
         }

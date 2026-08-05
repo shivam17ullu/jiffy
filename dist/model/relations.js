@@ -118,6 +118,8 @@ Order.hasMany(ReturnExchangeRequest, { foreignKey: "orderId", as: "returnRequest
 ReturnExchangeRequest.belongsTo(Order, { foreignKey: "orderId", as: "order" });
 ReturnExchangeRequest.hasMany(ReturnExchangeItem, { foreignKey: "requestId", as: "items" });
 ReturnExchangeItem.belongsTo(ReturnExchangeRequest, { foreignKey: "requestId", as: "request" });
+ReturnExchangeRequest.belongsTo(User, { foreignKey: "sellerId", as: "seller" });
+ReturnExchangeRequest.belongsTo(User, { foreignKey: "userId", as: "buyer" });
 ReturnExchangeItem.belongsTo(ProductVariant, { as: "originalVariant", foreignKey: "variantId" });
 ReturnExchangeItem.belongsTo(ProductVariant, { as: "exchangeVariant", foreignKey: "exchangeVariantId" });
 // EXPORTS
