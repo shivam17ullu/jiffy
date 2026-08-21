@@ -1,11 +1,11 @@
 export interface SellerFirstStepBody {
   phone_number: string;
-  email: string;
   password?: string;
 }
 
 export interface SellerOnboardingBody {
   userId: string;
+  email?: string;
   store: StoreAttributes;
   bankDetails: BankDetailAttributes;
   documents: DocumentAttributes;
@@ -23,6 +23,8 @@ export interface StoreAttributes {
   state?: string;
   is_active?: boolean;
   isSellerOpen?: boolean;
+  latitude?: number;
+  longitude?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }

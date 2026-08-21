@@ -6,7 +6,9 @@ import {
   User,
   SellerProfile,
   VerifiedSellers,
+  Store,
 } from "../../model/relations.js";
+import { Op, Sequelize } from "sequelize";
 
 /**
  * Add product to wishlist
@@ -51,7 +53,33 @@ export const removeFromWishlist = async (userId: number, productId: number) => {
  * Get user's wishlist with full product details
  */
 export const getWishlist = async (userId: number, opts: any = {}) => {
-  const { page = 1, limit = 20 } = opts;
+  const { page = 1, limit = 20, lat, lng } = opts;
+
+  // ── Geo filter – find seller IDs whose store is within radius ───────────────
+  let geoSellerIds: number[] | null = null;
+  if (lat != null && lng != null) {
+    const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 15;
+    const radiusM = radiusKm * 1000;
+    const nearbyStores = await Store.findAll({
+      attributes: ['id'],
+      include: [{
+        model: SellerProfile,
+        attributes: ['userId'],
+        required: true,
+      }],
+      where: Sequelize.where(
+        Sequelize.literal(`ST_Distance_Sphere(POINT(longitude, latitude), POINT(${lng}, ${lat}))`),
+        { [Op.lte]: radiusM }
+      ),
+    });
+    geoSellerIds = nearbyStores.map((s: any) => s.SellerProfile?.userId).filter(Boolean);
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
+  const productGeoWhere: any = {};
+  if (geoSellerIds !== null) {
+    productGeoWhere.sellerId = { [Op.in]: geoSellerIds };
+  }
 
   const wishlistItems = await Wishlist.findAndCountAll({
     where: { userId },
@@ -59,6 +87,7 @@ export const getWishlist = async (userId: number, opts: any = {}) => {
       {
         association: "product",
         required: true,
+        where: Object.keys(productGeoWhere).length > 0 ? productGeoWhere : undefined,
         include: [
           {
             association: "variants",

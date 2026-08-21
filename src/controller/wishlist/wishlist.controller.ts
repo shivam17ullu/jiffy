@@ -102,6 +102,8 @@ export const getWishlist = async (req: any, res: Response) => {
     const params = {
       page: parseInt(req.query.page) || 1,
       limit: parseInt(req.query.limit) || 20,
+      lat: req.query.lat ? parseFloat(req.query.lat as string) : undefined,
+      lng: req.query.lng ? parseFloat(req.query.lng as string) : undefined,
     };
     const result = await service.getWishlist(userId, params);
     res.json({ success: true, data: result });
@@ -154,15 +156,15 @@ export const addToWishlist = async (req: any, res: Response) => {
   try {
     const userId = req.userId || req.user?.id;
     const { productId } = req.body;
-    
+
     if (!productId) {
       return sendValidationError(res, "Product ID is required", "productId");
     }
 
     await service.addToWishlist(userId, productId);
-    res.json({ 
-      success: true, 
-      message: "Product added to wishlist successfully" 
+    res.json({
+      success: true,
+      message: "Product added to wishlist successfully"
     });
   } catch (err: unknown) {
     return handleControllerError(res, err);
@@ -208,15 +210,15 @@ export const removeFromWishlist = async (req: any, res: Response) => {
   try {
     const userId = req.userId || req.user?.id;
     const productId = parseInt(req.params.productId);
-    
+
     if (!productId) {
       return sendValidationError(res, "Product ID is required", "productId");
     }
 
     await service.removeFromWishlist(userId, productId);
-    res.json({ 
-      success: true, 
-      message: "Product removed from wishlist successfully" 
+    res.json({
+      success: true,
+      message: "Product removed from wishlist successfully"
     });
   } catch (err: unknown) {
     return handleControllerError(res, err);
@@ -268,15 +270,15 @@ export const checkWishlist = async (req: any, res: Response) => {
       );
     }
     const productId = parseInt(req.params.productId);
-    
+
     if (!productId) {
       return sendValidationError(res, "Product ID is required", "productId");
     }
 
     const isInWishlist = await service.isInWishlist(userId, productId);
-    res.json({ 
-      success: true, 
-      data: { isInWishlist } 
+    res.json({
+      success: true,
+      data: { isInWishlist }
     });
   } catch (err: unknown) {
     return handleControllerError(res, err);

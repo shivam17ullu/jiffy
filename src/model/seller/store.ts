@@ -15,6 +15,8 @@ class Store extends Model<StoreAttributes, StoreCreationAttributes> implements S
   public storeCategory?: string;
   public is_active!: boolean;
   public isSellerOpen!: boolean;
+  public latitude?: number;
+  public longitude?: number;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -32,6 +34,8 @@ Store.init(
     },
     is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
     isSellerOpen: { type: DataTypes.BOOLEAN, defaultValue: true },
+    latitude: { type: DataTypes.DECIMAL(10, 8), allowNull: true },
+    longitude: { type: DataTypes.DECIMAL(11, 8), allowNull: true },
   },
   {
     sequelize: jiffy,

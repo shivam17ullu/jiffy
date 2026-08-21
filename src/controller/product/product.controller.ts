@@ -57,7 +57,7 @@ import { Product } from '../../model/relations.js';
  *                 description: JSON array string of category IDs
  *               variants:
  *                 type: string
- *                 example: '[{"sku":"BS-S-M","size":"M","color":"Blue","price":500,"mrp":800,"stock":100,"isStock":true}]'
+ *                 example: '[{"sku":"BS-S-M","size":"M","color":"Blue","price":500,"mrp":800,"stock":100,"isStock":true,"isDefault":true}]'
  *                 description: JSON array string of variant objects
  *     responses:
  *       200:
@@ -83,7 +83,7 @@ export const create = async (req: any, res: any) => {
     if (!productData.variants) {
       return sendValidationError(res, "At least one variant is required", "variants");
     }
-    
+
     // Parse categories if it's a string
     if (typeof productData.categories === 'string') {
       try {
@@ -93,7 +93,7 @@ export const create = async (req: any, res: any) => {
         productData.categories = productData.categories.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
       }
     }
-    
+
     // Parse variants if it's a string
     if (typeof productData.variants === 'string') {
       try {
@@ -102,7 +102,7 @@ export const create = async (req: any, res: any) => {
         throw new Error('Invalid variants format. Must be valid JSON array.');
       }
     }
-    
+
     // Parse tags if it's a string
     if (typeof productData.tags === 'string') {
       try {
@@ -113,40 +113,39 @@ export const create = async (req: any, res: any) => {
       }
     }
 
-    // Handle image uploads - support both file uploads and base64 images
-    let imageUrls: string[] = [];
-    
-    // 1. Handle file uploads (multipart/form-data)
-    if (req.files && req.files.length > 0) {
-      const fileUrls = await uploadMultipleToS3(req.files, 'products');
-      imageUrls.push(...fileUrls);
-    }
-    
-    // 2. Handle base64 images from request body (JSON or form-data)
-    if (productData.images && Array.isArray(productData.images)) {
-      // Filter base64 images
-      const base64Images = productData.images.filter((img: string) => 
-        typeof img === 'string' && (img.startsWith('data:image') || img.length > 100) // Base64 images are usually long strings
-      );
-      
-      if (base64Images.length > 0) {
-        // Upload base64 images to S3
-        const base64Urls = await uploadMultipleBase64ToS3(base64Images, 'products');
-        imageUrls.push(...base64Urls);
+    // We no longer use product-level images from req.files, but leaving it for backwards compatibility if needed, though they won't be saved to the product anymore.
+    // We will process images inside each variant directly.
+
+    // Process variant images
+    for (const variant of productData.variants) {
+      if (!variant.images || !Array.isArray(variant.images) || variant.images.length < 2 || variant.images.length > 4) {
+        return sendValidationError(res, "Each variant must have between 2 and 4 images", "variants");
       }
-      
-      // Keep non-base64 URLs (already uploaded images)
-      const existingUrls = productData.images.filter((img: string) => 
-        typeof img === 'string' && img.startsWith('http') && !img.startsWith('data:image')
-      );
-      imageUrls.push(...existingUrls);
-      
-      // Remove images from body - we'll use the S3 URLs
-      delete productData.images;
+
+      const uploadedImages = [];
+      const base64ImagesToUpload = [];
+
+      // Separate existing URLs from new base64 images
+      for (const img of variant.images) {
+        if (typeof img === 'string' && (img.startsWith('data:image') || (img.length > 100 && !img.startsWith('http')))) {
+          base64ImagesToUpload.push(img);
+        } else if (typeof img === 'string' && img.startsWith('http')) {
+          uploadedImages.push(img);
+        }
+      }
+
+      // Upload base64 images
+      if (base64ImagesToUpload.length > 0) {
+        const base64Urls = await uploadMultipleBase64ToS3(base64ImagesToUpload, 'products');
+        uploadedImages.push(...base64Urls);
+      }
+
+      // Replace variant images with uploaded URLs
+      variant.images = uploadedImages;
     }
 
-    // Create product with S3 image URLs
-    const product = await service.createProduct(productData, sellerId, imageUrls);
+    // Create product
+    const product = await service.createProduct(productData, sellerId);
     res.json({ success: true, data: product });
   } catch (err: unknown) {
     return handleControllerError(res, err);
@@ -249,9 +248,11 @@ export const list = async (req: any, res: Response) => {
     sort: req.query.sort,
     storeName: req.query.storeName,
     userId: req.userId || undefined, // Include userId if authenticated
+    lat: req.query.lat ? parseFloat(req.query.lat as string) : undefined,
+    lng: req.query.lng ? parseFloat(req.query.lng as string) : undefined,
   };
   const result = await service.listProducts(params);
-  res.json({ success:true, ...result });
+  res.json({ success: true, ...result });
 };
 
 /**
@@ -296,23 +297,23 @@ export const list = async (req: any, res: Response) => {
  *         description: List of seller products
  */
 export const getSellerProducts = async (req: any, res: Response) => {
-    try {
-        const sellerId = req.userId;
-        const params = {
-            page: parseInt(req.query.page) || 1,
-            limit: parseInt(req.query.limit) || 20,
-            q: req.query.q,
-            categoryId: req.query.categoryId ? +req.query.categoryId : (req.query.filter ? +req.query.filter : undefined),
-            brand: req.query.brand,
-            minPrice: req.query.minPrice,
-            maxPrice: req.query.maxPrice,
-            sort: req.query.sort
-        };
-        const result = await service.listSellerProducts(sellerId, params);
-        res.json({ success: true, ...result });
-    } catch (err: unknown) {
-        return handleControllerError(res, err);
-    }
+  try {
+    const sellerId = req.userId;
+    const params = {
+      page: parseInt(req.query.page) || 1,
+      limit: parseInt(req.query.limit) || 20,
+      q: req.query.q,
+      categoryId: req.query.categoryId ? +req.query.categoryId : (req.query.filter ? +req.query.filter : undefined),
+      brand: req.query.brand,
+      minPrice: req.query.minPrice,
+      maxPrice: req.query.maxPrice,
+      sort: req.query.sort
+    };
+    const result = await service.listSellerProducts(sellerId, params);
+    res.json({ success: true, ...result });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
 };
 
 /**
@@ -394,7 +395,7 @@ export const get = async (req: any, res: Response) => {
   if (!product) {
     return sendError(res, 404, "Product not found");
   }
-  res.json({ success:true, data: product });
+  res.json({ success: true, data: product });
 };
 
 /**
@@ -427,117 +428,86 @@ export const get = async (req: any, res: Response) => {
  *         description: Product not found
  */
 export const update = async (req: any, res: Response) => {
-    try {
-        const productId = parseInt(req.params.id);
-        const sellerId = req.userId;
-        
-        // Parse JSON fields if they come as strings (from multipart/form-data)
-        let productData = { ...req.body };
-        
-        // Parse categories if it's a string
-        if (typeof productData.categories === 'string') {
-          try {
-            productData.categories = JSON.parse(productData.categories);
-          } catch (e) {
-            productData.categories = productData.categories.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
-          }
-        }
-        
-        // Parse variants if it's a string
-        if (typeof productData.variants === 'string') {
-          try {
-            productData.variants = JSON.parse(productData.variants);
-          } catch (e) {
-            throw new Error('Invalid variants format. Must be valid JSON array.');
-          }
-        }
-        
-        // Parse tags if it's a string
-        if (typeof productData.tags === 'string') {
-          try {
-            productData.tags = JSON.parse(productData.tags);
-          } catch (e) {
-            productData.tags = productData.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
-          }
-        }
+  try {
+    const productId = parseInt(req.params.id);
+    const sellerId = req.userId;
 
-        // Get existing product to compare images and verify ownership
-        const existingProduct = await Product.findByPk(productId);
-        if (!existingProduct) {
-          return sendError(res, 404, "Product not found");
-        }
-        
-        if (existingProduct.sellerId !== sellerId) {
-          return sendError(res, 403, "You are not authorized to update this product");
-        }
-        
-        const existingImages: string[] = (existingProduct.images as string[]) || [];
-        
-        // Handle image uploads - support both file uploads and base64 images
-        let finalImageUrls: string[] = [];
-        
-        // 1. Handle file uploads (multipart/form-data)
-        if (req.files && req.files.length > 0) {
-          const fileUrls = await uploadMultipleToS3(req.files, 'products');
-          finalImageUrls.push(...fileUrls);
-        }
-        
-        // 2. Handle images from request body
-        if (productData.images && Array.isArray(productData.images)) {
-          // Filter base64 images (new images to upload)
-          const base64Images = productData.images.filter((img: string) => 
-            typeof img === 'string' && (img.startsWith('data:image') || (img.length > 100 && !img.startsWith('http')))
-          );
-          
-          // Upload new base64 images to S3
-          if (base64Images.length > 0) {
-            const base64Urls = await uploadMultipleBase64ToS3(base64Images, 'products');
-            finalImageUrls.push(...base64Urls);
-          }
-          
-          // Keep existing S3 URLs (images that user wants to keep)
-          const existingUrls = productData.images.filter((img: string) => 
-            typeof img === 'string' && img.startsWith('http')
-          );
-          finalImageUrls.push(...existingUrls);
-          
-          // Remove images from body - we'll use the final S3 URLs
-          delete productData.images;
-        }
-        
-        // Find images to delete from S3 (old images not in the new list)
-        const imagesToDelete = existingImages.filter((oldImg: string) => 
-          !finalImageUrls.includes(oldImg)
-        );
-        
-        // Delete old images from S3 that are not in the new list
-        if (imagesToDelete.length > 0) {
-          try {
-            await Promise.all(
-              imagesToDelete.map((url: string) => 
-                deleteFromS3(url).catch((err: any) => {
-                  // Log error but don't fail the update if S3 delete fails
-                  console.error(`Failed to delete image from S3: ${url}`, err.message);
-                })
-              )
-            );
-          } catch (err: any) {
-            console.error("Error deleting old images from S3:", err.message);
-            // Continue with update even if S3 deletion fails
-          }
-        }
-        
-        // Update product with only the new image list (replace, don't merge)
-        const result = await service.updateProduct(productId, sellerId, productData, finalImageUrls);
-        
-        if (!result) {
-            return sendError(res, 404, "Product not found or you are not authorized to update it");
-        }
-        
-        res.json({ success: true, data: result });
-    } catch (err: unknown) {
-        return handleControllerError(res, err);
+    // Parse JSON fields if they come as strings (from multipart/form-data)
+    let productData = { ...req.body };
+
+    // Parse categories if it's a string
+    if (typeof productData.categories === 'string') {
+      try {
+        productData.categories = JSON.parse(productData.categories);
+      } catch (e) {
+        productData.categories = productData.categories.split(',').map((id: string) => parseInt(id.trim())).filter((id: number) => !isNaN(id));
+      }
     }
+
+    // Parse variants if it's a string
+    if (typeof productData.variants === 'string') {
+      try {
+        productData.variants = JSON.parse(productData.variants);
+      } catch (e) {
+        throw new Error('Invalid variants format. Must be valid JSON array.');
+      }
+    }
+
+    // Parse tags if it's a string
+    if (typeof productData.tags === 'string') {
+      try {
+        productData.tags = JSON.parse(productData.tags);
+      } catch (e) {
+        productData.tags = productData.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+      }
+    }
+
+    // Get existing product to compare images and verify ownership
+    const existingProduct = await Product.findByPk(productId);
+    if (!existingProduct) {
+      return sendError(res, 404, "Product not found");
+    }
+
+    if (existingProduct.sellerId !== sellerId) {
+      return sendError(res, 403, "You are not authorized to update this product");
+    }
+
+    // Process variant images
+    for (const variant of productData.variants) {
+      if (!variant.images || !Array.isArray(variant.images) || variant.images.length < 2 || variant.images.length > 4) {
+        return sendValidationError(res, "Each variant must have between 2 and 4 images", "variants");
+      }
+
+      const uploadedImages = [];
+      const base64ImagesToUpload = [];
+
+      for (const img of variant.images) {
+        if (typeof img === 'string' && (img.startsWith('data:image') || (img.length > 100 && !img.startsWith('http')))) {
+          base64ImagesToUpload.push(img);
+        } else if (typeof img === 'string' && img.startsWith('http')) {
+          uploadedImages.push(img);
+        }
+      }
+
+      if (base64ImagesToUpload.length > 0) {
+        const base64Urls = await uploadMultipleBase64ToS3(base64ImagesToUpload, 'products');
+        uploadedImages.push(...base64Urls);
+      }
+
+      variant.images = uploadedImages;
+    }
+
+    // Update product
+    const result = await service.updateProduct(productId, sellerId, productData);
+
+    if (!result) {
+      return sendError(res, 404, "Product not found or you are not authorized to update it");
+    }
+
+    res.json({ success: true, data: result });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
 };
 
 /**
@@ -564,19 +534,19 @@ export const update = async (req: any, res: Response) => {
  *         description: Product not found
  */
 export const deleteProduct = async (req: any, res: Response) => {
-    try {
-        const productId = parseInt(req.params.id);
-        const sellerId = req.userId;
-        const result = await service.deleteProduct(productId, sellerId);
-        
-        if (!result) {
-            return sendError(res, 404, "Product not found or you are not authorized to delete it");
-        }
-        
-        res.json({ success: true, message: "Product deleted successfully" });
-    } catch (err: unknown) {
-        return handleControllerError(res, err);
+  try {
+    const productId = parseInt(req.params.id);
+    const sellerId = req.userId;
+    const result = await service.deleteProduct(productId, sellerId);
+
+    if (!result) {
+      return sendError(res, 404, "Product not found or you are not authorized to delete it");
     }
+
+    res.json({ success: true, message: "Product deleted successfully" });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
 };
 
 /**
@@ -621,26 +591,26 @@ export const deleteProduct = async (req: any, res: Response) => {
  *         description: Product or variant not found
  */
 export const toggleVariantStatus = async (req: any, res: Response) => {
-    try {
-        const productId = parseInt(req.params.id);
-        const variantId = parseInt(req.params.variantId);
-        const sellerId = req.userId;
-        const { isActive } = req.body;
+  try {
+    const productId = parseInt(req.params.id);
+    const variantId = parseInt(req.params.variantId);
+    const sellerId = req.userId;
+    const { isActive } = req.body;
 
-        if (typeof isActive !== 'boolean') {
-            return sendValidationError(res, "isActive must be a boolean", "isActive");
-        }
-
-        const result = await service.toggleVariantStatus(productId, variantId, sellerId, isActive);
-        
-        if (!result) {
-            return sendError(res, 404, "Product/Variant not found or you are not authorized to update it");
-        }
-        
-        res.json({ success: true, data: result, message: "Variant status updated successfully" });
-    } catch (err: unknown) {
-        return handleControllerError(res, err);
+    if (typeof isActive !== 'boolean') {
+      return sendValidationError(res, "isActive must be a boolean", "isActive");
     }
+
+    const result = await service.toggleVariantStatus(productId, variantId, sellerId, isActive);
+
+    if (!result) {
+      return sendError(res, 404, "Product/Variant not found or you are not authorized to update it");
+    }
+
+    res.json({ success: true, data: result, message: "Variant status updated successfully" });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
 };
 
 /**
@@ -689,15 +659,62 @@ export const toggleVariantStatus = async (req: any, res: Response) => {
  *         description: Bad request
  */
 export const searchAll = async (req: any, res: Response) => {
-    try {
-        const q = req.query.q || req.query.query || '';
-        if (!q) {
-            return res.json({ success: true, data: [] });
-        }
-        const result = await service.searchAll(String(q).trim());
-        res.json({ success: true, data: result });
-    } catch (err: unknown) {
-        return handleControllerError(res, err);
+  try {
+    const q = req.query.q || req.query.query || '';
+    if (!q) {
+      return res.json({ success: true, data: [] });
     }
+    const lat = req.query.lat ? parseFloat(req.query.lat as string) : undefined;
+    const lng = req.query.lng ? parseFloat(req.query.lng as string) : undefined;
+    const result = await service.searchAll(String(q).trim(), lat, lng);
+    res.json({ success: true, data: result });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
 };
 
+/**
+ * @swagger
+ * /api/products/{id}/variants/{variantId}/default:
+ *   patch:
+ *     summary: Set a product variant as default
+ *     description: Set a product variant as default (Seller only)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: variantId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Variant set as default successfully
+ *       403:
+ *         description: Forbidden - Not the owner
+ *       404:
+ *         description: Product or variant not found
+ */
+export const setDefaultVariant = async (req: any, res: Response) => {
+  try {
+    const productId = parseInt(req.params.id);
+    const variantId = parseInt(req.params.variantId);
+    const sellerId = req.userId;
+
+    const result = await service.setDefaultVariant(productId, variantId, sellerId);
+
+    if (!result) {
+      return sendError(res, 404, "Product/Variant not found or you are not authorized to update it");
+    }
+
+    res.json({ success: true, data: result, message: "Variant set as default successfully" });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
+};

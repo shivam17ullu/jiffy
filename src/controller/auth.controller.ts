@@ -35,6 +35,106 @@ export default class AuthController {
 	 *       500:
 	 *         description: Server error
 	 */
+
+	/**
+	 * @swagger
+	 * /api/auth/email/send-otp:
+	 *   post:
+	 *     summary: Send OTP for email verification
+	 *     description: Sends a 6-digit OTP to the registered email address.
+	 *     tags: [Authentication]
+	 *     requestBody:
+	 *       required: true
+	 *       content:
+	 *         application/json:
+	 *           schema:
+	 *             type: object
+	 *             required:
+	 *               - email
+	 *             properties:
+	 *               email:
+	 *                 type: string
+	 *                 format: email
+	 *     responses:
+	 *       200:
+	 *         description: Email OTP sent successfully
+	 *       400:
+	 *         description: Bad request
+	 */
+	static async sendEmailOtp(req: Request, res: Response) {
+		try {
+			const { email } = req.body;
+			if (!email) {
+				return sendValidationError(res, "Email is required", "email");
+			}
+
+			const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+			if (!emailRegex.test(email)) {
+				return sendValidationError(res, "Invalid email format", "email");
+			}
+
+			await AuthService.generateEmailOtp(email);
+
+			return createResponse(res, {
+				status: 200,
+				message: "Email OTP sent successfully",
+				response: null,
+			});
+		} catch (error: unknown) {
+			return handleControllerError(res, error, 500);
+		}
+	}
+
+	/**
+	 * @swagger
+	 * /api/auth/email/verify-otp:
+	 *   post:
+	 *     summary: Verify Email OTP
+	 *     description: Verifies the 6-digit email OTP and updates the email verification status.
+	 *     tags: [Authentication]
+	 *     requestBody:
+	 *       required: true
+	 *       content:
+	 *         application/json:
+	 *           schema:
+	 *             type: object
+	 *             required:
+	 *               - email
+	 *               - otp
+	 *             properties:
+	 *               email:
+	 *                 type: string
+	 *                 format: email
+	 *               otp:
+	 *                 type: string
+	 *     responses:
+	 *       200:
+	 *         description: Email verified successfully
+	 *       400:
+	 *         description: Invalid OTP or expired
+	 */
+	static async verifyEmailOtp(req: Request, res: Response) {
+		try {
+			const { email, otp } = req.body;
+			if (!email) {
+				return sendValidationError(res, "Email is required", "email");
+			}
+			if (!otp) {
+				return sendValidationError(res, "OTP is required", "otp");
+			}
+
+			const result = await AuthService.verifyEmailOtp(email, otp);
+
+			return createResponse(res, {
+				status: 200,
+				message: result.message,
+				response: null,
+			});
+		} catch (error: unknown) {
+			return handleControllerError(res, error);
+		}
+	}
+
 	static async sendOtp(req: Request, res: Response) {
 		try {
 			const { phone_number, role } = req.body;
@@ -275,16 +375,11 @@ export default class AuthController {
 	 *             type: object
 	 *             required:
 	 *               - phone_number
-	 *               - email
 	 *               # - password
 	 *             properties:
 	 *               phone_number:
 	 *                 type: string
 	 *                 example: "9876543210"
-	 *               email:
-	 *                 type: string
-	 *                 format: email
-	 *                 example: "seller@example.com"
 	 *               # password:
 	 *               #   type: string
 	 *               #   example: "SecurePassword123"
@@ -296,7 +391,7 @@ export default class AuthController {
 	 */
 	static async registerSeller(req: Request, res: Response) {
 		try {
-			const { phone_number, email } = req.body;
+			const { phone_number } = req.body;
 			// const { password } = req.body; // commented out password
 			if (!phone_number) {
 				return sendValidationError(
@@ -304,9 +399,6 @@ export default class AuthController {
 					"Phone number is required",
 					"phone_number"
 				);
-			}
-			if (!email) {
-				return sendValidationError(res, "Email is required", "email");
 			}
 			// if (!password) {
 			// 	return sendValidationError(res, "Password is required", "password");
@@ -405,6 +497,8 @@ export default class AuthController {
 	 *             properties:
 	 *               userId:
 	 *                 type: integer
+	 *               email:
+	 *                 type: string
 	 *               store:
 	 *                 type: object
 	 *                 properties:

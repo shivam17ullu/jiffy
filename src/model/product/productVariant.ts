@@ -1,5 +1,6 @@
 import { Model, DataTypes, Optional } from 'sequelize';
 import { jiffy } from "../../config/sequelize.js";
+
 interface VariantAttributes {
   id: number;
   productId: number;
@@ -11,8 +12,11 @@ interface VariantAttributes {
   stock: number;
   isStock: boolean;
   isActive: boolean;
+  isDefault: boolean;
+  images?: string[];
 }
-type VariantCreation = Optional<VariantAttributes, 'id' | 'sku' | 'size' | 'color' | 'mrp' | 'isActive' | 'isStock'>;
+
+type VariantCreation = Optional<VariantAttributes, 'id' | 'sku' | 'size' | 'color' | 'mrp' | 'isActive' | 'isStock' | 'isDefault' | 'images'>;
 
 class ProductVariant extends Model<VariantAttributes, VariantCreation> implements VariantAttributes {
   public id!: number;
@@ -25,6 +29,8 @@ class ProductVariant extends Model<VariantAttributes, VariantCreation> implement
   public stock!: number;
   public isStock!: boolean;
   public isActive!: boolean;
+  public isDefault!: boolean;
+  public images?: string[];
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -39,7 +45,9 @@ ProductVariant.init({
   mrp: { type: DataTypes.FLOAT, allowNull: true },
   stock: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
   isStock: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
-  isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true }
+  isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+  isDefault: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  images: { type: DataTypes.JSON, allowNull: true, defaultValue: [] }
 }, { tableName: 'product_variants', sequelize: jiffy });
 
 

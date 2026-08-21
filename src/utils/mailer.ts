@@ -355,3 +355,49 @@ export const sendSellerRejectionEmail = async (email: string, sellerName: string
     console.error("Error sending seller rejection email:", error);
   }
 };
+
+
+export const sendEmailVerificationOTP = async (email: string, otp: string, phone_number?: string) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER || process.env.EMAIL_FROM,
+        pass: process.env.SMTP_PASS, // User must provide this in .env
+      },
+    });
+
+    const fromEmail = process.env.EMAIL_FROM || 'ranjitkumarbgs61@gmail.com';
+
+    const info = await transporter.sendMail({
+      from: `"Drapeit" <${fromEmail}>`,
+      to: email,
+      subject: "Drapeit - Email Verification OTP",
+      text: `Your OTP for email verification is ${otp}. It will expire in 5 minutes.`,
+      html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; color: #334155;">
+                <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
+                    <h1 style="margin: 0; font-size: 24px;">Drapeit</h1>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;">Email Verification</p>
+                </div>
+                
+                <div style="padding: 24px; line-height: 1.5;">
+                    <p>Dear Seller,</p>
+                    <p>Use the following 6-digit OTP to verify your email address:</p>
+                    <div style="background-color: #f1f5f9; padding: 12px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px; color: #0f172a; border-radius: 4px; margin: 20px 0;">
+                        ${otp}
+                    </div>
+                    <p>This OTP is valid for 5 minutes. If you did not request this, please ignore this email.</p>
+                    <p style="margin-bottom: 0;">Warm regards,<br><strong>Team Drapeit</strong></p>
+                </div>
+            </div>
+      `
+    });
+
+    console.log("Email verification OTP sent: %s", info.messageId);
+  } catch (error) {
+    console.error("Error sending email verification OTP:", error);
+  }
+};

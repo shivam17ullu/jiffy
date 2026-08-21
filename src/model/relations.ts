@@ -2,6 +2,7 @@ import User from "./auth/user.js";
 import Role from "./auth/role.js";
 import UserRole from "./auth/userRole.js";
 import OtpLogin from "./auth/otpLogin.js";
+import EmailOtp from "./auth/emailOtp.js";
 import { RefreshToken } from "./auth/refreshToken.js";
 import BuyerProfile from "./profile/buyerProfile.js";
 import SellerProfile from "./profile/sellerProfile.js";
@@ -25,8 +26,8 @@ import Wallet from "./wallet/wallet.js";
 import WalletTransaction from "./wallet/walletTransaction.js";
 import ReturnExchangeRequest from "./order/returnExchangeRequest.js";
 import ReturnExchangeItem from "./order/returnExchangeItem.js";
-
-
+import Coupon from "./coupon/coupon.js";
+import CouponUsage from "./coupon/couponUsage.js";
 
 // ---------------- Associations ----------------
 
@@ -82,6 +83,8 @@ OrderItem.belongsTo(Order, { as: "order", foreignKey: "orderId" });
 Order.hasMany(OrderItem, { as: "items", foreignKey: "orderId" });
 
 OrderItem.belongsTo(Product, { as: "product", foreignKey: "productId" });
+OrderItem.belongsTo(ProductVariant, { as: "variant", foreignKey: "variantId" });
+ProductVariant.hasMany(OrderItem, { as: "orderItems", foreignKey: "variantId" });
 
 Order.belongsTo(User, { as: "buyer", foreignKey: "userId" });
 Order.belongsTo(User, { as: "seller", foreignKey: "sellerId" });
@@ -156,7 +159,15 @@ ReturnExchangeRequest.belongsTo(User, { foreignKey: "userId", as: "buyer" });
 ReturnExchangeItem.belongsTo(ProductVariant, { as: "originalVariant", foreignKey: "variantId" });
 ReturnExchangeItem.belongsTo(ProductVariant, { as: "exchangeVariant", foreignKey: "exchangeVariantId" });
 
+// Coupon relations
+Coupon.hasMany(CouponUsage, { foreignKey: "coupon_id", as: "usages" });
+CouponUsage.belongsTo(Coupon, { foreignKey: "coupon_id", as: "coupon" });
 
+User.hasMany(CouponUsage, { foreignKey: "user_id", as: "couponUsages" });
+CouponUsage.belongsTo(User, { foreignKey: "user_id", as: "user" });
+
+Order.hasMany(CouponUsage, { foreignKey: "order_id", as: "couponUsages" });
+CouponUsage.belongsTo(Order, { foreignKey: "order_id", as: "order" });
 
 // EXPORTS
 export {
@@ -164,6 +175,7 @@ export {
   Role,
   UserRole,
   OtpLogin,
+  EmailOtp,
   RefreshToken,
   BuyerProfile,
   SellerProfile,
@@ -186,6 +198,8 @@ export {
   Wallet,
   WalletTransaction,
   ReturnExchangeRequest,
-  ReturnExchangeItem
+  ReturnExchangeItem,
+  Coupon,
+  CouponUsage
 };
 

@@ -5,3 +5,15 @@
 # firebase
 serviceAccountKey.json
 sellerServiceAccountKey.json
+*ServiceAccountKey.json
+
+# Builds
+dist/
+
+# OS
+.DS_Store
+
+# Tests and Scratch
+test*.ts
+test*.js
+src/script/scratch_*.ts

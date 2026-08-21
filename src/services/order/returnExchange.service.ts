@@ -181,11 +181,16 @@ export const createReturnExchangeRequest = async (
     }
 
     // 7. Update overall Order status to initial return/exchange status
-    const initialOrderStatus = type === "RETURN" ? "Return Processed" : "Exchange Processed";
-    await Order.update(
-      { status: initialOrderStatus },
-      { where: { id: order.id }, transaction: t }
-    );
+    const initialOrderStatus = type === "RETURN" ? "Return Requested" : "Exchange Requested";
+    // Optional: You could remove the global Order.update if you want to rely purely on item status.
+    // For backwards compatibility, we'll keep it but also update OrderItem.
+    
+    for (const item of verifiedItems) {
+      await OrderItem.update(
+        { status: initialOrderStatus },
+        { where: { id: item.orderItemId }, transaction: t }
+      );
+    }
 
     await t.commit();
 
@@ -393,23 +398,95 @@ export const updateRequestStatus = async (
 
     // Sync order status for accepted / rejected / cancelled states
     if (newStatus === "APPROVED") {
-      const orderStatus = lockedRequest.type === "RETURN" ? "Return Accepted" : "Exchange Accepted";
-      await Order.update(
-        { status: orderStatus },
-        { where: { id: lockedRequest.orderId }, transaction: t }
-      );
+      const itemStatus = lockedRequest.type === "RETURN" ? "Return Accepted" : "Exchange Accepted";
+      const exchangeItems = (lockedRequest as any).items || [];
+      for (const item of exchangeItems) {
+        await OrderItem.update(
+          { status: itemStatus },
+          { where: { id: item.orderItemId }, transaction: t }
+        );
+      }
+
+      if (lockedRequest.type === "EXCHANGE") {
+        const originalOrder = await Order.findByPk(lockedRequest.orderId, { transaction: t });
+        if (!originalOrder) {
+          throw new Error("Original order not found.");
+        }
+
+        const exchangeItems = (lockedRequest as any).items || [];
+
+        let exchangeTotal = 0;
+
+        for (const item of exchangeItems) {
+          // Decrement stock of the exchange variant
+          const variant = await ProductVariant.findByPk(item.exchangeVariantId, { transaction: t });
+          if (!variant) {
+            throw new Error(`Exchange variant #${item.exchangeVariantId} not found.`);
+          }
+          if (variant.stock < item.qty) {
+            throw new Error(`Insufficient stock for exchange variant #${item.exchangeVariantId}.`);
+          }
+          await variant.update({ stock: variant.stock - item.qty }, { transaction: t });
+          
+          exchangeTotal += (item.price * item.qty);
+        }
+
+        const newExchangeOrder = await Order.create({
+          userId: lockedRequest.userId,
+          sellerId: lockedRequest.sellerId,
+          total: exchangeTotal,
+          status: "Confirmed",
+          shippingAddress: originalOrder.shippingAddress,
+          paymentInfo: originalOrder.paymentInfo || {
+            method: "Exchange",
+            status: "captured",
+            originalOrderId: lockedRequest.orderId,
+            exchangeRequestId: lockedRequest.id,
+          },
+        }, { transaction: t });
+
+        for (const item of exchangeItems) {
+          await OrderItem.create({
+            orderId: newExchangeOrder.id,
+            productId: item.productId,
+            variantId: item.exchangeVariantId,
+            qty: item.qty,
+            price: item.price,
+            isReplacement: true, // Mark this as a replacement to prevent recursive exchanges
+            status: 'Delivered', // Skip fulfillment for replacement? Or 'Created' depending on logic
+          } as any, { transaction: t });
+        }
+
+        // Send push notification for new exchange order
+        createAndSendNotification(
+          lockedRequest.userId,
+          "Exchange Order Created",
+          `A new order #${newExchangeOrder.id} has been created for your exchange request #${lockedRequest.id}.`,
+          "exchange_order_created",
+          newExchangeOrder.id,
+          "buyer"
+        ).catch((err) => {
+          console.error(`Failed to send exchange order creation notification to buyer #${lockedRequest.userId}:`, err);
+        });
+      }
     } else if (newStatus === "REJECTED") {
-      const orderStatus = lockedRequest.type === "RETURN" ? "Return Rejected" : "Exchange Rejected";
-      await Order.update(
-        { status: orderStatus },
-        { where: { id: lockedRequest.orderId }, transaction: t }
-      );
+      const itemStatus = lockedRequest.type === "RETURN" ? "Return Rejected" : "Exchange Rejected";
+      const exchangeItems = (lockedRequest as any).items || [];
+      for (const item of exchangeItems) {
+        await OrderItem.update(
+          { status: itemStatus },
+          { where: { id: item.orderItemId }, transaction: t }
+        );
+      }
     } else if (newStatus === "CANCELLED") {
-      // Restore overall order status to Delivered if it was return/exchange accepted
-      await Order.update(
-        { status: "Delivered" },
-        { where: { id: lockedRequest.orderId }, transaction: t }
-      );
+      // Restore overall order item status to null/empty if cancelled
+      const exchangeItems = (lockedRequest as any).items || [];
+      for (const item of exchangeItems) {
+        await OrderItem.update(
+          { status: "" },
+          { where: { id: item.orderItemId }, transaction: t }
+        );
+      }
     }
 
     // Trigger business processes on completion
@@ -441,27 +518,23 @@ export const updateRequestStatus = async (
           t
         );
 
-        // Update overall Order status
-        await Order.update(
-          { status: "Refund Successful" },
-          { where: { id: lockedRequest.orderId }, transaction: t }
-        );
+        for (const item of items) {
+          await OrderItem.update(
+            { status: "Refund Successful" },
+            { where: { id: item.orderItemId }, transaction: t }
+          );
+        }
       } else if (lockedRequest.type === "EXCHANGE") {
         for (const item of items) {
-          // Decrement stock of the exchange variant
-          const variant = await ProductVariant.findByPk(item.exchangeVariantId, { transaction: t });
-          if (!variant) {
-            throw new Error(`Exchange variant #${item.exchangeVariantId} not found.`);
-          }
-          if (variant.stock < item.qty) {
-            throw new Error(`Insufficient stock for exchange variant #${item.exchangeVariantId}.`);
-          }
-          await variant.update({ stock: variant.stock - item.qty }, { transaction: t });
+          await OrderItem.update(
+            { status: "Exchange Processed" },
+            { where: { id: item.orderItemId }, transaction: t }
+          );
         }
-
-        // Update overall Order status
+        
+        // Ensure the parent order status returns to Delivered after partial exchanges
         await Order.update(
-          { status: "Exchange Processed" },
+          { status: "Delivered" },
           { where: { id: lockedRequest.orderId }, transaction: t }
         );
       }
