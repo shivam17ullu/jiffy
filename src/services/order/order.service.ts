@@ -321,10 +321,16 @@ export const listOrders = async (
           association: "items",
           include: [
             {
+              association: "variant",
+            },
+            {
               association: "product",
               include: [
                 {
                   association: "categories",
+                },
+                {
+                  association: "variants",
                 },
               ],
             },
@@ -397,8 +403,14 @@ export const getOrderById = async (
         association: "items",
         include: [
           {
+            association: "variant",
+          },
+          {
             association: "product",
             include: [
+              {
+                association: "variants",
+              },
               {
                 association: "categories",
                 include: [
@@ -571,11 +583,32 @@ export const updateOrderStatus = async (
 
   const order = await Order.findByPk(orderId);
   if (order) {
+    // Generate custom title and message based on status
+    let title = "Order Status Updated";
+    let message = `Your order #${order.id} status has been updated to ${status}.`;
+
+    if (status.toLowerCase() === "accepted") {
+      title = "Order Accepted! 🎉";
+      message = `Great news! Your order #${order.id} has been accepted by the seller.`;
+    } else if (status.toLowerCase() === "rejected") {
+      title = "Order Rejected ❌";
+      message = `Unfortunately, your order #${order.id} was rejected by the seller.`;
+    } else if (status.toLowerCase() === "cancelled") {
+      title = "Order Cancelled 🚫";
+      message = `Your order #${order.id} has been cancelled.`;
+    } else if (status.toLowerCase() === "shipped") {
+      title = "Order Shipped! 🚚";
+      message = `Your order #${order.id} is on the way!`;
+    } else if (status.toLowerCase() === "delivered") {
+      title = "Order Delivered! 📦";
+      message = `Your order #${order.id} has been delivered. Enjoy!`;
+    }
+
     // Send status update notification to the buyer
     createAndSendNotification(
       order.userId,
-      "Order Status Updated",
-      `Your order #${order.id} status has been updated to ${status}.`,
+      title,
+      message,
       "order_status_update",
       order.id,
       "buyer"

@@ -33,7 +33,7 @@ export default class AdminService {
 			whereCondition.status = status;
 		}
 
-		return await SellerProfile.findAll({
+		const sellers = await SellerProfile.findAll({
 			order: [["createdAt", "DESC"]],
 			attributes: ["id", "userId", "businessName", "phone", "address", "city", "state", "zipCode", "gstNumber", "createdAt"],
 			include: [
@@ -47,6 +47,13 @@ export default class AdminService {
 					attributes: ["email"],
 				},
 			],
+		});
+
+		return sellers.map(seller => {
+			const data = seller.toJSON() as any;
+			data.email = data.User?.email || null;
+			delete data.User;
+			return data;
 		});
 	}
 
@@ -442,10 +449,16 @@ export default class AdminService {
 						association: "items",
 						include: [
 							{
+								association: "variant",
+							},
+							{
 								association: "product",
 								include: [
 									{
 										association: "categories",
+									},
+									{
+										association: "variants",
 									},
 								],
 							},
@@ -498,8 +511,14 @@ export default class AdminService {
 					association: "items",
 					include: [
 						{
+							association: "variant",
+						},
+						{
 							association: "product",
 							include: [
+								{
+									association: "variants",
+								},
 								{
 									association: "categories",
 									include: [
@@ -786,7 +805,15 @@ export default class AdminService {
 					association: "items",
 					include: [
 						{
+							association: "variant",
+						},
+						{
 							association: "product",
+							include: [
+								{
+									association: "variants",
+								},
+							],
 						},
 					],
 				},

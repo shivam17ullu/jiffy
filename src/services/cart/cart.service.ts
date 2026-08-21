@@ -7,6 +7,7 @@ import {
   SellerProfile,
   Category,
 } from "../../model/relations.js";
+import { ApiError } from "../../utils/ApiError.js";
 
 
 export const getOrCreateCart = async (userId: number) => {
@@ -17,6 +18,26 @@ export const getOrCreateCart = async (userId: number) => {
 
 export const addToCart = async (userId: number, productId: number, variantId: number | null, qty = 1) => {
   const cart = await getOrCreateCart(userId);
+
+  // Check if we can add this product (must be from the same seller)
+  const existingItems = await CartItem.findAll({
+    where: { cartId: cart.id },
+    include: [{ association: "product", attributes: ["sellerId"] }],
+  });
+
+  if (existingItems.length > 0) {
+    const existingSellerId = (existingItems[0] as any).product.sellerId;
+    const newProduct = await Product.findByPk(productId, { attributes: ["sellerId"] });
+    
+    if (!newProduct) {
+      throw ApiError.notFound('Product not found');
+    }
+
+    if (newProduct.sellerId !== existingSellerId) {
+      throw ApiError.badRequest('You can only add products from one seller at a time. Please remove the existing items from your cart to add this product.');
+    }
+  }
+
   // find variant price snapshot
   let price = 0;
   let finalVariantId: number | null = null;
@@ -162,6 +183,7 @@ export const getCart = async (userId: number) => {
               price: variant.price,
               mrp: variant.mrp,
               stock: variant.stock,
+              images: variant.images || [],
             }
           : null,
         stockAvailable: variant ? variant.stock >= item.qty : false,

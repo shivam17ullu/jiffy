@@ -7,19 +7,31 @@ import { readFileSync } from "fs";
 import path from "path";
 
 let sellerApp: App | undefined;
+let buyerApp: App | undefined;
 
+// Initialize Seller Firebase App
 try {
-  const keyPath = path.resolve(process.cwd(), "src/config/sellerServiceAccountKey.json");
-  const sellerServiceAccount = JSON.parse(
-    readFileSync(keyPath, "utf8")
-  );
-
+  const sellerKeyPath = path.resolve(process.cwd(), "src/config/sellerServiceAccountKey.json");
+  const sellerServiceAccount = JSON.parse(readFileSync(sellerKeyPath, "utf8"));
   sellerApp = initializeApp({
     credential: cert(sellerServiceAccount),
   }, 'seller');
   console.log("[Firebase] Seller App initialized successfully.");
 } catch (error) {
   console.error("[Firebase] Failed to initialize Seller App:", error);
+}
+
+// Initialize Buyer Firebase App
+try {
+  const buyerKeyPath = path.resolve(process.cwd(), "src/config/buyerServiceAccountKey.json");
+  const buyerServiceAccount = JSON.parse(readFileSync(buyerKeyPath, "utf8"));
+  buyerApp = initializeApp({
+    credential: cert(buyerServiceAccount),
+  }, 'buyer');
+  console.log("[Firebase] Buyer App initialized successfully.");
+} catch (error) {
+  // If the buyer config doesn't exist, log a warning but don't crash.
+  console.log("[Firebase] Buyer specific config not found, will attempt to fallback to Seller config if they share the same project.");
 }
 
 /**
@@ -41,10 +53,18 @@ export const sendFcmPushNotification = async (
     return;
   }
 
-  if (role === "seller" && sellerApp) {
+  // Determine which Firebase App to use
+  let appToUse: App | undefined;
+  if (role === "buyer") {
+    appToUse = buyerApp || sellerApp; // Fallback to sellerApp if they share the project
+  } else {
+    appToUse = sellerApp;
+  }
+
+  if (appToUse) {
     try {
-      console.log(`[Push Notification] Attempting to send push to ${tokens.length} devices via Firebase Admin SDK (Seller)...`);
-      const messaging = getMessaging(sellerApp);
+      console.log(`[Push Notification] Attempting to send push to ${tokens.length} devices via Firebase Admin SDK (${role || "unknown"})...`);
+      const messaging = getMessaging(appToUse);
       const payload = {
         tokens,
         notification: {
@@ -58,11 +78,31 @@ export const sendFcmPushNotification = async (
         `[Push Notification] Successfully sent via Firebase Admin SDK. Success count: ${response.successCount}, Failure count: ${response.failureCount}`
       );
       if (response.failureCount > 0) {
+        const invalidTokens: string[] = [];
+        
         response.responses.forEach((resp: any, idx: number) => {
           if (!resp.success) {
-            console.error(`[Push Notification] Failed to send to token ${tokens[idx]}:`, resp.error);
+            console.error(`[Push Notification] Failed to send to token ${tokens[idx]}:`, resp.error?.message || resp.error);
+            
+            if (
+              resp.error?.code === "messaging/registration-token-not-registered" ||
+              resp.error?.code === "messaging/invalid-registration-token"
+            ) {
+              invalidTokens.push(tokens[idx]);
+            }
           }
         });
+
+        if (invalidTokens.length > 0) {
+          try {
+            await UserDevice.destroy({
+              where: { fcmToken: invalidTokens }
+            });
+            console.log(`[Push Notification] Automatically removed ${invalidTokens.length} invalid tokens from database.`);
+          } catch (dbError) {
+            console.error("[Push Notification] Failed to remove invalid tokens from database:", dbError);
+          }
+        }
       }
     } catch (error: any) {
       console.error(

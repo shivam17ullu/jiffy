@@ -22,6 +22,7 @@ import wishlistRouter from './routes/wishlist.js';
 import notificationRouter from './routes/notification.js';
 import walletRouter from './routes/wallet.js';
 import returnExchangeRouter from './routes/returnExchange.js';
+import couponRouter from './routes/coupon.js';
 import { globalErrorHandler } from './middleware/errorHandler.js';
 
 
@@ -63,6 +64,7 @@ app.use("/api/seller", sellerRouter)
 app.use("/api/admin", adminRouter)
 app.use("/api/wallet", walletRouter)
 app.use("/api/return-exchange", returnExchangeRouter)
+app.use("/api/coupons", couponRouter)
 app.use("/api", paymentRouter)
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));

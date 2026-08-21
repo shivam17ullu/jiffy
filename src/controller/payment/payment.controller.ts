@@ -143,12 +143,17 @@ export const confirmOrderPayment = async (
 
   const updatedOrders: Order[] = [];
   for (const order of matchedOrders) {
-    if (order.status === "created") {
-      order.status = "confirmed";
+    const validStatuses = ["created", "confirmed", "processing", "shipped", "out for delivery"];
+    const currentStatusLower = (order.status || "").toLowerCase();
+    if (validStatuses.includes(currentStatusLower)) {
+      if (currentStatusLower === "created") {
+        order.status = "confirmed";
+      }
       
       const currentInfo = typeof order.paymentInfo === "object" ? order.paymentInfo : {};
       order.paymentInfo = {
         ...currentInfo,
+        mode: "Online",
         razorpay_order_id: razorpayOrderId,
         razorpay_payment_id: paymentId,
         razorpay_signature: signature,
@@ -157,11 +162,12 @@ export const confirmOrderPayment = async (
         payment_verified_at: new Date().toISOString()
       };
       
+      order.changed('paymentInfo', true);
       await order.save();
       updatedOrders.push(order);
-      console.log(`Order ID ${order.id} status updated to confirmed.`);
+      console.log(`Order ID ${order.id} payment info updated (status: ${order.status}).`);
     } else {
-      console.log(`Order ID ${order.id} is already in status: ${order.status}. Skipping status update.`);
+      console.log(`Order ID ${order.id} is already in status: ${order.status}. Skipping status/payment update.`);
       updatedOrders.push(order);
     }
   }

@@ -12,4 +12,7 @@ orderRouter.get('/:id', authenticate, ctrl.getOrderById);
 // Sellers can update order status; Buyers can cancel their orders
 orderRouter.patch('/:id/status', authenticate, ctrl.updateStatus);
 
+// Upgrade order payment mode (Wallet, Online, or Mix)
+orderRouter.post('/:id/upgrade-payment', authenticate, ctrl.upgradeOrderPayment);
+
 export default orderRouter;

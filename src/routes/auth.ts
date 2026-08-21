@@ -16,4 +16,7 @@ authRouter.post("/admin-logout", AuthController.adminLogout);
 authRouter.post("/device-token", AuthController.registerDevice);
 
 
+authRouter.post("/email/send-otp", AuthController.sendEmailOtp);
+authRouter.post("/email/verify-otp", AuthController.verifyEmailOtp);
+
 export default authRouter;

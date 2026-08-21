@@ -9,6 +9,8 @@ interface OrderItemAttributes {
   variantId?: number | null;
   qty: number;
   price: number; // snapshot
+  status?: string;
+  isReplacement?: boolean;
 }
 type OrderItemCreation = Optional<OrderItemAttributes, 'id' | 'variantId'>;
 
@@ -19,6 +21,8 @@ class OrderItem extends Model<OrderItemAttributes, OrderItemCreation> implements
   public variantId?: number | null;
   public qty!: number;
   public price!: number;
+  public status?: string;
+  public isReplacement?: boolean;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -29,7 +33,9 @@ OrderItem.init({
   productId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
   variantId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
   qty: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
-  price: { type: DataTypes.FLOAT, allowNull: false }
+  price: { type: DataTypes.FLOAT, allowNull: false },
+  status: { type: DataTypes.STRING(30), allowNull: true },
+  isReplacement: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }
 }, { tableName: 'order_items', sequelize: jiffy });
 
 export default OrderItem;

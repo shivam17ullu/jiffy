@@ -1,4 +1,5 @@
 import * as service from '../../services/order/order.service.js';
+import { getOrCreateWallet, debitWallet } from "../../services/wallet/wallet.service.js";
 import { Response } from "express";
 import { User, Role, Order } from "../../model/relations.js";
 import {
@@ -305,6 +306,168 @@ export const updateStatus = async (req: any, res: Response) => {
 
     const updatedOrder = await service.updateOrderStatus(orderId, order.sellerId, status);
     return res.json({ success: true, data: updatedOrder });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
+};
+/**
+ * @swagger
+ * /api/orders/{id}/upgrade-payment:
+ *   post:
+ *     summary: Upgrade COD order to Wallet or Online payment
+ *     description: Pay the remaining COD amount using Wallet, Razorpay, or a mix of both.
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               walletAmount:
+ *                 type: number
+ *               razorpay_order_id:
+ *                 type: string
+ *               razorpay_payment_id:
+ *                 type: string
+ *               razorpay_signature:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Order upgraded successfully
+ *       400:
+ *         description: Invalid input or signature
+ *       404:
+ *         description: Order not found
+ */
+export const upgradeOrderPayment = async (req: any, res: Response) => {
+  try {
+    const userId = req.userId || req.user?.id;
+    const orderId = req.params.id;
+    const { walletAmount, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    const order = await Order.findOne({ where: { id: orderId, userId } });
+    if (!order) {
+      return sendError(res, 404, "Order not found");
+    }
+
+    const validStatuses = ["created", "confirmed", "processing", "shipped", "out for delivery"];
+    const currentStatusLower = (order.status || "").toLowerCase();
+    if (!validStatuses.includes(currentStatusLower)) {
+      return sendError(res, 400, `Cannot upgrade payment for order in status: ${order.status}`);
+    }
+
+    let pInfo = typeof order.paymentInfo === "object" ? order.paymentInfo : {};
+    if (pInfo.mode !== "COD") {
+      return sendError(res, 400, "Order is not COD");
+    }
+
+    const currentWalletDeducted = Number(pInfo.walletAmount || 0);
+    const remainingAmount = Number((order.total - currentWalletDeducted).toFixed(2));
+    
+    if (remainingAmount <= 0) {
+      return sendError(res, 400, "Order is already fully paid");
+    }
+
+    let debitAmount = 0;
+    if (walletAmount && Number(walletAmount) > 0) {
+      debitAmount = Number(walletAmount);
+      if (debitAmount > remainingAmount) {
+        return sendError(res, 400, "Wallet amount cannot exceed remaining order total");
+      }
+      
+      const wallet = await getOrCreateWallet(userId);
+      if (Number(wallet.balance) < debitAmount) {
+        return sendError(res, 400, "Insufficient wallet balance");
+      }
+    }
+
+    let isFullWallet = debitAmount === remainingAmount;
+
+    // Verify Razorpay if it's not a full wallet payment
+    if (!isFullWallet) {
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        return sendError(res, 400, "Razorpay details are required for partial/full online payment");
+      }
+
+      const keySecret = process.env.RAZORPAY_KEY_SECRET;
+      if (!keySecret) {
+        return sendError(res, 500, "Razorpay credentials not configured");
+      }
+
+      const crypto = require("crypto");
+      const generated_signature = crypto
+        .createHmac("sha256", keySecret)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest("hex");
+
+      if (generated_signature !== razorpay_signature) {
+        return sendError(res, 400, "Payment signature verification failed");
+      }
+    }
+
+    let transaction = null;
+    if (debitAmount > 0) {
+      const { jiffy } = require("../../config/sequelize.js");
+      transaction = await jiffy.transaction();
+      try {
+        await debitWallet(
+          {
+            userId,
+            amount: debitAmount,
+            referenceId: orderId.toString(),
+            referenceType: "ORDER",
+            category: "ORDER_PAYMENT",
+            description: `Order ${orderId} upgraded payment`
+          },
+          transaction
+        );
+        await transaction.commit();
+      } catch (err) {
+        if (transaction) await transaction.rollback();
+        throw err;
+      }
+    }
+
+    // Update Order
+    const newWalletTotal = currentWalletDeducted + debitAmount;
+    
+    pInfo = {
+      ...pInfo,
+      mode: isFullWallet ? "Wallet" : "Online",
+      method: isFullWallet ? "wallet" : "Razorpay",
+      walletAmount: newWalletTotal,
+      status: "captured",
+      payment_verified_at: new Date().toISOString()
+    };
+
+    if (!isFullWallet) {
+      pInfo.razorpay_order_id = razorpay_order_id;
+      pInfo.razorpay_payment_id = razorpay_payment_id;
+      pInfo.razorpay_signature = razorpay_signature;
+    }
+
+    order.paymentInfo = pInfo;
+    if (currentStatusLower === "created") {
+      order.status = "confirmed";
+    }
+    
+    order.changed("paymentInfo", true);
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Order payment upgraded successfully",
+      data: { id: order.id, status: order.status, paymentInfo: order.paymentInfo }
+    });
   } catch (err: unknown) {
     return handleControllerError(res, err);
   }

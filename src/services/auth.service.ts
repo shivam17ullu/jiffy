@@ -22,7 +22,8 @@ import { ApiError } from "../utils/ApiError.js";
 import { sendOtpFast2SMS } from "../utils/fast2sms.js";
 import { generateOtp } from "../utils/generateOtp.js";
 import { uploadBase64ToS3 } from "../utils/s3Upload.js";
-import { sendSellerOnboardEmail, sendSellerWelcomeEmail } from "../utils/mailer.js";
+import { sendSellerOnboardEmail, sendSellerWelcomeEmail, sendEmailVerificationOTP } from "../utils/mailer.js";
+import EmailOtp from "../model/auth/emailOtp.js";
 import {
 	assertSellerCanAccess,
 	assertSellerCanAccessByPhone,
@@ -33,6 +34,41 @@ const ACCESS_TOKEN_EXP = "1d";
 const REFRESH_TOKEN_EXP_MIN = 60 * 24 * 7; // 7 days
 
 export default class AuthService {
+
+	static async generateEmailOtp(email: string) {
+		const user = await User.findOne({ where: { email } });
+		if (user) {
+			throw ApiError.conflict("Email is already in use", "email");
+		}
+		const otp = await generateOtp();
+		const expires_at = addMinutes(new Date(), 5);
+
+		await EmailOtp.create({ email, otp, expires_at });
+		await sendEmailVerificationOTP(email, otp);
+		return otp;
+	}
+
+	static async verifyEmailOtp(email: string, otp: string) {
+		const otpRecord = await EmailOtp.findOne({
+			where: { email, otp, is_used: false },
+			order: [["created_at", "DESC"]],
+		});
+
+		if (!otpRecord) throw new Error("Invalid OTP");
+		if (isBefore(otpRecord.expires_at, new Date())) throw new Error("OTP expired");
+
+		otpRecord.is_used = true;
+		await otpRecord.save();
+
+		const user = await User.findOne({ where: { email } });
+		if (user) {
+			user.is_email_verified = true;
+			await user.save();
+		}
+
+		return { success: true, message: "Email verified successfully" };
+	}
+
 	static async generateOtp(phone_number: string, role?: string) {
 		if (role === 'seller') {
 			const user = await User.findOne({ where: { phone_number } });
@@ -201,11 +237,11 @@ export default class AuthService {
 	}
 
 	static async registerSeller(payload: SellerFirstStepBody) {
-		const { phone_number, email } = payload;
+		const { phone_number } = payload;
 
 		const existingAccounts = await User.findAll({
 			where: {
-				[Op.or]: [{ phone_number }, { email }],
+				phone_number
 			},
 			include: [SellerProfile],
 		});
@@ -222,17 +258,11 @@ export default class AuthService {
 							"phone_number"
 						);
 					}
-					throw ApiError.conflict("Email is already registered as a seller", "email");
 				}
 			}
 
 			if (existingAccounts.length === 1) {
 				userToUse = existingAccounts[0];
-			} else {
-				throw ApiError.conflict(
-					"Phone number and Email belong to different accounts",
-					"email"
-				);
 			}
 		}
 
@@ -251,14 +281,12 @@ export default class AuthService {
 				userToUse = await User.create(
 					{
 						phone_number,
-						email,
 						is_active: false,
 					},
 					{ transaction }
 				);
 			} else {
-				if (userToUse.email !== email || userToUse.phone_number !== phone_number) {
-					userToUse.email = email;
+				if (userToUse.phone_number !== phone_number) {
 					userToUse.phone_number = phone_number;
 					await userToUse.save({ transaction });
 				}
@@ -385,6 +413,8 @@ export default class AuthService {
 					storeAddress: storePayload.storeAddress || storePayload.store_address,
 					pincode: storePayload.pincode,
 					storeCategory: storePayload.storeCategory || storePayload.store_category,
+					latitude: storePayload.latitude,
+					longitude: storePayload.longitude,
 				},
 				{ transaction }
 			);
@@ -429,12 +459,18 @@ export default class AuthService {
 
 			console.log(verified);
 
+			const user = await User.findByPk(Number(payload.userId));
+			if (user && payload.email) {
+				(user as any).email = payload.email;
+				(user as any).is_email_verified = true;
+				await user.save({ transaction });
+			}
+
 			await transaction.commit();
 
 			// Fetch user to get email and fallback phone number
-			const user = await User.findByPk(Number(payload.userId));
 			const userPhone = user?.phone_number || seller.phone || "";
-			const userEmail = (user as any)?.email || "";
+			const userEmail = payload.email || (user as any)?.email || "";
 			const sellerName = bankPayload.accountHolderName || bankPayload.account_holder_name || "N/A";
 
 			// Send email notification to admins
@@ -540,15 +576,14 @@ export default class AuthService {
 			throw ApiError.notFound("User not found", "userId");
 		}
 
-		// 2. Clean up any existing devices for different users or roles that are using this deviceId
-		// to prevent sending push notifications of user A to user B when logging in on the same device.
+		// 2. Clean up any existing devices for different users that are using this deviceId
+		// for the SAME role, to prevent sending push notifications of user A to user B when
+		// logging in on the same device. We do not want to delete the other app's (role) token.
 		await UserDevice.destroy({
 			where: {
 				deviceId,
-				[Op.or]: [
-					{ userId: { [Op.ne]: userId } },
-					{ role: { [Op.ne]: role } }
-				]
+				role,
+				userId: { [Op.ne]: userId }
 			}
 		});
 

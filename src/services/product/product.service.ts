@@ -39,7 +39,7 @@ async function generateUniqueSlug(name: string, transaction?: any, excludeProduc
 	return uniqueSlug;
 }
 
-export const createProduct = async (payload: any, sellerId: number, imageUrls: string[] = []) => {
+export const createProduct = async (payload: any, sellerId: number) => {
 	const t = await jiffy.transaction();
 	try {
 		payload.slug = await generateUniqueSlug(payload.name, t);
@@ -47,21 +47,31 @@ export const createProduct = async (payload: any, sellerId: number, imageUrls: s
 		const {
 			categories = [],
 			variants = [],
-			images = [],
 			tags = [],
 			...rest
 		} = payload;
 
-		// Use uploaded S3 URLs if provided, otherwise use provided URLs
-		const finalImages = imageUrls.length > 0 ? imageUrls : images;
-
 		const product = await Product.create(
-			{ ...rest, images: finalImages, tags, sellerId },
+			{ ...rest, tags, sellerId },
 			{ transaction: t }
 		);
 
 		if (categories.length > 0) {
 			await product.addCategories(categories, { transaction: t });
+		}
+
+		if (variants && variants.length > 0) {
+			let hasDefault = false;
+			for (const v of variants) {
+				if (v.isDefault && !hasDefault) {
+					hasDefault = true;
+				} else {
+					v.isDefault = false;
+				}
+			}
+			if (!hasDefault) {
+				variants[0].isDefault = true;
+			}
 		}
 
 		for (const v of variants) {
@@ -95,6 +105,8 @@ export const listProducts = async (opts: any) => {
 		sort,
 		storeName,
 		userId, // Optional: to check wishlist status
+		lat,
+		lng,
 	} = opts;
 
 	const where: any = { isActive: true };
@@ -157,6 +169,34 @@ export const listProducts = async (opts: any) => {
 	if (brand) {
 		where.brand = { [Op.like]: `%${brand}%` };
 	}
+
+	// ── Geo filter – restrict to stores within radiusKm of buyer ───────────────
+	if (lat != null && lng != null) {
+		const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 15;
+		const radiusM = radiusKm * 1000;
+		const nearbyStores = await Store.findAll({
+			attributes: ['id'],
+			include: [{
+				model: SellerProfile,
+				attributes: ['userId'],
+				required: true,
+			}],
+			where: Sequelize.where(
+				Sequelize.literal(
+					`ST_Distance_Sphere(POINT(longitude, latitude), POINT(${lng}, ${lat}))`
+				),
+				{ [Op.lte]: radiusM }
+			),
+		});
+		const nearbySellerIds = nearbyStores.map((s: any) => s.SellerProfile?.userId).filter(Boolean);
+		// Intersect with any existing sellerId filter (e.g. from storeName)
+		if (where.sellerId && where.sellerId[Op.in]) {
+			where.sellerId[Op.in] = where.sellerId[Op.in].filter((id: number) => nearbySellerIds.includes(id));
+		} else {
+			where.sellerId = { [Op.in]: nearbySellerIds };
+		}
+	}
+	// ────────────────────────────────────────────────────────────────────────────
 
 	// Category filtering - handle hierarchical categories
 	let categoryFilter: any = null;
@@ -308,8 +348,11 @@ export const listProducts = async (opts: any) => {
 			qty: cartVariantQtyMap.get(v.id) || 0,
 		}));
 
+		const allImages = mappedVariants.flatMap((v: any) => (Array.isArray(v.images) ? v.images : [])).filter(Boolean);
+
 		return {
 			...rawProduct,
+			images: allImages,
 			variants: mappedVariants,
 			priceRange: {
 				min: minPrice,
@@ -467,8 +510,11 @@ export const getProductById = async (id: number, userId?: number, checkSellerSta
 		qty: cartVariantQtyMap.get(v.id) || 0,
 	}));
 
+	const allImages = mappedVariants.flatMap((v: any) => (Array.isArray(v.images) ? v.images : [])).filter(Boolean);
+
 	return {
 		...rawProduct,
+		images: allImages,
 		variants: mappedVariants,
 		priceRange: {
 			min: minPrice,
@@ -499,16 +545,9 @@ export const getProductById = async (id: number, userId?: number, checkSellerSta
 	};
 };
 // Update product with seller ownership check
-export const updateProduct = async (id: number, sellerId: number, payload: any, imageUrls: string[] | null = null) => {
+export const updateProduct = async (id: number, sellerId: number, payload: any) => {
 	const t = await jiffy.transaction();
 	try {
-		// If imageUrls is provided (even if empty array), replace existing images
-		// If imageUrls is null, don't touch the images field
-		if (imageUrls !== null) {
-			// Replace images with the new list (frontend sends the complete list)
-			payload.images = imageUrls;
-		}
-
 		if (payload.name) {
 			payload.slug = await generateUniqueSlug(payload.name, t, id);
 		}
@@ -541,6 +580,20 @@ export const updateProduct = async (id: number, sellerId: number, payload: any, 
 			}
 
 			if (variants && Array.isArray(variants)) {
+				if (variants.length > 0) {
+					let hasDefault = false;
+					for (const v of variants) {
+						if (v.isDefault && !hasDefault) {
+							hasDefault = true;
+						} else {
+							v.isDefault = false;
+						}
+					}
+					if (!hasDefault) {
+						variants[0].isDefault = true;
+					}
+				}
+
 				const existingVariants = await ProductVariant.findAll({
 					where: { productId: id },
 					transaction: t
@@ -679,8 +732,11 @@ export const listSellerProducts = async (sellerId: number, opts: any) => {
 		const minPrice = prices.length > 0 ? Math.min(...prices) : null;
 		const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
 
+		const allImages = variants.flatMap((v: any) => (Array.isArray(v.images) ? v.images : [])).filter(Boolean);
+
 		return {
 			...product.toJSON(),
+			images: allImages,
 			priceRange: {
 				min: minPrice,
 				max: maxPrice,
@@ -714,7 +770,38 @@ export const toggleVariantStatus = async (productId: number, variantId: number, 
 	return await getProductById(productId);
 };
 
-export const searchAll = async (q: string) => {
+export const setDefaultVariant = async (productId: number, variantId: number, sellerId: number) => {
+	// Verify the product belongs to the seller
+	const product = await Product.findOne({ where: { id: productId, sellerId } });
+	if (!product) {
+		return null;
+	}
+
+	const variant = await ProductVariant.findOne({ where: { id: variantId, productId } });
+	if (!variant) {
+		return null;
+	}
+
+	const t = await jiffy.transaction();
+	try {
+		// Set all variants to non-default
+		await ProductVariant.update(
+			{ isDefault: false },
+			{ where: { productId }, transaction: t }
+		);
+
+		// Set the specified variant to default
+		await variant.update({ isDefault: true }, { transaction: t });
+
+		await t.commit();
+		return await getProductById(productId);
+	} catch (err) {
+		await t.rollback();
+		throw err;
+	}
+};
+
+export const searchAll = async (q: string, lat?: number, lng?: number) => {
 	const term = `%${q}%`;
 
 	// 1. Search products
@@ -743,6 +830,10 @@ export const searchAll = async (q: string) => {
 						]
 					}
 				]
+			},
+			{
+				association: "variants",
+				required: false
 			}
 		],
 		limit: 20
@@ -752,14 +843,25 @@ export const searchAll = async (q: string) => {
 		id: p.id,
 		name: p.name,
 		type: "product",
-		image: (p.images && p.images.length > 0) ? p.images[0] : null,
+		image: (p.variants && p.variants.length > 0 && p.variants[0].images && p.variants[0].images.length > 0) ? p.variants[0].images[0] : null,
 		isSellerOpen: null
 	}));
 
 	// 2. Search stores
+	const storeGeoWhere: any = { is_active: true };
+	if (lat != null && lng != null) {
+		const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 15;
+		const radiusM = radiusKm * 1000;
+		storeGeoWhere[Op.and] = [
+			Sequelize.where(
+				Sequelize.literal(`ST_Distance_Sphere(POINT(longitude, latitude), POINT(${lng}, ${lat}))`),
+				{ [Op.lte]: radiusM }
+			)
+		];
+	}
 	const matchedStores = await Store.findAll({
 		where: {
-			is_active: true,
+			...storeGeoWhere,
 			[Op.or]: [
 				{ storeName: { [Op.like]: term } },
 				{ '$SellerProfile.businessName$': { [Op.like]: term } }
@@ -796,12 +898,12 @@ export const searchAll = async (q: string) => {
 
 	// 3. Search brands
 	const productsWithBrands = await Product.findAll({
-		attributes: ['brand', 'images'],
+		attributes: ['brand'],
 		where: {
+			isActive: true,
 			brand: {
 				[Op.like]: term
-			},
-			isActive: true
+			}
 		},
 		include: [
 			{
@@ -820,6 +922,10 @@ export const searchAll = async (q: string) => {
 						]
 					}
 				]
+			},
+			{
+				association: "variants",
+				required: false
 			}
 		],
 		limit: 100
@@ -835,7 +941,7 @@ export const searchAll = async (q: string) => {
 					id: brandName,
 					name: brandName,
 					type: "brand",
-					image: (p.images && p.images.length > 0) ? p.images[0] : null,
+					image: ((p as any).variants && (p as any).variants.length > 0 && (p as any).variants[0].images && (p as any).variants[0].images.length > 0) ? (p as any).variants[0].images[0] : null,
 					isSellerOpen: null
 				});
 			}

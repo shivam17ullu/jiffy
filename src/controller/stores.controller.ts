@@ -44,8 +44,10 @@ export default class StoreController {
    */
   static async getStores(req: Request, res: Response) {
     try {
-      const { zipCode, storeCategory } = req.query;
-      const stores = await StoreService.getstores(zipCode as string, storeCategory as string);
+      const { zipCode, storeCategory, lat, lng } = req.query;
+      const latNum = lat ? parseFloat(lat as string) : undefined;
+      const lngNum = lng ? parseFloat(lng as string) : undefined;
+      const stores = await StoreService.getstores(zipCode as string, storeCategory as string, latNum, lngNum);
 
       if (!stores || (Array.isArray(stores) && stores.length === 0)) {
         return sendError(res, 404, "No stores found");

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import AdminController from "../controller/admin.controller.js";
+import AdminCouponController from "../controller/coupon/admin.coupon.controller.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 
 const adminRouter = Router();
@@ -22,5 +23,12 @@ adminRouter.patch("/orders/:id/status", AdminController.updateOrderStatus);
 adminRouter.get("/revenue", AdminController.getPlatformRevenue);
 adminRouter.get("/revenue/sellers/:id", AdminController.getParticularSellerRevenue);
 adminRouter.get("/wallets", AdminController.getWallets);
+
+// Coupon Routes
+adminRouter.post("/coupons", AdminCouponController.create);
+adminRouter.get("/coupons", AdminCouponController.list);
+adminRouter.get("/coupons/:id", AdminCouponController.getById);
+adminRouter.put("/coupons/:id", AdminCouponController.update);
+adminRouter.delete("/coupons/:id", AdminCouponController.delete);
 
 export default adminRouter;

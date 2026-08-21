@@ -6,6 +6,7 @@ interface UserAttributes {
   phone_number: string;
   is_active: boolean;
   email?: string;
+  is_email_verified?: boolean;
   password?: string;
   created_at?: Date;
   updated_at?: Date;
@@ -13,7 +14,7 @@ interface UserAttributes {
 
 type UserCreationAttributes = Optional<
   UserAttributes,
-  "id" | "is_active" | "created_at" | "updated_at"
+  "id" | "is_active" | "is_email_verified" | "created_at" | "updated_at"
 >;
 
 class User
@@ -23,6 +24,7 @@ class User
   public id!: number;
   public phone_number!: string;
   public email?: string;
+  public is_email_verified!: boolean;
   public password?: string;
   public is_active!: boolean;
   public readonly created_at!: Date;
@@ -42,6 +44,10 @@ User.init(
     },
     email: {
       type: DataTypes.STRING(50),
+    },
+    is_email_verified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
     password: {
       type: DataTypes.STRING(100),
