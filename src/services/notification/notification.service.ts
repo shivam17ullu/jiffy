@@ -31,6 +31,7 @@ try {
   console.log("[Firebase] Buyer App initialized successfully.");
 } catch (error) {
   // If the buyer config doesn't exist, log a warning but don't crash.
+  console.error("[Firebase] Failed to load Buyer config. Error:", error);
   console.log("[Firebase] Buyer specific config not found, will attempt to fallback to Seller config if they share the same project.");
 }
 
@@ -79,11 +80,11 @@ export const sendFcmPushNotification = async (
       );
       if (response.failureCount > 0) {
         const invalidTokens: string[] = [];
-        
+
         response.responses.forEach((resp: any, idx: number) => {
           if (!resp.success) {
             console.error(`[Push Notification] Failed to send to token ${tokens[idx]}:`, resp.error?.message || resp.error);
-            
+
             if (
               resp.error?.code === "messaging/registration-token-not-registered" ||
               resp.error?.code === "messaging/invalid-registration-token"
