@@ -288,6 +288,64 @@ export default class AuthController {
 
 	/**
 	 * @swagger
+	 * /api/seller/refresh-token:
+	 *   post:
+	 *     summary: Refresh seller access token
+	 *     description: Generates a new access token for seller using a valid refresh token. Verifies seller role and active status.
+	 *     tags: [Seller, Authentication]
+	 *     requestBody:
+	 *       required: true
+	 *       content:
+	 *         application/json:
+	 *           schema:
+	 *             type: object
+	 *             required:
+	 *               - refreshToken
+	 *             properties:
+	 *               refreshToken:
+	 *                 type: string
+	 *                 example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+	 *     responses:
+	 *       200:
+	 *         description: Token refreshed successfully
+	 *       400:
+	 *         description: Bad request (missing refresh token)
+	 *       401:
+	 *         description: Invalid or expired refresh token
+	 *       403:
+	 *         description: Forbidden - Not a seller or inactive seller
+	 */
+	static async refreshSellerToken(req: Request, res: Response) {
+		try {
+			const { refreshToken } = req.body;
+			if (!refreshToken) {
+				return sendValidationError(
+					res,
+					"Refresh token is required",
+					"refreshToken"
+				);
+			}
+
+			const deviceInfo = (req.headers["user-agent"] as string) || "unknown";
+			const ip = req.ip;
+
+			const result = await AuthService.refreshSellerToken(
+				refreshToken,
+				deviceInfo,
+				ip
+			);
+			return createResponse(res, {
+				status: 200,
+				message: "Token refreshed successfully",
+				response: result,
+			});
+		} catch (error: unknown) {
+			return handleControllerError(res, error, 401);
+		}
+	}
+
+	/**
+	 * @swagger
 	 * /api/auth/logout:
 	 *   post:
 	 *     summary: Logout user
@@ -513,6 +571,17 @@ export default class AuthController {
 	 *                     enum: [Men, Women, Kids, All]
 	 *                   phone:
 	 *                     type: string
+	 *                   openingDays:
+	 *                     type: array
+	 *                     items:
+	 *                       type: string
+	 *                     example: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+	 *                   openingTime:
+	 *                     type: string
+	 *                     example: "09:00 AM"
+	 *                   closingTime:
+	 *                     type: string
+	 *                     example: "09:00 PM"
 	 *               bankDetails:
 	 *                 type: object
 	 *                 properties:

@@ -10,10 +10,12 @@ interface ProductAttributes {
   details?: string;
   tags?: string[];
   isActive: boolean;
+  isReturnable?: boolean;
+  isExchangeable?: boolean;
   sellerId: number;          // ⭐ NEW
 }
 
-type ProductCreation = Optional<ProductAttributes, "id" | "description" | "brand" | "details" | "tags" | "isActive">;
+type ProductCreation = Optional<ProductAttributes, "id" | "description" | "brand" | "details" | "tags" | "isActive" | "isReturnable" | "isExchangeable">;
 
 class Product extends Model<ProductAttributes, ProductCreation> implements ProductAttributes {
   public id!: number;
@@ -24,6 +26,8 @@ class Product extends Model<ProductAttributes, ProductCreation> implements Produ
   public details?: string;
   public tags?: string[];
   public isActive!: boolean;
+  public isReturnable!: boolean;
+  public isExchangeable!: boolean;
   public sellerId!: number;     // ⭐ NEW
 
   public readonly createdAt!: Date;
@@ -43,6 +47,8 @@ Product.init(
     details: { type: DataTypes.TEXT, allowNull: true },
     tags: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    isReturnable: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    isExchangeable: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
 
     // ⭐ NEW seller field
     sellerId: {

@@ -225,6 +225,63 @@ export default class AuthService {
 		return { accessToken, refreshToken };
 	}
 
+	static async refreshSellerToken(
+		oldToken: string,
+		deviceInfo?: string,
+		ip?: string
+	) {
+		const stored = await RefreshToken.findOne({
+			where: { token: oldToken, is_revoked: false },
+		});
+
+		if (!stored) throw new Error("Invalid refresh token");
+
+		if (isBefore((stored as RefreshToken).expires_at, new Date()))
+			throw new Error("Refresh token expired");
+
+		let payload: { userId: number };
+		try {
+			payload = jwt.verify(oldToken, process.env.TOKEN as string) as {
+				userId: number;
+			};
+		} catch {
+			throw new Error("Invalid refresh token");
+		}
+
+		const user = await User.findByPk(payload.userId, {
+			include: [
+				Role,
+				{
+					model: SellerProfile,
+					include: [Store, Document, BankDetail, VerifiedSellers],
+				},
+			],
+		});
+
+		if (!user) {
+			throw ApiError.notFound("User account not found");
+		}
+
+		if (!userHasSellerRole(user as { Roles?: { name: string }[] })) {
+			throw ApiError.forbidden("Access denied. Seller role required.");
+		}
+
+		await assertSellerCanAccess(payload.userId);
+
+		// Revoke old refresh token for security/rotation
+		(stored as RefreshToken).is_revoked = true;
+		await stored.save();
+
+		const accessToken = this.generateAccessToken(payload.userId);
+		const refreshToken = await this.generateRefreshToken(
+			payload.userId,
+			deviceInfo,
+			ip
+		);
+
+		return { accessToken, refreshToken, user };
+	}
+
 	static async revokeRefreshToken(token: string) {
 		const stored = await RefreshToken.findOne({ where: { token } });
 
@@ -415,6 +472,9 @@ export default class AuthService {
 					storeCategory: storePayload.storeCategory || storePayload.store_category,
 					latitude: storePayload.latitude,
 					longitude: storePayload.longitude,
+					openingDays: storePayload.openingDays || storePayload.opening_days || storePayload.storeOpeningDays || storePayload.store_opening_days || (payload as any).openingDays || (payload as any).opening_days || (payload as any).storeOpeningDays || (payload as any).store_opening_days || [],
+					openingTime: storePayload.openingTime || storePayload.opening_time || storePayload.storeOpeningTime || storePayload.store_opening_time || (payload as any).openingTime || (payload as any).opening_time || (payload as any).storeOpeningTime || (payload as any).store_opening_time || null,
+					closingTime: storePayload.closingTime || storePayload.closing_time || storePayload.storeClosingTime || storePayload.store_closing_time || (payload as any).closingTime || (payload as any).closing_time || (payload as any).storeClosingTime || (payload as any).store_closing_time || null,
 				},
 				{ transaction }
 			);

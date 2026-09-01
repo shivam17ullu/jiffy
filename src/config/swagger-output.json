@@ -239,6 +239,35 @@
         }
       }
     },
+    "/api/auth/seller/refresh-token": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "user-agent",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "refreshToken": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/auth/admin-login": {
       "post": {
         "description": "",
@@ -440,7 +469,17 @@
             "type": "string"
           },
           {
+            "name": "pincode",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "storeCategory",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "category",
             "in": "query",
             "type": "string"
           },
@@ -450,7 +489,22 @@
             "type": "string"
           },
           {
+            "name": "latitude",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "lng",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "long",
             "in": "query",
             "type": "string"
           }
@@ -689,6 +743,31 @@
             "type": "string"
           },
           {
+            "name": "lat",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "latitude",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "long",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "page",
             "in": "query",
             "type": "string"
@@ -735,16 +814,6 @@
           },
           {
             "name": "storeName",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "lat",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "lng",
             "in": "query",
             "type": "string"
           }
@@ -796,7 +865,22 @@
             "type": "string"
           },
           {
+            "name": "latitude",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "lng",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "long",
             "in": "query",
             "type": "string"
           }
@@ -963,6 +1047,85 @@
               "type": "object",
               "properties": {
                 "isActive": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/products/{id}/variants/{variantId}/default": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "variantId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/products/{id}/return-exchange": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "isReturnable": {
+                  "example": "any"
+                },
+                "isExchangeable": {
+                  "example": "any"
+                },
+                "is_returnable": {
+                  "example": "any"
+                },
+                "is_exchangeable": {
+                  "example": "any"
+                },
+                "isReturnExchangeable": {
+                  "example": "any"
+                },
+                "is_return_exchangeable": {
                   "example": "any"
                 }
               }
@@ -1159,6 +1322,11 @@
         "description": "",
         "parameters": [
           {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "body",
             "in": "body",
             "schema": {
@@ -1190,6 +1358,11 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
           }
         ],
         "responses": {
@@ -1210,16 +1383,9 @@
             "type": "string"
           },
           {
-            "name": "body",
-            "in": "body",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "userId": {
-                  "example": "any"
-                }
-              }
-            }
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
           }
         ],
         "responses": {
@@ -1238,16 +1404,9 @@
             "type": "string"
           },
           {
-            "name": "body",
-            "in": "body",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "userId": {
-                  "example": "any"
-                }
-              }
-            }
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
           }
         ],
         "responses": {
@@ -1419,6 +1578,35 @@
         }
       }
     },
+    "/api/seller/refresh-token": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "user-agent",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "refreshToken": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/seller/stats": {
       "get": {
         "description": "",
@@ -1486,6 +1674,26 @@
     },
     "/api/seller/reupload-docs": {
       "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/seller/profile": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/seller/me": {
+      "get": {
         "description": "",
         "responses": {
           "200": {

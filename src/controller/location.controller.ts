@@ -57,14 +57,18 @@ import {
 class LocationController {
   static async create(req: Request, res: Response) {
     try {
-      const { userId, addressLine1 } = req.body;
+      const userId = (req as any).userId || req.body.userId;
+      const { addressLine1 } = req.body;
       if (!userId) {
         return sendValidationError(res, "User ID is required", "userId");
       }
       if (!addressLine1) {
         return sendValidationError(res, "Address is required", "addressLine1");
       }
-      const result = await LocationService.createLocation(req.body);
+      const result = await LocationService.createLocation({
+        ...req.body,
+        userId: Number(userId),
+      });
       return createResponse(res, {
         status: 201,
         message: "Location added successfully",
@@ -82,8 +86,8 @@ class LocationController {
    *     summary: Get user locations
    *     description: Get all shipping addresses for a user
    *     tags: [Location]
- *     security:
- *       - bearerAuth: []
+   *     security:
+   *       - bearerAuth: []
    *     parameters:
    *       - in: path
    *         name: userId
@@ -98,7 +102,11 @@ class LocationController {
    */
   static async list(req: Request, res: Response) {
     try {
-      const result = await LocationService.getUserLocations(Number(req.params.userId));
+      const userId = Number(req.params.userId || (req as any).userId);
+      if (isNaN(userId)) {
+        return sendError(res, 400, "Invalid user ID");
+      }
+      const result = await LocationService.getUserLocations(userId);
       return createResponse(res, {
         status: 200,
         message: "Locations fetched",
@@ -160,14 +168,18 @@ class LocationController {
   static async update(req: Request, res: Response) {
     try {
       const locationId = Number(req.params.id);
-      let userId = Number((req as any).userId || req.body.userId);
+      if (isNaN(locationId)) {
+        return sendError(res, 400, "Invalid location ID");
+      }
+
+      let userId = Number((req as any).userId || req.body?.userId || req.query?.userId);
 
       if (!userId || isNaN(userId)) {
         const loc = await LocationService.getLocationById(locationId);
         if (!loc) {
           return sendError(res, 404, "Location not found");
         }
-        userId = (loc as any).userId;
+        userId = Number((loc as any).userId);
       }
 
       const result = await LocationService.updateLocation(
@@ -201,17 +213,6 @@ class LocationController {
    *         required: true
    *         schema:
    *           type: integer
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - userId
-   *             properties:
-   *               userId:
-   *                 type: integer
    *     responses:
    *       200:
    *         description: Location deleted successfully
@@ -220,14 +221,30 @@ class LocationController {
    */
   static async delete(req: Request, res: Response) {
     try {
+      const locationId = Number(req.params.id);
+      if (isNaN(locationId)) {
+        return sendError(res, 400, "Invalid location ID");
+      }
+
+      let userId = Number((req as any).userId || req.body?.userId || req.query?.userId);
+
+      const loc = await LocationService.getLocationById(locationId);
+      if (!loc) {
+        return sendError(res, 404, "Location not found");
+      }
+
+      if (userId && !isNaN(userId) && loc.userId && Number(loc.userId) !== userId) {
+        return sendError(res, 403, "Unauthorized to delete this location");
+      }
+
       await LocationService.deleteLocation(
-        Number(req.params.id),
-        Number(req.body.userId)
+        locationId,
+        !isNaN(userId) && userId > 0 ? userId : undefined
       );
 
       return createResponse(res, {
         status: 200,
-        message: "Location deleted",
+        message: "Location deleted successfully",
       });
     } catch (e: unknown) {
       return handleControllerError(res, e, 500);

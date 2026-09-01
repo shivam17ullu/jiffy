@@ -45,22 +45,34 @@ class LocationService {
   static async updateLocation(id: number, userId: number, data: any) {
     const isDefault = String(data.isDefault) === "true" || data.isDefault === 1 || data.isDefault === true;
     if (isDefault) {
+      const updateWhere: any = {};
+      if (userId && !isNaN(userId)) {
+        updateWhere.userId = userId;
+      }
       await Location.update(
         { isDefault: false },
-        { where: { userId } }
+        { where: updateWhere }
       );
       data.isDefault = true;
     } else if (data.isDefault !== undefined) {
       data.isDefault = false;
     }
 
-    await Location.update(data, { where: { id, userId } });
+    const where: any = { id };
+    if (userId && !isNaN(userId)) {
+      where.userId = userId;
+    }
+    await Location.update(data, { where });
     return await Location.findByPk(id);
   }
 
   // DELETE
-  static async deleteLocation(id: number, userId: number) {
-    return await Location.destroy({ where: { id, userId } });
+  static async deleteLocation(id: number, userId?: number) {
+    const where: any = { id };
+    if (userId && !isNaN(userId)) {
+      where.userId = userId;
+    }
+    return await Location.destroy({ where });
   }
 }
 

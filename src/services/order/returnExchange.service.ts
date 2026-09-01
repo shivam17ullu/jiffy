@@ -4,6 +4,7 @@ import {
   ReturnExchangeItem,
   Order,
   OrderItem,
+  Product,
   ProductVariant,
   User,
   SellerProfile,
@@ -94,6 +95,17 @@ export const createReturnExchangeRequest = async (
 
       if (orderItem.productId !== productId || orderItem.variantId !== variantId) {
         throw new Error(`Item specifications for order item #${orderItemId} do not match the database.`);
+      }
+
+      // Check product-level return / exchange eligibility
+      const product = await Product.findByPk(productId, { transaction: t });
+      if (product) {
+        if (type === "RETURN" && (product.isReturnable === false || (product as any).is_returnable === false)) {
+          throw new Error(`Product "${product.name}" is not eligible for return.`);
+        }
+        if (type === "EXCHANGE" && (product.isExchangeable === false || (product as any).is_exchangeable === false)) {
+          throw new Error(`Product "${product.name}" is not eligible for exchange.`);
+        }
       }
 
       // Check remaining returnable quantity
