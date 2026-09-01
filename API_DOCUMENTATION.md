@@ -317,7 +317,10 @@ Complete seller profile setup. **Requires Authentication**
     "storeName": "My Store",
     "storeAddress": "123 Main St",
     "pincode": "123456",
-    "phone": "9876543210"
+    "phone": "9876543210",
+    "openingDays": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+    "openingTime": "09:00 AM",
+    "closingTime": "09:00 PM"
   },
   "bankDetails": {
     "accountHolderName": "John Doe",
@@ -340,6 +343,86 @@ Complete seller profile setup. **Requires Authentication**
   "success": false,
   "status": 400,
   "message": "All onboarding fields are required",
+  "errors": []
+}
+```
+
+---
+
+### 8. Refresh Token (Seller)
+
+**POST** `/api/seller/refresh-token` or `/api/auth/seller/refresh-token`
+
+Generate a new access token and rotate refresh token for an authenticated seller. Validates that the user has the seller role and active status.
+
+**Request Body:**
+
+```json
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**Response:**
+
+```json
+{
+  "status": 200,
+  "message": "Token refreshed successfully",
+  "data": {
+    "accessToken": "eyJhbGci...",
+    "refreshToken": "eyJhbGci...",
+    "user": {
+      "id": 10,
+      "phone_number": "9876543210",
+      "email": "seller@example.com",
+      "is_active": true,
+      "Roles": [
+        {
+          "id": 2,
+          "name": "seller"
+        }
+      ],
+      "SellerProfile": {
+        "id": 1,
+        "userId": 10,
+        "businessName": "Fashion Hub",
+        "phone": "9876543210"
+      }
+    }
+  }
+}
+```
+
+**Error Response (Missing Refresh Token):**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "Refresh token is required",
+  "errors": []
+}
+```
+
+**Error Response (Invalid or Expired Refresh Token):**
+
+```json
+{
+  "success": false,
+  "status": 401,
+  "message": "Invalid or revoked refresh token",
+  "errors": []
+}
+```
+
+**Error Response (Not a Seller):**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Access denied. Seller role required.",
   "errors": []
 }
 ```
@@ -474,6 +557,8 @@ Create a new product. **Requires Authentication**
   "images": ["https://example.com/image1.jpg"],
   "tags": ["shirt", "men"],
   "categories": [1, 2],
+  "isReturnable": true,
+  "isExchangeable": true,
   "variants": [
     {
       "sku": "BS-S-M",
@@ -525,7 +610,7 @@ Get paginated list of seller's own products. **Requires Authentication**
 
 **PUT** `/api/products/:id`
 
-Update product details. **Requires Authentication & Ownership**
+Update product details including return/exchange flags. **Requires Authentication & Ownership**
 
 **Error Response:**
 
@@ -540,7 +625,39 @@ Update product details. **Requires Authentication & Ownership**
 
 ---
 
-### 6. Delete Product (Seller Only)
+### 6. Update Product Return & Exchange Policy (Seller Only)
+
+**PATCH** `/api/products/:id/return-exchange`
+
+Update whether a product is eligible for returns and/or exchanges. **Requires Authentication & Ownership**
+
+**Request Body:**
+
+```json
+{
+  "isReturnable": true,
+  "isExchangeable": false
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Product return/exchange policy updated successfully",
+  "data": {
+    "id": 1,
+    "name": "Blue Shirt",
+    "isReturnable": true,
+    "isExchangeable": false
+  }
+}
+```
+
+---
+
+### 7. Delete Product (Seller Only)
 
 **DELETE** `/api/products/:id`
 
@@ -1202,7 +1319,22 @@ Add a new shipping address.
 
 ## 👨‍💼 Seller APIs
 
-### 1. Get Seller Dashboard Statistics
+### 1. Seller Refresh Token
+
+**POST** `/api/seller/refresh-token` (or `/api/auth/seller/refresh-token`)
+
+Refresh access token specifically for seller application. Requires valid `refreshToken` in request body.
+
+**Request Body:**
+```json
+{
+  "refreshToken": "eyJhbGci..."
+}
+```
+
+---
+
+### 2. Get Seller Dashboard Statistics
 
 **GET** `/api/seller/stats`
 
@@ -1277,6 +1409,80 @@ Get comprehensive seller statistics. **Requires Authentication (Seller only)**
   "status": 403,
   "message": "Seller account is pending admin approval.",
   "errors": []
+}
+```
+
+### 2. Get Full Seller Profile
+
+**GET** `/api/seller/profile` (or `/api/seller/me`)
+
+Retrieve all details of the authenticated seller including profile, store (with opening schedule), bank details, documents, and verification status. **Requires Authentication (Seller only)**
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "status": 200,
+  "message": "Seller profile retrieved successfully",
+  "data": {
+    "id": 1,
+    "userId": 10,
+    "businessName": "Fashion Hub",
+    "phone": "9876543210",
+    "address": "123 Fashion Street",
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "zipCode": "400001",
+    "gstNumber": "27AAAAA0000A1Z5",
+    "email": "seller@example.com",
+    "phone_number": "9876543210",
+    "createdAt": "2026-08-29T06:30:00.000Z",
+    "updatedAt": "2026-08-29T06:30:00.000Z",
+    "store": {
+      "id": 1,
+      "sellerId": 1,
+      "storeName": "Fashion Hub Main Store",
+      "storeAddress": "123 Fashion Street, Mumbai",
+      "pincode": "400001",
+      "storeCategory": "Men",
+      "is_active": true,
+      "isSellerOpen": true,
+      "latitude": 19.076,
+      "longitude": 72.8777,
+      "openingDays": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+      "openingTime": "09:00 AM",
+      "closingTime": "09:00 PM",
+      "createdAt": "2026-08-29T06:30:00.000Z",
+      "updatedAt": "2026-08-29T06:30:00.000Z"
+    },
+    "Document": {
+      "aadhaarUrl": "https://...",
+      "panUrl": "https://...",
+      "gstUrl": "https://...",
+      "storeDocUrl": "https://...",
+      "storeImageUrl": "https://..."
+    },
+    "BankDetail": {
+      "accountHolderName": "Fashion Hub",
+      "accountNumber": "1234567890",
+      "ifscCode": "HDFC0001234",
+      "termsAccepted": true
+    },
+    "VerifiedSeller": {
+      "id": 1,
+      "is_active": true,
+      "status": "approved",
+      "rejection_reason": null
+    },
+    "User": {
+      "id": 10,
+      "phone_number": "9876543210",
+      "email": "seller@example.com",
+      "is_active": true
+    },
+    "reason": null
+  }
 }
 ```
 

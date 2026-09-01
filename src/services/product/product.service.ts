@@ -48,11 +48,31 @@ export const createProduct = async (payload: any, sellerId: number) => {
 			categories = [],
 			variants = [],
 			tags = [],
+			isReturnable,
+			isExchangeable,
 			...rest
 		} = payload;
 
+		const isReturnableBool = isReturnable !== undefined
+			? (typeof isReturnable === "string" ? isReturnable === "true" : Boolean(isReturnable))
+			: (payload.is_returnable !== undefined
+				? (typeof payload.is_returnable === "string" ? payload.is_returnable === "true" : Boolean(payload.is_returnable))
+				: true);
+
+		const isExchangeableBool = isExchangeable !== undefined
+			? (typeof isExchangeable === "string" ? isExchangeable === "true" : Boolean(isExchangeable))
+			: (payload.is_exchangeable !== undefined
+				? (typeof payload.is_exchangeable === "string" ? payload.is_exchangeable === "true" : Boolean(payload.is_exchangeable))
+				: true);
+
 		const product = await Product.create(
-			{ ...rest, tags, sellerId },
+			{
+				...rest,
+				tags,
+				sellerId,
+				isReturnable: isReturnableBool,
+				isExchangeable: isExchangeableBool,
+			},
 			{ transaction: t }
 		);
 
@@ -171,8 +191,8 @@ export const listProducts = async (opts: any) => {
 	}
 
 	// ── Geo filter – restrict to stores within radiusKm of buyer ───────────────
-	if (lat != null && lng != null) {
-		const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 15;
+	if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+		const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 10;
 		const radiusM = radiusKm * 1000;
 		const nearbyStores = await Store.findAll({
 			attributes: ['id'],
@@ -556,11 +576,24 @@ export const updateProduct = async (id: number, sellerId: number, payload: any) 
 			categories,
 			variants,
 			tags,
+			isReturnable,
+			isExchangeable,
 			...rest
 		} = payload;
 
 		const updateData: any = { ...rest };
 		if (tags !== undefined) updateData.tags = tags;
+		if (isReturnable !== undefined) {
+			updateData.isReturnable = typeof isReturnable === "string" ? isReturnable === "true" : Boolean(isReturnable);
+		} else if (payload.is_returnable !== undefined) {
+			updateData.isReturnable = typeof payload.is_returnable === "string" ? payload.is_returnable === "true" : Boolean(payload.is_returnable);
+		}
+
+		if (isExchangeable !== undefined) {
+			updateData.isExchangeable = typeof isExchangeable === "string" ? isExchangeable === "true" : Boolean(isExchangeable);
+		} else if (payload.is_exchangeable !== undefined) {
+			updateData.isExchangeable = typeof payload.is_exchangeable === "string" ? payload.is_exchangeable === "true" : Boolean(payload.is_exchangeable);
+		}
 
 		const [updatedCount] = await Product.update(updateData, {
 			where: { id, sellerId },
@@ -640,6 +673,50 @@ export const updateProduct = async (id: number, sellerId: number, payload: any) 
 // Delete product with seller ownership check
 export const deleteProduct = async (id: number, sellerId: number) => {
 	return await Product.destroy({ where: { id, sellerId } });
+};
+
+// Update product return and exchange flags
+export const updateProductReturnExchange = async (
+	id: number,
+	sellerId: number,
+	policy: {
+		isReturnable?: boolean | string;
+		isExchangeable?: boolean | string;
+		is_returnable?: boolean | string;
+		is_exchangeable?: boolean | string;
+		isReturnExchangeable?: boolean | string;
+		is_return_exchangeable?: boolean | string;
+	}
+) => {
+	const product = await Product.findOne({ where: { id, sellerId } });
+	if (!product) return null;
+
+	const updateData: any = {};
+
+	if (policy.isReturnExchangeable !== undefined) {
+		const val = typeof policy.isReturnExchangeable === "string" ? policy.isReturnExchangeable === "true" : Boolean(policy.isReturnExchangeable);
+		updateData.isReturnable = val;
+		updateData.isExchangeable = val;
+	} else if (policy.is_return_exchangeable !== undefined) {
+		const val = typeof policy.is_return_exchangeable === "string" ? policy.is_return_exchangeable === "true" : Boolean(policy.is_return_exchangeable);
+		updateData.isReturnable = val;
+		updateData.isExchangeable = val;
+	}
+
+	if (policy.isReturnable !== undefined) {
+		updateData.isReturnable = typeof policy.isReturnable === "string" ? policy.isReturnable === "true" : Boolean(policy.isReturnable);
+	} else if (policy.is_returnable !== undefined) {
+		updateData.isReturnable = typeof policy.is_returnable === "string" ? policy.is_returnable === "true" : Boolean(policy.is_returnable);
+	}
+
+	if (policy.isExchangeable !== undefined) {
+		updateData.isExchangeable = typeof policy.isExchangeable === "string" ? policy.isExchangeable === "true" : Boolean(policy.isExchangeable);
+	} else if (policy.is_exchangeable !== undefined) {
+		updateData.isExchangeable = typeof policy.is_exchangeable === "string" ? policy.is_exchangeable === "true" : Boolean(policy.is_exchangeable);
+	}
+
+	await product.update(updateData);
+	return await getProductById(id);
 };
 
 export const listSellerProducts = async (sellerId: number, opts: any) => {
@@ -803,16 +880,41 @@ export const setDefaultVariant = async (productId: number, variantId: number, se
 
 export const searchAll = async (q: string, lat?: number, lng?: number) => {
 	const term = `%${q}%`;
+	const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 10;
+	const radiusM = radiusKm * 1000;
+	const hasGeo = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+
+	let nearbySellerIds: number[] | null = null;
+	if (hasGeo) {
+		const nearbyStores = await Store.findAll({
+			attributes: ['id'],
+			include: [{
+				model: SellerProfile,
+				attributes: ['userId'],
+				required: true,
+			}],
+			where: Sequelize.where(
+				Sequelize.literal(`ST_Distance_Sphere(POINT(longitude, latitude), POINT(${lng}, ${lat}))`),
+				{ [Op.lte]: radiusM }
+			),
+		});
+		nearbySellerIds = nearbyStores.map((s: any) => s.SellerProfile?.userId).filter(Boolean);
+	}
 
 	// 1. Search products
+	const productWhere: any = {
+		isActive: true,
+		[Op.or]: [
+			{ name: { [Op.like]: term } },
+			{ description: { [Op.like]: term } }
+		]
+	};
+	if (nearbySellerIds !== null) {
+		productWhere.sellerId = { [Op.in]: nearbySellerIds };
+	}
+
 	const matchedProducts = await Product.findAll({
-		where: {
-			isActive: true,
-			[Op.or]: [
-				{ name: { [Op.like]: term } },
-				{ description: { [Op.like]: term } }
-			]
-		},
+		where: productWhere,
 		include: [
 			{
 				association: "seller",
@@ -849,9 +951,7 @@ export const searchAll = async (q: string, lat?: number, lng?: number) => {
 
 	// 2. Search stores
 	const storeGeoWhere: any = { is_active: true };
-	if (lat != null && lng != null) {
-		const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 15;
-		const radiusM = radiusKm * 1000;
+	if (hasGeo) {
 		storeGeoWhere[Op.and] = [
 			Sequelize.where(
 				Sequelize.literal(`ST_Distance_Sphere(POINT(longitude, latitude), POINT(${lng}, ${lat}))`),
@@ -897,14 +997,19 @@ export const searchAll = async (q: string, lat?: number, lng?: number) => {
 	}));
 
 	// 3. Search brands
+	const brandWhere: any = {
+		isActive: true,
+		brand: {
+			[Op.like]: term
+		}
+	};
+	if (nearbySellerIds !== null) {
+		brandWhere.sellerId = { [Op.in]: nearbySellerIds };
+	}
+
 	const productsWithBrands = await Product.findAll({
 		attributes: ['brand'],
-		where: {
-			isActive: true,
-			brand: {
-				[Op.like]: term
-			}
-		},
+		where: brandWhere,
 		include: [
 			{
 				association: "seller",

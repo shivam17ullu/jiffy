@@ -44,13 +44,23 @@ export default class StoreController {
    */
   static async getStores(req: Request, res: Response) {
     try {
-      const { zipCode, storeCategory, lat, lng } = req.query;
-      const latNum = lat ? parseFloat(lat as string) : undefined;
-      const lngNum = lng ? parseFloat(lng as string) : undefined;
-      const stores = await StoreService.getstores(zipCode as string, storeCategory as string, latNum, lngNum);
+      const zipCode = (req.query.zipCode || req.query.pincode) as string | undefined;
+      const storeCategory = (req.query.storeCategory || req.query.category) as string | undefined;
+
+      const rawLat = req.query.lat ?? req.query.latitude;
+      const rawLng = req.query.lng ?? req.query.longitude ?? req.query.long;
+
+      const latNum = rawLat !== undefined && rawLat !== '' ? parseFloat(rawLat as string) : undefined;
+      const lngNum = rawLng !== undefined && rawLng !== '' ? parseFloat(rawLng as string) : undefined;
+
+      const stores = await StoreService.getstores(zipCode, storeCategory, latNum, lngNum);
 
       if (!stores || (Array.isArray(stores) && stores.length === 0)) {
-        return sendError(res, 404, "No stores found");
+        return createResponse(res, {
+          status: 200,
+          message: "No stores found",
+          response: [],
+        });
       }
 
       const formattedStores = stores.map((store: any) => {
@@ -61,6 +71,16 @@ export default class StoreController {
         } else {
           storeData.store_image = null;
         }
+
+        const firstStore = storeData.Stores?.[0] || storeData.Store || null;
+        storeData.store = firstStore;
+        storeData.Store = firstStore;
+        if (firstStore) {
+          storeData.distanceKm = firstStore.distanceKm;
+          storeData.estimatedTimeMins = firstStore.estimatedTimeMins;
+          storeData.isSellerOpen = firstStore.isSellerOpen;
+        }
+
         return storeData;
       });
 
@@ -124,10 +144,14 @@ export default class StoreController {
         return sendError(res, 404, "Store/seller profile not found");
       }
 
+      const storeData = store.toJSON() as any;
+      storeData.store = storeData.Stores?.[0] || storeData.Store || null;
+      storeData.Store = storeData.Store || storeData.Stores?.[0] || null;
+
       createResponse(res, {
         status: 200,
         message: "Store/seller profile retrieved successfully",
-        response: store,
+        response: storeData,
       });
     } catch (error: unknown) {
       return handleControllerError(res, error, 500);

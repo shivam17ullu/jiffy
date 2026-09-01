@@ -87,6 +87,8 @@ export default class AdminController {
 				message: "Seller details retrieved successfully",
 				response: {
 					...responseData,
+					store: responseData.Stores?.[0] || responseData.Store || null,
+					Store: responseData.Store || responseData.Stores?.[0] || null,
 					reason: reasonMessage
 				},
 			});

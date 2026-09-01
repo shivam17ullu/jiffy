@@ -46,6 +46,9 @@ export default class AdminService {
 					model: User,
 					attributes: ["email"],
 				},
+				{
+					model: Store,
+				},
 			],
 		});
 
@@ -53,6 +56,8 @@ export default class AdminService {
 			const data = seller.toJSON() as any;
 			data.email = data.User?.email || null;
 			delete data.User;
+			data.store = data.Stores?.[0] || data.Store || null;
+			data.Store = data.Store || data.Stores?.[0] || null;
 			return data;
 		});
 	}

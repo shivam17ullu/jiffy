@@ -57,8 +57,8 @@ export const getWishlist = async (userId: number, opts: any = {}) => {
 
   // ── Geo filter – find seller IDs whose store is within radius ───────────────
   let geoSellerIds: number[] | null = null;
-  if (lat != null && lng != null) {
-    const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 15;
+  if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+    const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 10;
     const radiusM = radiusKm * 1000;
     const nearbyStores = await Store.findAll({
       attributes: ['id'],

@@ -10,8 +10,8 @@ const EARTH_RADIUS_M = 6371000;
  * caller's position.  Returns null when coordinates are not provided.
  */
 function buildGeoWhere(lat?: number, lng?: number): any {
-  const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 15;
-  if (lat == null || lng == null) return null;
+  const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 10;
+  if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) return null;
 
   const radiusM = radiusKm * 1000;
 
@@ -19,7 +19,7 @@ function buildGeoWhere(lat?: number, lng?: number): any {
   return Sequelize.where(
     Sequelize.literal(
       `ST_Distance_Sphere(
-         POINT(longitude, latitude),
+         POINT(Stores.longitude, Stores.latitude),
          POINT(${lng}, ${lat})
        )`
     ),
@@ -29,27 +29,34 @@ function buildGeoWhere(lat?: number, lng?: number): any {
 
 export default class StoreService {
   static async getstores(zipCode?: string, storeCategory?: string, lat?: number, lng?: number) {
-    const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 15;
-    let storeWhere: any = {};
-
+    const hasGeo = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+    const geoWhere = hasGeo ? buildGeoWhere(lat, lng) : null;
+    const conditions: any[] = [];
 
     if (storeCategory && storeCategory.toLowerCase() !== "all") {
-      storeWhere.storeCategory = storeCategory;
+      conditions.push({ storeCategory });
     }
 
-    // ── Geo filter ──────────────────────────────────────────────────────────
-    const geoWhere = buildGeoWhere(lat, lng);
-    if (geoWhere) {
-      storeWhere = { ...storeWhere, [Op.and]: [geoWhere] };
+    // Only filter by exact pincode if geo coordinates are not provided
+    if (zipCode && !hasGeo) {
+      conditions.push({ pincode: zipCode });
     }
-    // ────────────────────────────────────────────────────────────────────────
+
+    if (geoWhere) {
+      conditions.push(geoWhere);
+    }
+
+    let storeWhere: any = {};
+    if (conditions.length > 0) {
+      storeWhere = { [Op.and]: conditions };
+    }
 
     let storeInclude: any = {
       model: Store,
-      required: (Object.keys(storeWhere).length > 0 || geoWhere != null),
+      required: true,
     };
 
-    if (lat != null && lng != null) {
+    if (hasGeo) {
       storeInclude.attributes = {
         include: [
           [
@@ -65,21 +72,30 @@ export default class StoreService {
       };
     }
 
-    if (Object.keys(storeWhere).length > 0) {
+    if (conditions.length > 0) {
       storeInclude.where = storeWhere;
     }
 
-    // Order by latest store first
-    let orderClause: any = [
-      [Store, 'createdAt', 'DESC']
-    ];
+    // Order by nearest store first if lat/lng provided, else latest store first
+    let orderClause: any = hasGeo
+      ? [
+          [
+            Sequelize.literal(`ST_Distance_Sphere(POINT(Stores.longitude, Stores.latitude), POINT(${lng}, ${lat}))`),
+            'ASC'
+          ]
+        ]
+      : [
+          [Store, 'createdAt', 'DESC']
+        ];
 
     return await SellerProfile.findAll({
       order: orderClause,
+      subQuery: false,
       include: [
         {
           model: VerifiedSellers,
           where: { is_active: true, status: "approved" }, // INNER JOIN condition
+          required: true,
         },
         storeInclude,
         {

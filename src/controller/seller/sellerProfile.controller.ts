@@ -31,3 +31,44 @@ export const getStatus = async (req: any, res: Response) => {
         return handleControllerError(res, err);
     }
 };
+
+/**
+ * @swagger
+ * /api/seller/profile:
+ *   get:
+ *     summary: Get complete seller profile
+ *     description: Retrieve all details of the authenticated seller including profile, store, bank details, documents, and verification status.
+ *     tags: [Seller]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Seller profile retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Not a seller
+ *       404:
+ *         description: Seller profile not found
+ */
+export const getProfile = async (req: any, res: Response) => {
+    try {
+        const userId = req.userId;
+        const profileData = await service.getSellerProfile(userId);
+        
+        if (!profileData) {
+            return handleControllerError(res, new Error("Seller profile not found"), 404);
+        }
+
+        res.json({
+            success: true,
+            status: 200,
+            message: "Seller profile retrieved successfully",
+            response: profileData,
+            data: profileData
+        });
+    } catch (err: unknown) {
+        return handleControllerError(res, err);
+    }
+};
+

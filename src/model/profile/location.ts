@@ -28,7 +28,27 @@ type LocationCreationAttributes = Optional<
   "id" | "sellerId" | "buyerId" | "latitude" | "longitude" | "createdAt" | "updatedAt"
 >;
 
-class Location extends Model<LocationAttributes, LocationCreationAttributes> {}
+class Location extends Model<LocationAttributes, LocationCreationAttributes> implements LocationAttributes {
+  public id!: number;
+  public userId!: number;
+  public sellerId?: number | null;
+  public buyerId?: number | null;
+  public type!: string;
+  public addressLine1!: string;
+  public addressLine2?: string;
+  public city!: string;
+  public state!: string;
+  public country!: string;
+  public pincode!: string;
+  public latitude?: number | null;
+  public longitude?: number | null;
+  public isDefault!: boolean;
+  public phone_number?: string;
+  public name?: string;
+  public alternate_number?: string;
+  public readonly createdAt!: Date;
+  public readonly updatedAt!: Date;
+}
 
 Location.init(
   {

@@ -25,6 +25,9 @@ export interface StoreAttributes {
   isSellerOpen?: boolean;
   latitude?: number;
   longitude?: number;
+  openingDays?: string[];
+  openingTime?: string;
+  closingTime?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }

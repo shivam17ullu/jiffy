@@ -59,6 +59,16 @@ import { Product } from '../../model/relations.js';
  *                 type: string
  *                 example: '[{"sku":"BS-S-M","size":"M","color":"Blue","price":500,"mrp":800,"stock":100,"isStock":true,"isDefault":true}]'
  *                 description: JSON array string of variant objects
+ *               isReturnable:
+ *                 type: boolean
+ *                 default: true
+ *                 example: true
+ *                 description: Whether product is eligible for returns
+ *               isExchangeable:
+ *                 type: boolean
+ *                 default: true
+ *                 example: true
+ *                 description: Whether product is eligible for exchange
  *     responses:
  *       200:
  *         description: Product created successfully. Images uploaded to S3 and URLs stored in product.
@@ -237,6 +247,9 @@ export const create = async (req: any, res: any) => {
  *                   type: integer
  */
 export const list = async (req: any, res: Response) => {
+  const rawLat = req.query.lat ?? req.query.latitude;
+  const rawLng = req.query.lng ?? req.query.longitude ?? req.query.long;
+
   const params = {
     page: parseInt(req.query.page) || 1,
     limit: parseInt(req.query.limit) || 20,
@@ -248,8 +261,8 @@ export const list = async (req: any, res: Response) => {
     sort: req.query.sort,
     storeName: req.query.storeName,
     userId: req.userId || undefined, // Include userId if authenticated
-    lat: req.query.lat ? parseFloat(req.query.lat as string) : undefined,
-    lng: req.query.lng ? parseFloat(req.query.lng as string) : undefined,
+    lat: rawLat !== undefined && rawLat !== '' ? parseFloat(rawLat as string) : undefined,
+    lng: rawLng !== undefined && rawLng !== '' ? parseFloat(rawLng as string) : undefined,
   };
   const result = await service.listProducts(params);
   res.json({ success: true, ...result });
@@ -664,8 +677,11 @@ export const searchAll = async (req: any, res: Response) => {
     if (!q) {
       return res.json({ success: true, data: [] });
     }
-    const lat = req.query.lat ? parseFloat(req.query.lat as string) : undefined;
-    const lng = req.query.lng ? parseFloat(req.query.lng as string) : undefined;
+    const rawLat = req.query.lat ?? req.query.latitude;
+    const rawLng = req.query.lng ?? req.query.longitude ?? req.query.long;
+
+    const lat = rawLat !== undefined && rawLat !== '' ? parseFloat(rawLat as string) : undefined;
+    const lng = rawLng !== undefined && rawLng !== '' ? parseFloat(rawLng as string) : undefined;
     const result = await service.searchAll(String(q).trim(), lat, lng);
     res.json({ success: true, data: result });
   } catch (err: unknown) {
@@ -718,3 +734,78 @@ export const setDefaultVariant = async (req: any, res: Response) => {
     return handleControllerError(res, err);
   }
 };
+
+/**
+ * @swagger
+ * /api/products/{id}/return-exchange:
+ *   patch:
+ *     summary: Update product return and exchange eligibility
+ *     description: Update whether a product accepts returns or exchanges (Seller only)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Product ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               isReturnable:
+ *                 type: boolean
+ *                 description: Whether return is acceptable
+ *                 example: true
+ *               isExchangeable:
+ *                 type: boolean
+ *                 description: Whether exchange is acceptable
+ *                 example: false
+ *     responses:
+ *       200:
+ *         description: Return/exchange policy updated successfully
+ *       400:
+ *         description: Bad request - no policy parameters provided
+ *       403:
+ *         description: Forbidden - Not the product owner
+ *       404:
+ *         description: Product not found
+ */
+export const updateReturnExchange = async (req: any, res: Response) => {
+  try {
+    const productId = parseInt(req.params.id);
+    const sellerId = req.userId;
+    const { isReturnable, isExchangeable, is_returnable, is_exchangeable, isReturnExchangeable, is_return_exchangeable } = req.body;
+
+    if (
+      isReturnable === undefined &&
+      isExchangeable === undefined &&
+      is_returnable === undefined &&
+      is_exchangeable === undefined &&
+      isReturnExchangeable === undefined &&
+      is_return_exchangeable === undefined
+    ) {
+      return sendValidationError(res, "At least one of isReturnable or isExchangeable must be provided", "isReturnable");
+    }
+
+    const updatedProduct = await service.updateProductReturnExchange(productId, sellerId, req.body);
+
+    if (!updatedProduct) {
+      return sendError(res, 404, "Product not found or you are not authorized to update it");
+    }
+
+    res.json({
+      success: true,
+      message: "Product return/exchange policy updated successfully",
+      data: updatedProduct,
+    });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
+};
+

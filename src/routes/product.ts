@@ -17,5 +17,6 @@ productRouter.put('/:id', authenticate, requireSeller, uploadMultiple, ctrl.upda
 productRouter.delete('/:id', authenticate, requireSeller, ctrl.deleteProduct);
 productRouter.patch('/:id/variants/:variantId/status', authenticate, requireSeller, ctrl.toggleVariantStatus);
 productRouter.patch('/:id/variants/:variantId/default', authenticate, requireSeller, ctrl.setDefaultVariant);
+productRouter.patch('/:id/return-exchange', authenticate, requireSeller, ctrl.updateReturnExchange);
 
 export default productRouter;
