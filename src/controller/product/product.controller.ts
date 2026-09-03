@@ -223,6 +223,11 @@ export const create = async (req: any, res: any) => {
  *         schema:
  *           type: string
  *         description: Filter by store/business name
+ *       - in: query
+ *         name: storeCategory
+ *         schema:
+ *           type: string
+ *         description: "Filter by store category (e.g. 'Men', 'Women', 'Kids', 'All', or comma-separated 'Men,Women')"
  *     responses:
  *       200:
  *         description: List of products
@@ -260,6 +265,7 @@ export const list = async (req: any, res: Response) => {
     maxPrice: req.query.maxPrice,
     sort: req.query.sort,
     storeName: req.query.storeName,
+    storeCategory: req.query.storeCategory || req.query.store_category,
     userId: req.userId || undefined, // Include userId if authenticated
     lat: rawLat !== undefined && rawLat !== '' ? parseFloat(rawLat as string) : undefined,
     lng: rawLng !== undefined && rawLng !== '' ? parseFloat(rawLng as string) : undefined,

@@ -28,7 +28,8 @@
 		"seed:category": "node --loader ts-node/esm src/script/seedCategory.ts",
 		"seed:product": "node --loader ts-node/esm src/script/seedProduct.ts",
 		"seed:all": "node --loader ts-node/esm src/script/seedAll.ts",
-		"db:sync": "node --loader ts-node/esm src/script/syncDb.ts"
+		"db:sync": "node --loader ts-node/esm src/script/syncDb.ts",
+		"db:reset": "node --loader ts-node/esm src/script/resetDb.ts"
 	},
 	"keywords": [],
 	"author": "Shivam Rawat",

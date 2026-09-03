@@ -124,12 +124,59 @@ export const listProducts = async (opts: any) => {
 		maxPrice,
 		sort,
 		storeName,
+		storeCategory,
 		userId, // Optional: to check wishlist status
 		lat,
 		lng,
 	} = opts;
 
 	const where: any = { isActive: true };
+
+	// Store category filter (e.g. 'Men', 'Women', 'Kids', or combinations like ['Men', 'Women'])
+	if (storeCategory) {
+		let requestedCategories: string[] = [];
+		if (Array.isArray(storeCategory)) {
+			requestedCategories = storeCategory.map((c) => String(c).trim()).filter(Boolean);
+		} else if (typeof storeCategory === "string" && storeCategory.trim()) {
+			const trimmed = storeCategory.trim();
+			try {
+				const parsed = JSON.parse(trimmed);
+				if (Array.isArray(parsed)) {
+					requestedCategories = parsed.map((c) => String(c).trim()).filter(Boolean);
+				} else if (parsed) {
+					requestedCategories = [String(parsed).trim()];
+				}
+			} catch {
+				requestedCategories = trimmed.split(",").map((c) => c.trim()).filter(Boolean);
+			}
+		}
+
+		const hasAll = requestedCategories.some((c) => c.toLowerCase() === "all");
+		if (requestedCategories.length > 0 && !hasAll) {
+			const orClauses = requestedCategories.map((cat) => {
+				const escaped = cat.replace(/'/g, "\\'");
+				return `JSON_CONTAINS(Store.storeCategory, '"${escaped}"') OR Store.storeCategory LIKE '%${escaped}%'`;
+			});
+			const allClause = `JSON_CONTAINS(Store.storeCategory, '"All"') OR Store.storeCategory LIKE '%All%' OR Store.storeCategory = 'All'`;
+			const storeCondition = Sequelize.literal(`(${orClauses.join(" OR ")} OR ${allClause})`);
+
+			const matchingStores = await Store.findAll({
+				attributes: ['sellerId'],
+				where: storeCondition,
+				include: [{
+					model: SellerProfile,
+					attributes: ['userId'],
+					required: true,
+				}],
+			});
+
+			const matchingSellerIds = matchingStores
+				.map((s: any) => s.SellerProfile?.userId || s.sellerId)
+				.filter(Boolean);
+
+			where.sellerId = { [Op.in]: matchingSellerIds };
+		}
+	}
 
 	// Get matching seller IDs for store name search in q
 	let qSellerIds: number[] = [];

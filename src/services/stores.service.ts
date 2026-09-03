@@ -28,13 +28,36 @@ function buildGeoWhere(lat?: number, lng?: number): any {
 }
 
 export default class StoreService {
-  static async getstores(zipCode?: string, storeCategory?: string, lat?: number, lng?: number) {
+  static async getstores(zipCode?: string, storeCategory?: string | string[], lat?: number, lng?: number) {
     const hasGeo = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
     const geoWhere = hasGeo ? buildGeoWhere(lat, lng) : null;
     const conditions: any[] = [];
 
-    if (storeCategory && storeCategory.toLowerCase() !== "all") {
-      conditions.push({ storeCategory });
+    let requestedCategories: string[] = [];
+    if (Array.isArray(storeCategory)) {
+      requestedCategories = storeCategory.map((c) => String(c).trim()).filter(Boolean);
+    } else if (typeof storeCategory === "string" && storeCategory.trim()) {
+      const trimmed = storeCategory.trim();
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          requestedCategories = parsed.map((c) => String(c).trim()).filter(Boolean);
+        } else if (parsed) {
+          requestedCategories = [String(parsed).trim()];
+        }
+      } catch {
+        requestedCategories = trimmed.split(",").map((c) => c.trim()).filter(Boolean);
+      }
+    }
+
+    const hasAll = requestedCategories.some((c) => c.toLowerCase() === "all");
+    if (requestedCategories.length > 0 && !hasAll) {
+      const orClauses = requestedCategories.map((cat) => {
+        const escaped = cat.replace(/'/g, "\\'");
+        return `JSON_CONTAINS(Stores.storeCategory, '"${escaped}"') OR Stores.storeCategory LIKE '%${escaped}%'`;
+      });
+      const allClause = `JSON_CONTAINS(Stores.storeCategory, '"All"') OR Stores.storeCategory LIKE '%All%' OR Stores.storeCategory = 'All'`;
+      conditions.push(Sequelize.literal(`(${orClauses.join(" OR ")} OR ${allClause})`));
     }
 
     // Only filter by exact pincode if geo coordinates are not provided

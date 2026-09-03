@@ -567,8 +567,11 @@ export default class AuthController {
 	 *                   pincode:
 	 *                     type: string
 	 *                   storeCategory:
-	 *                     type: string
-	 *                     enum: [Men, Women, Kids, All]
+	 *                     type: array
+	 *                     items:
+	 *                       type: string
+	 *                       enum: [Men, Women, Kids, All]
+	 *                     example: ["Men", "Women"]
 	 *                   phone:
 	 *                     type: string
 	 *                   openingDays:

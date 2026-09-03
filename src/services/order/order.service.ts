@@ -241,13 +241,31 @@ export const createOrdersFromCart = async (
 
       // Emit real-time update via WebSocket
       const orderItems = groups[order.sellerId] || [];
-      const itemsPayload = orderItems.map((it: any) => ({
-        productId: String(it.productId),
-        productName: it.product.name,
-        quantity: it.qty,
-        price: Number(it.price || it.variant.price),
-        imageUrl: it.product.images?.[0] || ""
-      }));
+      const itemsPayload = orderItems.map((it: any) => {
+        let rawImages = it.variant?.images || it.product?.images || [];
+        if (typeof rawImages === "string") {
+          try {
+            rawImages = JSON.parse(rawImages);
+          } catch {
+            rawImages = [rawImages];
+          }
+        }
+        const images: string[] = Array.isArray(rawImages)
+          ? rawImages.filter(Boolean)
+          : [];
+        const imageUrl = images[0] || "";
+
+        return {
+          productId: String(it.productId),
+          productName: it.product?.name || "",
+          quantity: it.qty,
+          price: Number(it.price || it.variant?.price || 0),
+          imageUrl: imageUrl,
+          images: images,
+          size: it.variant?.size || "",
+          color: it.variant?.color || "",
+        };
+      });
 
       emitToUser(order.sellerId, "new_order", {
         orderId: String(order.id),
@@ -708,4 +726,40 @@ export const cancelOrder = async (orderId: number, userId: number) => {
   }
 
   return updatedOrder;
+};
+
+/**
+ * Upload verification/dispatch images for an order (Seller only)
+ * @param orderId - Order ID
+ * @param sellerId - Seller User ID
+ * @param imageUrls - Array of image URLs (min 1, max 3)
+ */
+export const uploadOrderVerificationImages = async (
+  orderId: number,
+  sellerId: number,
+  imageUrls: string[]
+) => {
+  if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length < 1 || imageUrls.length > 3) {
+    throw new Error("Verification images count must be between 1 and 3");
+  }
+
+  const order = await Order.findByPk(orderId);
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  if (Number(order.sellerId) !== Number(sellerId)) {
+    throw new Error("You do not have permission to upload verification images for this order");
+  }
+
+  const currentStatus = (order.status || "").toLowerCase();
+  if (currentStatus === "cancelled" || currentStatus === "rejected") {
+    throw new Error(`Cannot upload verification images for an order that is ${order.status}`);
+  }
+
+  order.verificationImages = imageUrls;
+  order.changed("verificationImages", true);
+  await order.save();
+
+  return order;
 };

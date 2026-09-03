@@ -12,7 +12,7 @@ class Store extends Model<StoreAttributes, StoreCreationAttributes> implements S
   public storeName!: string;
   public storeAddress!: string;
   public pincode!: string;
-  public storeCategory?: string;
+  public storeCategory?: string[] | string;
   public is_active!: boolean;
   public isSellerOpen!: boolean;
   public latitude?: number;
@@ -32,8 +32,9 @@ Store.init(
     storeAddress: { type: DataTypes.TEXT, allowNull: false },
     pincode: { type: DataTypes.STRING(10), allowNull: false },
     storeCategory: { 
-      type: DataTypes.ENUM("Men", "Women", "Kids", "All"), 
-      allowNull: true 
+      type: DataTypes.JSON, 
+      allowNull: true,
+      defaultValue: [] 
     },
     is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
     isSellerOpen: { type: DataTypes.BOOLEAN, defaultValue: true },

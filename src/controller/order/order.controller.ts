@@ -7,6 +7,7 @@ import {
   sendError,
   sendValidationError,
 } from "../../middleware/responseHandler.js";
+import { uploadMultipleToS3, uploadMultipleBase64ToS3 } from "../../utils/s3Upload.js";
 
 /**
  * @swagger
@@ -472,3 +473,152 @@ export const upgradeOrderPayment = async (req: any, res: Response) => {
     return handleControllerError(res, err);
   }
 };
+
+/**
+ * @swagger
+ * /api/orders/{id}/verification-images:
+ *   post:
+ *     summary: Upload order verification/dispatch images (Seller only)
+ *     description: Upload between 1 and 3 verification images after accepting an order to prevent damage/wrong item disputes.
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Order ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: 1 to 3 verification image files
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: 1 to 3 base64 encoded image strings or URLs
+ *     responses:
+ *       200:
+ *         description: Verification images uploaded successfully
+ *       400:
+ *         description: Bad request / Invalid image count or order status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Not the order's seller
+ *       404:
+ *         description: Order not found
+ */
+export const uploadVerificationImages = async (req: any, res: Response) => {
+  try {
+    const userId = req.userId || req.user?.id;
+    const orderId = parseInt(req.params.id);
+
+    if (isNaN(orderId)) {
+      return sendValidationError(res, "Invalid order ID", "id");
+    }
+
+    let files: Express.Multer.File[] = [];
+    if (req.files) {
+      if (Array.isArray(req.files)) {
+        files = req.files;
+      } else if (typeof req.files === "object") {
+        Object.values(req.files).forEach((f: any) => {
+          if (Array.isArray(f)) {
+            files.push(...f);
+          } else if (f) {
+            files.push(f);
+          }
+        });
+      }
+    } else if (req.file) {
+      files = [req.file];
+    }
+
+    let rawBodyImages = req.body.images || req.body.verificationImages || [];
+    if (typeof rawBodyImages === "string") {
+      try {
+        rawBodyImages = JSON.parse(rawBodyImages);
+      } catch {
+        rawBodyImages = [rawBodyImages];
+      }
+    }
+    if (!Array.isArray(rawBodyImages)) {
+      rawBodyImages = [rawBodyImages];
+    }
+
+    // Filter out invalid/empty strings
+    const validBodyImages = rawBodyImages.filter(
+      (img: any) => typeof img === "string" && img.trim().length > 0
+    );
+
+    const isBase64 = (img: string) =>
+      !img.startsWith("http://") && !img.startsWith("https://");
+
+    const base64Images = validBodyImages.filter(isBase64);
+    const existingUrls = validBodyImages.filter((img: string) => !isBase64(img));
+
+    const totalProvided = files.length + validBodyImages.length;
+    if (totalProvided < 1) {
+      return sendValidationError(
+        res,
+        "Please provide between 1 and 3 verification images",
+        "images"
+      );
+    }
+    if (totalProvided > 3) {
+      return sendValidationError(
+        res,
+        "Maximum 3 verification images are allowed",
+        "images"
+      );
+    }
+
+    let uploadedUrls: string[] = [];
+
+    if (files.length > 0) {
+      const s3Urls = await uploadMultipleToS3(files, "order-verification");
+      uploadedUrls.push(...s3Urls);
+    }
+
+    if (base64Images.length > 0) {
+      const s3Base64Urls = await uploadMultipleBase64ToS3(
+        base64Images,
+        "order-verification"
+      );
+      uploadedUrls.push(...s3Base64Urls);
+    }
+
+    const finalImageUrls = [...existingUrls, ...uploadedUrls];
+
+    const updatedOrder = await service.uploadOrderVerificationImages(
+      orderId,
+      userId,
+      finalImageUrls
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Order verification images uploaded successfully",
+      data: updatedOrder,
+    });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
+};
+
