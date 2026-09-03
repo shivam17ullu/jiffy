@@ -12,8 +12,29 @@ export default class StoreController {
    * /api/stores/list:
    *   get:
    *     summary: Get list of verified stores
-   *     description: Get all verified and active seller stores
+   *     description: Get all verified and active seller stores with optional filtering by zip code, store category, and geo coordinates
    *     tags: [Stores]
+   *     parameters:
+   *       - in: query
+   *         name: zipCode
+   *         schema:
+   *           type: string
+   *         description: Pincode / ZipCode filter
+   *       - in: query
+   *         name: storeCategory
+   *         schema:
+   *           type: string
+   *         description: "Filter by store category (e.g. 'Men', 'Women', 'Kids', 'All', or comma-separated 'Men,Women')"
+   *       - in: query
+   *         name: lat
+   *         schema:
+   *           type: number
+   *         description: User latitude
+   *       - in: query
+   *         name: lng
+   *         schema:
+   *           type: number
+   *         description: User longitude
    *     responses:
    *       200:
    *         description: List of verified stores
@@ -45,7 +66,7 @@ export default class StoreController {
   static async getStores(req: Request, res: Response) {
     try {
       const zipCode = (req.query.zipCode || req.query.pincode) as string | undefined;
-      const storeCategory = (req.query.storeCategory || req.query.category) as string | undefined;
+      const storeCategory = (req.query.storeCategory || req.query.category) as string | string[] | undefined;
 
       const rawLat = req.query.lat ?? req.query.latitude;
       const rawLng = req.query.lng ?? req.query.longitude ?? req.query.long;
@@ -73,6 +94,13 @@ export default class StoreController {
         }
 
         const firstStore = storeData.Stores?.[0] || storeData.Store || null;
+        if (firstStore && typeof firstStore.storeCategory === "string") {
+          try {
+            firstStore.storeCategory = JSON.parse(firstStore.storeCategory);
+          } catch {
+            firstStore.storeCategory = [firstStore.storeCategory];
+          }
+        }
         storeData.store = firstStore;
         storeData.Store = firstStore;
         if (firstStore) {

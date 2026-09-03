@@ -1144,6 +1144,81 @@ Get detailed order information with full product, buyer, and seller details.
 
 ---
 
+### 5. Upload Order Verification Images (Seller Only)
+
+**POST** `/api/orders/:id/verification-images` (Alias: `/api/orders/:id/images`)
+
+Upload between 1 and 3 product condition & packaging verification images after accepting an order to prevent damage/wrong item disputes. Once uploaded, these image URLs are added to the order's `verificationImages` list and returned in order list and order detail APIs for Seller, Admin, and Buyer.
+
+**Authentication:** Required (Seller role, order must belong to this seller)
+
+**Content-Type:** `multipart/form-data` OR `application/json`
+
+**Multipart Form-Data:**
+- `images`: Array of 1 to 3 image files (or single `image`)
+
+**JSON Request Body (Base64 / URL strings):**
+
+```json
+{
+  "images": [
+    "data:image/jpeg;base64,...",
+    "data:image/jpeg;base64,..."
+  ]
+}
+```
+
+**Success Response:**
+
+```json
+{
+  "success": true,
+  "message": "Order verification images uploaded successfully",
+  "data": {
+    "id": 1,
+    "userId": 10,
+    "sellerId": 2,
+    "total": 1500,
+    "status": "Confirmed",
+    "verificationImages": [
+      "https://drapeit-products.s3.ap-southeast-2.amazonaws.com/order-verification/uuid1.jpg",
+      "https://drapeit-products.s3.ap-southeast-2.amazonaws.com/order-verification/uuid2.jpg"
+    ],
+    "shippingAddress": { ... },
+    "paymentInfo": { ... }
+  }
+}
+```
+
+**Error Response (Invalid image count):**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "Please provide between 1 and 3 verification images",
+  "errors": [
+    {
+      "field": "images",
+      "message": "Please provide between 1 and 3 verification images"
+    }
+  ]
+}
+```
+
+**Error Response (Forbidden / Not Order Seller):**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "You do not have permission to upload verification images for this order",
+  "errors": []
+}
+```
+
+---
+
 ## 👤 Profile APIs
 
 ### 1. Get Buyer Profile
@@ -1445,7 +1520,7 @@ Retrieve all details of the authenticated seller including profile, store (with 
       "storeName": "Fashion Hub Main Store",
       "storeAddress": "123 Fashion Street, Mumbai",
       "pincode": "400001",
-      "storeCategory": "Men",
+      "storeCategory": ["Men", "Women"],
       "is_active": true,
       "isSellerOpen": true,
       "latitude": 19.076,

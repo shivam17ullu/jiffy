@@ -10,11 +10,12 @@ export interface OrderAttributes {
   status: string;
   shippingAddress: any;
   paymentInfo?: any;
+  verificationImages?: string[] | null;
 }
 
 export type OrderCreation = Optional<
   OrderAttributes,
-  "id" | "status" | "paymentInfo"
+  "id" | "status" | "paymentInfo" | "verificationImages"
 >;
 
 class Order
@@ -28,6 +29,7 @@ class Order
   public status!: string;
   public shippingAddress!: any;
   public paymentInfo?: any;
+  public verificationImages?: string[] | null;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -50,6 +52,11 @@ Order.init(
     },
     shippingAddress: { type: DataTypes.JSON, allowNull: false },
     paymentInfo: { type: DataTypes.JSON, allowNull: true },
+    verificationImages: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: [],
+    },
   },
   {
     tableName: "orders",

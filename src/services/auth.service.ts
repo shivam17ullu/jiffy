@@ -463,13 +463,34 @@ export default class AuthService {
 				status: "pending",
 			}, { transaction });
 
+			let rawCategory = storePayload.storeCategory || storePayload.store_category;
+			let normalizedCategory: string[] = [];
+			if (Array.isArray(rawCategory)) {
+				normalizedCategory = rawCategory.map((c) => String(c).trim()).filter(Boolean);
+			} else if (typeof rawCategory === "string" && rawCategory.trim()) {
+				const trimmed = rawCategory.trim();
+				try {
+					const parsed = JSON.parse(trimmed);
+					if (Array.isArray(parsed)) {
+						normalizedCategory = parsed.map((c) => String(c).trim()).filter(Boolean);
+					} else if (parsed) {
+						normalizedCategory = [String(parsed).trim()];
+					}
+				} catch {
+					normalizedCategory = trimmed.split(",").map((c) => c.trim()).filter(Boolean);
+				}
+			}
+			if (normalizedCategory.length === 0) {
+				normalizedCategory = ["All"];
+			}
+
 			const store = await Store.create(
 				{
 					sellerId: seller.id,
 					storeName: storePayload.storeName || storePayload.store_name,
 					storeAddress: storePayload.storeAddress || storePayload.store_address,
 					pincode: storePayload.pincode,
-					storeCategory: storePayload.storeCategory || storePayload.store_category,
+					storeCategory: normalizedCategory,
 					latitude: storePayload.latitude,
 					longitude: storePayload.longitude,
 					openingDays: storePayload.openingDays || storePayload.opening_days || storePayload.storeOpeningDays || storePayload.store_opening_days || (payload as any).openingDays || (payload as any).opening_days || (payload as any).storeOpeningDays || (payload as any).store_opening_days || [],

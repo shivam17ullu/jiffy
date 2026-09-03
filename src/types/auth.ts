@@ -17,7 +17,7 @@ export interface StoreAttributes {
   storeName: string;
   storeAddress: string;
   pincode: string;
-  storeCategory?: string;
+  storeCategory?: string[] | string;
   phone?: string;
   city?: string;
   state?: string;
