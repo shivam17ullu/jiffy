@@ -146,12 +146,15 @@ export default class AuthController {
 				);
 			}
 
-			await AuthService.generateOtp(phone_number, role);
+			const result = await AuthService.generateOtp(phone_number, role);
 
 			return createResponse(res, {
 				status: 200,
 				message: "OTP sent successfully",
-				response: null,
+				response: {
+					otp_session: result.otpSession,
+					otp: result.otp,
+				},
 			});
 		} catch (error: unknown) {
 			return handleControllerError(res, error, 500);
@@ -181,6 +184,9 @@ export default class AuthController {
 	 *               otp:
 	 *                 type: string
 	 *                 example: "123456"
+	 *               otp_session:
+	 *                 type: string
+	 *                 example: "6a9bb88657f7a"
 	 *     responses:
 	 *       200:
 	 *         description: Login successful
@@ -207,7 +213,7 @@ export default class AuthController {
 	 */
 	static async verifyOtp(req: Request, res: Response) {
 		try {
-			const { phone_number, otp, role } = req.body;
+			const { phone_number, otp, role, otp_session } = req.body;
 			if (!phone_number) {
 				return sendValidationError(
 					res,
@@ -227,7 +233,8 @@ export default class AuthController {
 				otp,
 				deviceInfo,
 				ip,
-				role
+				role,
+				otp_session
 			);
 
 			return createResponse(res, {
@@ -469,7 +476,8 @@ export default class AuthController {
 				message: "OTP sent successfully",
 				response: {
 					user: response.user,
-					otp: response.otp
+					otp: response.otp,
+					otp_session: response.otpSession,
 				},
 			});
 		} catch (error: unknown) {
@@ -498,15 +506,26 @@ export default class AuthController {
 	 *                 type: string
 	 *               otp:
 	 *                 type: string
+	 *               otp_session:
+	 *                 type: string
 	 *     responses:
 	 *       200:
 	 *         description: Seller verified successfully
+	 *         content:
+	 *           application/json:
+	 *             schema:
+	 *               type: object
+	 *               properties:
+	 *                 status:
+	 *                   type: integer
+	 *                 message:
+	 *                   type: string
 	 *       400:
 	 *         description: Invalid OTP
 	 */
 	static async verifySellerOtp(req: Request, res: Response) {
 		try {
-			const { otp, phone_number } = req.body;
+			const { otp, phone_number, otp_session } = req.body;
 			if (!phone_number) {
 				return sendValidationError(
 					res,
@@ -521,7 +540,7 @@ export default class AuthController {
 			const deviceInfo = req.headers["user-agent"] || "unknown";
 			const ip = req.ip;
 
-			await AuthService.verifySellerOtp(phone_number, otp, deviceInfo, ip);
+			await AuthService.verifySellerOtp(phone_number, otp, deviceInfo, ip, otp_session);
 
 			return createResponse(res, {
 				status: 200,

@@ -21,6 +21,7 @@ import { SellerFirstStepBody, SellerOnboardingBody } from "../types/auth.js";
 import { ApiError } from "../utils/ApiError.js";
 import { sendOtpFast2SMS } from "../utils/fast2sms.js";
 import { generateOtp } from "../utils/generateOtp.js";
+import { sendOtpMuzztech, verifyOtpMuzztech } from "../utils/muzztech.js";
 import { uploadBase64ToS3 } from "../utils/s3Upload.js";
 import { sendSellerOnboardEmail, sendSellerWelcomeEmail, sendEmailVerificationOTP } from "../utils/mailer.js";
 import EmailOtp from "../model/auth/emailOtp.js";
@@ -82,15 +83,18 @@ export default class AuthService {
 
 		await assertSellerCanAccessByPhone(phone_number);
 
-		const otp = await generateOtp();
+		// Send via Muzztech
+		const { otpSession, otp } = await sendOtpMuzztech(phone_number);
 		const expires_at = addMinutes(new Date(), 5);
 
-		await OtpLogin.create({ phone_number, otp, expires_at });
+		await OtpLogin.create({
+			phone_number,
+			otp: otp || otpSession,
+			otp_session: otpSession,
+			expires_at,
+		});
 
-		// Send via Fast2SMS
-		// await sendOtpFast2SMS(phone_number, otp);
-
-		return otp;
+		return { otp, otpSession };
 	}
 
 	static async verifyOtp(
@@ -98,16 +102,35 @@ export default class AuthService {
 		otp: string,
 		deviceInfo?: string,
 		ip?: string,
-		role?: string
+		role?: string,
+		otp_session?: string
 	) {
+		const whereClause: any = { phone_number, is_used: false };
+		if (otp_session) {
+			whereClause.otp_session = otp_session;
+		}
+
 		const otpRecord = await OtpLogin.findOne({
-			where: { phone_number, otp, is_used: false },
+			where: whereClause,
 			order: [["created_at", "DESC"]],
 		});
 
 		if (!otpRecord) throw new Error("Invalid OTP");
 		if (isBefore(otpRecord.expires_at, new Date()))
 			throw new Error("OTP expired");
+
+		const sessionToVerify = otp_session || otpRecord.otp_session;
+
+		if (sessionToVerify) {
+			const verificationResult = await verifyOtpMuzztech(sessionToVerify, otp);
+			if (!verificationResult.verified) {
+				throw new Error(verificationResult.message || "Invalid OTP");
+			}
+		} else {
+			if (otpRecord.otp !== otp) {
+				throw new Error("Invalid OTP");
+			}
+		}
 
 		// mark OTP as used
 		otpRecord.is_used = true;
@@ -328,7 +351,7 @@ export default class AuthService {
 			defaults: { name: "seller" },
 		});
 
-		const otp = await generateOtp();
+		const { otpSession, otp } = await sendOtpMuzztech(phone_number);
 		const expires_at = addMinutes(new Date(), 5);
 
 		const transaction = await jiffy.transaction();
@@ -356,12 +379,12 @@ export default class AuthService {
 
 			if (existingOtp) {
 				await existingOtp.update(
-					{ otp, expires_at, is_used: false },
+					{ otp: otp || otpSession, otp_session: otpSession, expires_at, is_used: false },
 					{ transaction }
 				);
 			} else {
 				await OtpLogin.create(
-					{ phone_number, otp, expires_at },
+					{ phone_number, otp: otp || otpSession, otp_session: otpSession, expires_at },
 					{ transaction }
 				);
 			}
@@ -372,10 +395,8 @@ export default class AuthService {
 				transaction,
 			});
 
-			await sendOtpFast2SMS(phone_number, otp);
-
 			await transaction.commit();
-			return { user: userToUse, otp };
+			return { user: userToUse, otp, otpSession };
 		} catch (error: unknown) {
 			await transaction.rollback();
 			throw error;
@@ -386,17 +407,36 @@ export default class AuthService {
 		phone_number: string,
 		otp: string,
 		deviceInfo?: string,
-		ip?: string
+		ip?: string,
+		otp_session?: string
 	) {
+		const whereClause: any = { phone_number, is_used: false };
+		if (otp_session) {
+			whereClause.otp_session = otp_session;
+		}
+
 		// Find latest valid OTP
 		const otpRecord = await OtpLogin.findOne({
-			where: { phone_number, otp, is_used: false },
+			where: whereClause,
 			order: [["created_at", "DESC"]],
 		});
 
-		if (!otpRecord) throw new Error("Invalid OTP");
+		if (!otpRecord) throw new Error("Invalid OTP or session");
 		if (isBefore(otpRecord.expires_at, new Date())) {
 			throw new Error("OTP expired");
+		}
+
+		const sessionToVerify = otp_session || otpRecord.otp_session;
+
+		if (sessionToVerify) {
+			const verificationResult = await verifyOtpMuzztech(sessionToVerify, otp);
+			if (!verificationResult.verified) {
+				throw new Error(verificationResult.message || "Invalid OTP");
+			}
+		} else {
+			if (otpRecord.otp !== otp) {
+				throw new Error("Invalid OTP");
+			}
 		}
 
 		// Mark OTP as used

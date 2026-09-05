@@ -113,6 +113,9 @@
                 },
                 "role": {
                   "example": "any"
+                },
+                "otp_session": {
+                  "example": "any"
                 }
               }
             }
@@ -216,6 +219,9 @@
                   "example": "any"
                 },
                 "phone_number": {
+                  "example": "any"
+                },
+                "otp_session": {
                   "example": "any"
                 }
               }
