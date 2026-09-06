@@ -23,17 +23,17 @@ export const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit per file
-    files: 10, // Max 10 files
-    fieldSize: 10 * 1024 * 1024, // 10MB for field values
+    fileSize: 50 * 1024 * 1024, // 50MB limit per file (accommodates high-res mobile photos)
+    files: 20, // Max 20 files
+    fieldSize: 100 * 1024 * 1024, // 100MB for field values (accommodates large base64 strings in form-data)
   },
 });
 
 // Middleware for single image upload
 export const uploadSingle = upload.single("image");
 
-// Middleware for multiple images upload
-const uploadMultipleMulter = upload.array("images", 10);
+// Middleware for multiple images upload (accepts any field names e.g. "images", "images[]", "files")
+const uploadAnyMulter = upload.any();
 
 /** Multer middleware that forwards errors to the global error handler */
 export const uploadMultiple = (
@@ -41,7 +41,7 @@ export const uploadMultiple = (
   res: Response,
   next: NextFunction
 ) => {
-  uploadMultipleMulter(req, res, (err) => {
+  uploadAnyMulter(req, res, (err) => {
     if (err) return next(err);
     next();
   });
