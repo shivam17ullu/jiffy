@@ -50,19 +50,19 @@ const getS3Client = (): S3Client => {
  */
 export const base64ToBuffer = (base64String: string): { buffer: Buffer; mimeType: string; extension: string } => {
 	// Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
-	let base64Data = base64String;
+	let base64Data = base64String.trim();
 	let mimeType = 'image/jpeg'; // default
 	let extension = 'jpg'; // default
 
-	if (base64String.includes(',')) {
-		const parts = base64String.split(',');
+	if (base64Data.includes(',')) {
+		const parts = base64Data.split(',');
 		const dataPrefix = parts[0];
-		base64Data = parts[1];
+		base64Data = parts.slice(1).join(',');
 
 		// Extract mime type from prefix
 		const mimeMatch = dataPrefix.match(/data:([^;]+)/);
 		if (mimeMatch) {
-			mimeType = mimeMatch[1];
+			mimeType = mimeMatch[1].toLowerCase().trim();
 			// Get extension from mime type
 			const extMap: { [key: string]: string } = {
 				'image/jpeg': 'jpg',
@@ -71,11 +71,16 @@ export const base64ToBuffer = (base64String: string): { buffer: Buffer; mimeType
 				'image/gif': 'gif',
 				'image/webp': 'webp',
 				'image/svg+xml': 'svg',
+				'image/heic': 'heic',
+				'image/heif': 'heif',
 				'application/pdf': 'pdf',
 			};
-			extension = extMap[mimeType] || 'jpg';
+			extension = extMap[mimeType] || mimeType.split('/')[1]?.split('+')[0] || 'jpg';
 		}
 	}
+
+	// Clean up base64 string (remove whitespace/newlines inserted by mobile encoders)
+	base64Data = base64Data.replace(/[\r\n\s]+/g, '');
 
 	// Convert base64 to buffer
 	const buffer = Buffer.from(base64Data, 'base64');

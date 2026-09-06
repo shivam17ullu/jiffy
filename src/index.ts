@@ -33,20 +33,36 @@ import { globalErrorHandler } from './middleware/errorHandler.js';
 dotenv.config();
 
 app.use(bodyParser.json({
-	limit: '50mb',
+	limit: '150mb',
 	verify: (req: any, res, buf) => {
 		req.rawBody = buf;
 	}
 }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '150mb' }));
 app.use(express.json({
-	limit: '50mb',
+	limit: '150mb',
 	verify: (req: any, res, buf) => {
 		req.rawBody = buf;
 	}
 }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(cors());
+app.use(express.urlencoded({ extended: true, limit: '150mb' }));
+app.use(cors({
+	origin: true,
+	credentials: true,
+	methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+	allowedHeaders: [
+		'Content-Type',
+		'Authorization',
+		'X-Requested-With',
+		'Accept',
+		'Origin',
+		'Access-Control-Request-Method',
+		'Access-Control-Request-Headers',
+		'x-client-platform',
+		'x-app-version',
+		'User-Agent'
+	],
+}));
 import adminRouter from './routes/admin.js';
 import paymentRouter from './routes/payment.js';
 
@@ -77,6 +93,9 @@ const startServer = async () => {
 		console.log('Connection to both databases has been established successfully.');
 		const port = process.env.PORT || 3000;
 		const server = createServer(app);
+		server.keepAliveTimeout = 65000;
+		server.headersTimeout = 66000;
+		server.requestTimeout = 300000; // 5 minutes timeout for large mobile uploads
 		initSocket(server);
 		server.listen(port, () => {
 			console.log(`PORT is running on ${port} with WebSockets enabled`);

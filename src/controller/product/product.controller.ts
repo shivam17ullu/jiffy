@@ -127,32 +127,41 @@ export const create = async (req: any, res: any) => {
     // We will process images inside each variant directly.
 
     // Process variant images
+    // 1. Validate all variants first
     for (const variant of productData.variants) {
       if (!variant.images || !Array.isArray(variant.images) || variant.images.length < 2 || variant.images.length > 4) {
         return sendValidationError(res, "Each variant must have between 2 and 4 images", "variants");
       }
-
-      const uploadedImages = [];
-      const base64ImagesToUpload = [];
-
-      // Separate existing URLs from new base64 images
-      for (const img of variant.images) {
-        if (typeof img === 'string' && (img.startsWith('data:image') || (img.length > 100 && !img.startsWith('http')))) {
-          base64ImagesToUpload.push(img);
-        } else if (typeof img === 'string' && img.startsWith('http')) {
-          uploadedImages.push(img);
-        }
-      }
-
-      // Upload base64 images
-      if (base64ImagesToUpload.length > 0) {
-        const base64Urls = await uploadMultipleBase64ToS3(base64ImagesToUpload, 'products');
-        uploadedImages.push(...base64Urls);
-      }
-
-      // Replace variant images with uploaded URLs
-      variant.images = uploadedImages;
     }
+
+    // 2. Process and upload variant images concurrently
+    await Promise.all(
+      productData.variants.map(async (variant: any) => {
+        const uploadedImages: string[] = [];
+        const base64ImagesToUpload: string[] = [];
+
+        // Separate existing URLs from new base64 images
+        for (const img of variant.images) {
+          if (typeof img === 'string') {
+            const trimmedImg = img.trim();
+            if (trimmedImg.startsWith('http://') || trimmedImg.startsWith('https://')) {
+              uploadedImages.push(trimmedImg);
+            } else if (trimmedImg.startsWith('data:image') || trimmedImg.startsWith('data:application') || trimmedImg.length > 100) {
+              base64ImagesToUpload.push(trimmedImg);
+            }
+          }
+        }
+
+        // Upload base64 images
+        if (base64ImagesToUpload.length > 0) {
+          const base64Urls = await uploadMultipleBase64ToS3(base64ImagesToUpload, 'products');
+          uploadedImages.push(...base64Urls);
+        }
+
+        // Replace variant images with uploaded URLs
+        variant.images = uploadedImages;
+      })
+    );
 
     // Create product
     const product = await service.createProduct(productData, sellerId);
@@ -492,29 +501,38 @@ export const update = async (req: any, res: Response) => {
     }
 
     // Process variant images
+    // 1. Validate all variants first
     for (const variant of productData.variants) {
       if (!variant.images || !Array.isArray(variant.images) || variant.images.length < 2 || variant.images.length > 4) {
         return sendValidationError(res, "Each variant must have between 2 and 4 images", "variants");
       }
-
-      const uploadedImages = [];
-      const base64ImagesToUpload = [];
-
-      for (const img of variant.images) {
-        if (typeof img === 'string' && (img.startsWith('data:image') || (img.length > 100 && !img.startsWith('http')))) {
-          base64ImagesToUpload.push(img);
-        } else if (typeof img === 'string' && img.startsWith('http')) {
-          uploadedImages.push(img);
-        }
-      }
-
-      if (base64ImagesToUpload.length > 0) {
-        const base64Urls = await uploadMultipleBase64ToS3(base64ImagesToUpload, 'products');
-        uploadedImages.push(...base64Urls);
-      }
-
-      variant.images = uploadedImages;
     }
+
+    // 2. Process and upload variant images concurrently
+    await Promise.all(
+      productData.variants.map(async (variant: any) => {
+        const uploadedImages: string[] = [];
+        const base64ImagesToUpload: string[] = [];
+
+        for (const img of variant.images) {
+          if (typeof img === 'string') {
+            const trimmedImg = img.trim();
+            if (trimmedImg.startsWith('http://') || trimmedImg.startsWith('https://')) {
+              uploadedImages.push(trimmedImg);
+            } else if (trimmedImg.startsWith('data:image') || trimmedImg.startsWith('data:application') || trimmedImg.length > 100) {
+              base64ImagesToUpload.push(trimmedImg);
+            }
+          }
+        }
+
+        if (base64ImagesToUpload.length > 0) {
+          const base64Urls = await uploadMultipleBase64ToS3(base64ImagesToUpload, 'products');
+          uploadedImages.push(...base64Urls);
+        }
+
+        variant.images = uploadedImages;
+      })
+    );
 
     // Update product
     const result = await service.updateProduct(productId, sellerId, productData);

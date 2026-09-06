@@ -14,12 +14,12 @@ export const globalErrorHandler = (
     return;
   }
 
-  const multerErr = err as { code?: string; message?: string };
+  const multerErr = err as { code?: string; message?: string; type?: string; status?: number };
   if (multerErr?.code === "LIMIT_FILE_SIZE") {
     handleControllerError(
       res,
       ApiError.badRequest(
-        "File size exceeds the 10MB limit",
+        "File size exceeds the 50MB limit",
         "images"
       )
     );
@@ -28,7 +28,29 @@ export const globalErrorHandler = (
   if (multerErr?.code === "LIMIT_FILE_COUNT") {
     handleControllerError(
       res,
-      ApiError.badRequest("Too many files uploaded. Maximum 10 images allowed", "images")
+      ApiError.badRequest("Too many files uploaded. Maximum 20 images allowed", "images")
+    );
+    return;
+  }
+  if (multerErr?.code === "LIMIT_FIELD_VALUE") {
+    handleControllerError(
+      res,
+      ApiError.badRequest("Field payload size is too large", "payload")
+    );
+    return;
+  }
+  if (multerErr?.code === "LIMIT_UNEXPECTED_FILE") {
+    handleControllerError(
+      res,
+      ApiError.badRequest("Unexpected file field in upload request", "images")
+    );
+    return;
+  }
+  if (multerErr?.type === "entity.too.large" || multerErr?.status === 413) {
+    handleControllerError(
+      res,
+      ApiError.badRequest("Request payload exceeds size limit", "payload"),
+      413
     );
     return;
   }
