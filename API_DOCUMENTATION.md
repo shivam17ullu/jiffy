@@ -1563,6 +1563,119 @@ Retrieve all details of the authenticated seller including profile, store (with 
 
 ---
 
+### 4. Update Operating Hours and Days
+
+**PUT / PATCH** `/api/seller/operating-hours` (or `/api/seller/operating-schedule`)
+
+Update operating days, opening time, and closing time for the authenticated seller's store. **Requires Authentication (Seller only)**
+
+**Request Body:**
+
+```json
+{
+  "openingDays": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  "openingTime": "09:00 AM",
+  "closingTime": "09:00 PM",
+  "isSellerOpen": true
+}
+```
+
+> **Note:**
+> - `openingDays` can also be provided as a comma-separated string (e.g. `"Monday, Tuesday, Wednesday"`).
+> - You can update one, multiple, or all fields in a single request.
+> - `isSellerOpen` is optional and allows toggling the open/closed status.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "status": 200,
+  "message": "Operating hours and days updated successfully",
+  "response": {
+    "id": 1,
+    "sellerId": 1,
+    "storeName": "Fashion Hub Main Store",
+    "storeAddress": "123 Fashion Street, Mumbai",
+    "pincode": "400001",
+    "storeCategory": ["Men", "Women"],
+    "is_active": true,
+    "isSellerOpen": true,
+    "latitude": 19.076,
+    "longitude": 72.8777,
+    "openingDays": [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ],
+    "openingTime": "09:00 AM",
+    "closingTime": "09:00 PM",
+    "createdAt": "2026-08-29T06:30:00.000Z",
+    "updatedAt": "2026-09-10T12:00:00.000Z"
+  },
+  "data": {
+    "id": 1,
+    "sellerId": 1,
+    "storeName": "Fashion Hub Main Store",
+    "storeAddress": "123 Fashion Street, Mumbai",
+    "pincode": "400001",
+    "storeCategory": ["Men", "Women"],
+    "is_active": true,
+    "isSellerOpen": true,
+    "latitude": 19.076,
+    "longitude": 72.8777,
+    "openingDays": [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ],
+    "openingTime": "09:00 AM",
+    "closingTime": "09:00 PM",
+    "createdAt": "2026-08-29T06:30:00.000Z",
+    "updatedAt": "2026-09-10T12:00:00.000Z"
+  }
+}
+```
+
+**Error Response (no fields provided / invalid format):**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "At least one field (openingDays, openingTime, closingTime, isSellerOpen) must be provided"
+}
+```
+
+**Error Response (unauthorized / not a seller):**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "Access denied. Seller role required."
+}
+```
+
+**Error Response (seller profile or store not found):**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Store not found for this seller"
+}
+```
+
+
+---
+
 ## 🔑 Role-Based Access
 
 ### Buyer APIs
