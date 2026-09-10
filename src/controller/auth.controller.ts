@@ -153,7 +153,6 @@ export default class AuthController {
 				message: "OTP sent successfully",
 				response: {
 					otp_session: result.otpSession,
-					otp: result.otp,
 				},
 			});
 		} catch (error: unknown) {

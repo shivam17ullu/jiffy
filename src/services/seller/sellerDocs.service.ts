@@ -41,24 +41,31 @@ export const reuploadSellerDocs = async (
     throw ApiError.badRequest("Documents can only be reuploaded if the seller account is rejected");
   }
 
+  const isBase64String = (str?: string): boolean => {
+    if (!str || typeof str !== 'string') return false;
+    const trimmed = str.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return false;
+    return trimmed.startsWith('data:') || trimmed.length > 100;
+  };
+
   let aadhaarFinal = payload.aadhaarUrl || payload.aadhaar_url;
-  if (aadhaarFinal?.startsWith('data:')) {
-    aadhaarFinal = await uploadBase64ToS3(aadhaarFinal, 'documents');
+  if (isBase64String(aadhaarFinal)) {
+    aadhaarFinal = await uploadBase64ToS3(aadhaarFinal!, 'documents');
   }
 
   let panFinal = payload.panUrl || payload.pan_url;
-  if (panFinal?.startsWith('data:')) {
-    panFinal = await uploadBase64ToS3(panFinal, 'documents');
+  if (isBase64String(panFinal)) {
+    panFinal = await uploadBase64ToS3(panFinal!, 'documents');
   }
 
   let gstFinal = payload.gstUrl || payload.gst_url;
-  if (gstFinal?.startsWith('data:')) {
-    gstFinal = await uploadBase64ToS3(gstFinal, 'documents');
+  if (isBase64String(gstFinal)) {
+    gstFinal = await uploadBase64ToS3(gstFinal!, 'documents');
   }
 
   let storeDocFinal = payload.storeDocUrl || payload.store_doc_url || payload.store_doc;
-  if (storeDocFinal?.startsWith('data:')) {
-    storeDocFinal = await uploadBase64ToS3(storeDocFinal, 'documents');
+  if (isBase64String(storeDocFinal)) {
+    storeDocFinal = await uploadBase64ToS3(storeDocFinal!, 'documents');
   }
 
   // Find or create document record

@@ -129,6 +129,13 @@ export const create = async (req: any, res: any) => {
     // Process variant images
     // 1. Validate all variants first
     for (const variant of productData.variants) {
+      if (typeof variant.images === 'string') {
+        try {
+          variant.images = JSON.parse(variant.images);
+        } catch {
+          variant.images = variant.images.split(',').map((img: string) => img.trim()).filter(Boolean);
+        }
+      }
       if (!variant.images || !Array.isArray(variant.images) || variant.images.length < 2 || variant.images.length > 4) {
         return sendValidationError(res, "Each variant must have between 2 and 4 images", "variants");
       }
@@ -146,7 +153,7 @@ export const create = async (req: any, res: any) => {
             const trimmedImg = img.trim();
             if (trimmedImg.startsWith('http://') || trimmedImg.startsWith('https://')) {
               uploadedImages.push(trimmedImg);
-            } else if (trimmedImg.startsWith('data:image') || trimmedImg.startsWith('data:application') || trimmedImg.length > 100) {
+            } else if (trimmedImg.startsWith('data:') || trimmedImg.length > 100) {
               base64ImagesToUpload.push(trimmedImg);
             }
           }
@@ -503,6 +510,13 @@ export const update = async (req: any, res: Response) => {
     // Process variant images
     // 1. Validate all variants first
     for (const variant of productData.variants) {
+      if (typeof variant.images === 'string') {
+        try {
+          variant.images = JSON.parse(variant.images);
+        } catch {
+          variant.images = variant.images.split(',').map((img: string) => img.trim()).filter(Boolean);
+        }
+      }
       if (!variant.images || !Array.isArray(variant.images) || variant.images.length < 2 || variant.images.length > 4) {
         return sendValidationError(res, "Each variant must have between 2 and 4 images", "variants");
       }
@@ -519,7 +533,7 @@ export const update = async (req: any, res: Response) => {
             const trimmedImg = img.trim();
             if (trimmedImg.startsWith('http://') || trimmedImg.startsWith('https://')) {
               uploadedImages.push(trimmedImg);
-            } else if (trimmedImg.startsWith('data:image') || trimmedImg.startsWith('data:application') || trimmedImg.length > 100) {
+            } else if (trimmedImg.startsWith('data:') || trimmedImg.length > 100) {
               base64ImagesToUpload.push(trimmedImg);
             }
           }

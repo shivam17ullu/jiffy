@@ -480,19 +480,19 @@ export default class AuthService {
 	static async onboardSeller(payload: SellerOnboardingBody) {
 		const transaction: Transaction = await jiffy.transaction();
 		try {
-			const storePayload = payload.store as any;
-			const bankPayload = payload.bankDetails as any;
-			const docsPayload = payload.documents as any;
+			const storePayload = (payload.store || {}) as any;
+			const bankPayload = (payload.bankDetails || (payload as any).bank_details || (payload as any).bank || {}) as any;
+			const docsPayload = (payload.documents || (payload as any).docs || (payload as any).document || {}) as any;
 
 			const seller = await SellerProfile.create(
 				{
 					userId: Number(payload.userId),
-					businessName: storePayload.storeName || storePayload.store_name,
-					phone: storePayload.phone,
-					zipCode: storePayload.pincode,
-					address: storePayload.storeAddress || storePayload.store_address,
-					city: storePayload.city,
-					state: storePayload.state,
+					businessName: storePayload.storeName || storePayload.store_name || (payload as any).businessName || (payload as any).business_name || (payload as any).storeName,
+					phone: storePayload.phone || (payload as any).phone,
+					zipCode: storePayload.pincode || storePayload.zipCode || (payload as any).pincode || (payload as any).zipCode,
+					address: storePayload.storeAddress || storePayload.store_address || (payload as any).address || (payload as any).storeAddress,
+					city: storePayload.city || (payload as any).city,
+					state: storePayload.state || (payload as any).state,
 				},
 				{ transaction }
 			);
@@ -503,7 +503,7 @@ export default class AuthService {
 				status: "pending",
 			}, { transaction });
 
-			let rawCategory = storePayload.storeCategory || storePayload.store_category;
+			let rawCategory = storePayload.storeCategory || storePayload.store_category || (payload as any).storeCategory || (payload as any).store_category;
 			let normalizedCategory: string[] = [];
 			if (Array.isArray(rawCategory)) {
 				normalizedCategory = rawCategory.map((c) => String(c).trim()).filter(Boolean);
@@ -524,15 +524,21 @@ export default class AuthService {
 				normalizedCategory = ["All"];
 			}
 
+			const parseCoord = (val: any): number | undefined => {
+				if (val === undefined || val === null || val === "") return undefined;
+				const num = Number(val);
+				return isNaN(num) ? undefined : num;
+			};
+
 			const store = await Store.create(
 				{
 					sellerId: seller.id,
-					storeName: storePayload.storeName || storePayload.store_name,
-					storeAddress: storePayload.storeAddress || storePayload.store_address,
-					pincode: storePayload.pincode,
+					storeName: storePayload.storeName || storePayload.store_name || seller.businessName,
+					storeAddress: storePayload.storeAddress || storePayload.store_address || seller.address || "",
+					pincode: storePayload.pincode || seller.zipCode || "",
 					storeCategory: normalizedCategory,
-					latitude: storePayload.latitude,
-					longitude: storePayload.longitude,
+					latitude: parseCoord(storePayload.latitude ?? (payload as any).latitude),
+					longitude: parseCoord(storePayload.longitude ?? (payload as any).longitude),
 					openingDays: storePayload.openingDays || storePayload.opening_days || storePayload.storeOpeningDays || storePayload.store_opening_days || (payload as any).openingDays || (payload as any).opening_days || (payload as any).storeOpeningDays || (payload as any).store_opening_days || [],
 					openingTime: storePayload.openingTime || storePayload.opening_time || storePayload.storeOpeningTime || storePayload.store_opening_time || (payload as any).openingTime || (payload as any).opening_time || (payload as any).storeOpeningTime || (payload as any).store_opening_time || null,
 					closingTime: storePayload.closingTime || storePayload.closing_time || storePayload.storeClosingTime || storePayload.store_closing_time || (payload as any).closingTime || (payload as any).closing_time || (payload as any).storeClosingTime || (payload as any).store_closing_time || null,
@@ -543,28 +549,35 @@ export default class AuthService {
 			const bankDetails = await BankDetail.create(
 				{
 					sellerId: seller.id,
-					accountHolderName: bankPayload.accountHolderName || bankPayload.account_holder_name,
-					accountNumber: bankPayload.accountNumber || bankPayload.account_number,
-					ifscCode: bankPayload.ifscCode || bankPayload.ifsc_code,
-					termsAccepted: bankPayload.termsAccepted ?? bankPayload.terms_accepted ?? false,
+					accountHolderName: bankPayload.accountHolderName || bankPayload.account_holder_name || (payload as any).accountHolderName || (payload as any).account_holder_name,
+					accountNumber: bankPayload.accountNumber || bankPayload.account_number || (payload as any).accountNumber || (payload as any).account_number,
+					ifscCode: bankPayload.ifscCode || bankPayload.ifsc_code || (payload as any).ifscCode || (payload as any).ifsc_code,
+					termsAccepted: bankPayload.termsAccepted ?? bankPayload.terms_accepted ?? (payload as any).termsAccepted ?? (payload as any).terms_accepted ?? false,
 				},
 				{ transaction }
 			);
 
-			let aadhaarFinal = docsPayload.aadhaarUrl || docsPayload.aadhaar_url;
-			if (aadhaarFinal?.startsWith('data:')) aadhaarFinal = await uploadBase64ToS3(aadhaarFinal, 'documents');
+			const isBase64String = (str?: string): boolean => {
+				if (!str || typeof str !== 'string') return false;
+				const trimmed = str.trim();
+				if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return false;
+				return trimmed.startsWith('data:') || trimmed.length > 100;
+			};
 
-			let panFinal = docsPayload.panUrl || docsPayload.pan_url;
-			if (panFinal?.startsWith('data:')) panFinal = await uploadBase64ToS3(panFinal, 'documents');
+			let aadhaarFinal = docsPayload.aadhaarUrl || docsPayload.aadhaar_url || docsPayload.aadhaar || (payload as any).aadhaarUrl || (payload as any).aadhaar_url;
+			if (isBase64String(aadhaarFinal)) aadhaarFinal = await uploadBase64ToS3(aadhaarFinal, 'documents');
 
-			let gstFinal = docsPayload.gstUrl || docsPayload.gst_url;
-			if (gstFinal?.startsWith('data:')) gstFinal = await uploadBase64ToS3(gstFinal, 'documents');
+			let panFinal = docsPayload.panUrl || docsPayload.pan_url || docsPayload.pan || (payload as any).panUrl || (payload as any).pan_url;
+			if (isBase64String(panFinal)) panFinal = await uploadBase64ToS3(panFinal, 'documents');
 
-			let storeDocFinal = docsPayload.storeDocUrl || docsPayload.store_doc || docsPayload.store_doc_url;
-			if (storeDocFinal?.startsWith('data:')) storeDocFinal = await uploadBase64ToS3(storeDocFinal, 'documents');
+			let gstFinal = docsPayload.gstUrl || docsPayload.gst_url || docsPayload.gst || (payload as any).gstUrl || (payload as any).gst_url;
+			if (isBase64String(gstFinal)) gstFinal = await uploadBase64ToS3(gstFinal, 'documents');
 
-			let storeImageFinal = docsPayload.storeImage || docsPayload.storeImageUrl || docsPayload.store_image || docsPayload.store_image_url || storePayload.storeImage || storePayload.storeImageUrl || storePayload.store_image || storePayload.store_image_url;
-			if (storeImageFinal?.startsWith('data:')) storeImageFinal = await uploadBase64ToS3(storeImageFinal, 'documents');
+			let storeDocFinal = docsPayload.storeDocUrl || docsPayload.store_doc || docsPayload.store_doc_url || docsPayload.storeDocument || (payload as any).storeDocUrl || (payload as any).store_doc;
+			if (isBase64String(storeDocFinal)) storeDocFinal = await uploadBase64ToS3(storeDocFinal, 'documents');
+
+			let storeImageFinal = docsPayload.storeImage || docsPayload.storeImageUrl || docsPayload.store_image || docsPayload.store_image_url || storePayload.storeImage || storePayload.storeImageUrl || storePayload.store_image || storePayload.store_image_url || (payload as any).storeImage || (payload as any).storeImageUrl;
+			if (isBase64String(storeImageFinal)) storeImageFinal = await uploadBase64ToS3(storeImageFinal, 'documents');
 
 			const documents = await Document.create(
 				{
