@@ -1,5 +1,8 @@
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
+import { ApiError } from "./ApiError.js";
+
+export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
 // Initialize S3 configuration
 const AWS_REGION = process.env.AWS_REGION || "ap-southeast-2";
@@ -46,9 +49,13 @@ const getS3Client = (): S3Client => {
 /**
  * Convert base64 string to buffer
  * @param base64String - Base64 encoded image string (with or without data URL prefix)
+ * @param maxSizeBytes - Maximum allowed size in bytes (defaults to 5MB)
  * @returns Buffer and mime type
  */
-export const base64ToBuffer = (base64String: string): { buffer: Buffer; mimeType: string; extension: string } => {
+export const base64ToBuffer = (
+	base64String: string,
+	maxSizeBytes: number = MAX_FILE_SIZE_BYTES
+): { buffer: Buffer; mimeType: string; extension: string } => {
 	// Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
 	let base64Data = base64String.trim();
 	let mimeType = 'image/jpeg'; // default
@@ -84,6 +91,27 @@ export const base64ToBuffer = (base64String: string): { buffer: Buffer; mimeType
 
 	// Convert base64 to buffer
 	const buffer = Buffer.from(base64Data, 'base64');
+	if (buffer.length > maxSizeBytes) {
+		throw ApiError.badRequest(`File size exceeds the limit of ${Math.round(maxSizeBytes / (1024 * 1024))}MB`);
+	}
+
+	// Sniff magic bytes if no data URL prefix was present
+	if (!base64String.includes(',') && buffer.length >= 4) {
+		if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+			mimeType = 'application/pdf';
+			extension = 'pdf';
+		} else if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+			mimeType = 'image/png';
+			extension = 'png';
+		} else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+			mimeType = 'image/gif';
+			extension = 'gif';
+		} else if (buffer.length >= 12 && buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 && buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) {
+			mimeType = 'image/webp';
+			extension = 'webp';
+		}
+	}
+
 	return { buffer, mimeType, extension };
 };
 
@@ -91,13 +119,19 @@ export const base64ToBuffer = (base64String: string): { buffer: Buffer; mimeType
  * Upload a file to S3
  * @param file - Multer file object
  * @param folder - Folder path in S3 (e.g., 'products', 'documents')
+ * @param maxSizeBytes - Maximum allowed size in bytes (defaults to 5MB)
  * @returns S3 URL of uploaded file
  */
 export const uploadToS3 = async (
 	file: Express.Multer.File,
-	folder: string = "products"
+	folder: string = "products",
+	maxSizeBytes: number = MAX_FILE_SIZE_BYTES
 ): Promise<string> => {
 	try {
+		if (file.size > maxSizeBytes || (file.buffer && file.buffer.length > maxSizeBytes)) {
+			throw ApiError.badRequest(`File size exceeds the limit of ${Math.round(maxSizeBytes / (1024 * 1024))}MB`);
+		}
+
 		const client = getS3Client();
 
 		// Generate unique filename
@@ -121,6 +155,7 @@ export const uploadToS3 = async (
 		const fileUrl = `https://${BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${fileName}`;
 		return fileUrl;
 	} catch (error: any) {
+		if (error instanceof ApiError) throw error;
 		console.error("S3 Upload Error:", error);
 		throw new Error(`Failed to upload file to S3: ${error.message}`);
 	}
@@ -130,17 +165,20 @@ export const uploadToS3 = async (
  * Upload multiple files to S3
  * @param files - Array of Multer file objects
  * @param folder - Folder path in S3
+ * @param maxSizeBytes - Maximum allowed size in bytes (defaults to 5MB)
  * @returns Array of S3 URLs
  */
 export const uploadMultipleToS3 = async (
 	files: Express.Multer.File[],
-	folder: string = "products"
+	folder: string = "products",
+	maxSizeBytes: number = MAX_FILE_SIZE_BYTES
 ): Promise<string[]> => {
 	try {
-		const uploadPromises = files.map((file) => uploadToS3(file, folder));
+		const uploadPromises = files.map((file) => uploadToS3(file, folder, maxSizeBytes));
 		const urls = await Promise.all(uploadPromises);
 		return urls;
 	} catch (error: any) {
+		if (error instanceof ApiError) throw error;
 		console.error("S3 Multiple Upload Error:", error);
 		throw new Error(`Failed to upload files to S3: ${error.message}`);
 	}
@@ -150,15 +188,17 @@ export const uploadMultipleToS3 = async (
  * Upload base64 image to S3
  * @param base64String - Base64 encoded image string
  * @param folder - Folder path in S3 (e.g., 'products', 'documents')
+ * @param maxSizeBytes - Maximum allowed size in bytes (defaults to 5MB)
  * @returns S3 URL of uploaded file
  */
 export const uploadBase64ToS3 = async (
 	base64String: string,
-	folder: string = "products"
+	folder: string = "products",
+	maxSizeBytes: number = MAX_FILE_SIZE_BYTES
 ): Promise<string> => {
 	try {
 		const client = getS3Client();
-		const { buffer, mimeType, extension } = base64ToBuffer(base64String);
+		const { buffer, mimeType, extension } = base64ToBuffer(base64String, maxSizeBytes);
 
 		// Generate unique filename
 		const fileName = `${folder}/${randomUUID()}.${extension}`;
@@ -180,6 +220,7 @@ export const uploadBase64ToS3 = async (
 		const fileUrl = `https://${BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${fileName}`;
 		return fileUrl;
 	} catch (error: any) {
+		if (error instanceof ApiError) throw error;
 		console.error("S3 Base64 Upload Error:", error);
 		throw new Error(`Failed to upload base64 image to S3: ${error.message}`);
 	}
@@ -189,17 +230,20 @@ export const uploadBase64ToS3 = async (
  * Upload multiple base64 images to S3
  * @param base64Strings - Array of base64 encoded image strings
  * @param folder - Folder path in S3
+ * @param maxSizeBytes - Maximum allowed size in bytes (defaults to 5MB)
  * @returns Array of S3 URLs
  */
 export const uploadMultipleBase64ToS3 = async (
 	base64Strings: string[],
-	folder: string = "products"
+	folder: string = "products",
+	maxSizeBytes: number = MAX_FILE_SIZE_BYTES
 ): Promise<string[]> => {
 	try {
-		const uploadPromises = base64Strings.map((base64) => uploadBase64ToS3(base64, folder));
+		const uploadPromises = base64Strings.map((base64) => uploadBase64ToS3(base64, folder, maxSizeBytes));
 		const urls = await Promise.all(uploadPromises);
 		return urls;
 	} catch (error: any) {
+		if (error instanceof ApiError) throw error;
 		console.error("S3 Multiple Base64 Upload Error:", error);
 		throw new Error(`Failed to upload base64 images to S3: ${error.message}`);
 	}

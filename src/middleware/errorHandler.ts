@@ -19,7 +19,7 @@ export const globalErrorHandler = (
     handleControllerError(
       res,
       ApiError.badRequest(
-        "File size exceeds the 50MB limit",
+        "File size exceeds the 5MB limit",
         "images"
       )
     );
