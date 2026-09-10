@@ -72,3 +72,66 @@ export const getProfile = async (req: any, res: Response) => {
     }
 };
 
+/**
+ * @swagger
+ * /api/seller/operating-hours:
+ *   put:
+ *     summary: Update seller operating hours and days
+ *     description: Update the operating days, opening time, and closing time for the authenticated seller's store
+ *     tags: [Seller]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               openingDays:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+ *                 description: Operating days of the week (array of strings or comma-separated string)
+ *               openingTime:
+ *                 type: string
+ *                 example: "09:00 AM"
+ *                 description: Store opening time
+ *               closingTime:
+ *                 type: string
+ *                 example: "09:00 PM"
+ *                 description: Store closing time
+ *               isSellerOpen:
+ *                 type: boolean
+ *                 example: true
+ *                 description: Whether the store is open
+ *     responses:
+ *       200:
+ *         description: Operating hours and days updated successfully
+ *       400:
+ *         description: Invalid request data
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Not a seller
+ *       404:
+ *         description: Seller profile or store not found
+ */
+export const updateOperatingHours = async (req: any, res: Response) => {
+    try {
+        const userId = req.userId;
+        const store = await service.updateOperatingHours(userId, req.body);
+
+        res.json({
+            success: true,
+            status: 200,
+            message: "Operating hours and days updated successfully",
+            response: store,
+            data: store
+        });
+    } catch (err: unknown) {
+        return handleControllerError(res, err);
+    }
+};
+

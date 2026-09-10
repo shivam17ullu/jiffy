@@ -254,5 +254,76 @@ export default class StoreController {
       return handleControllerError(res, error, 500);
     }
   }
+
+  /**
+   * @swagger
+   * /api/stores/{id}/operating-hours:
+   *   patch:
+   *     summary: Update store operating hours and days
+   *     description: Update opening days, opening time, and closing time for a store by its ID
+   *     tags: [Stores]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: Store ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               openingDays:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *                 description: Operating days of the week
+   *               openingTime:
+   *                 type: string
+   *                 description: Store opening time
+   *               closingTime:
+   *                 type: string
+   *                 description: Store closing time
+   *               isSellerOpen:
+   *                 type: boolean
+   *                 description: Open/closed status
+   *     responses:
+   *       200:
+   *         description: Store operating hours updated successfully
+   *       400:
+   *         description: Invalid store ID or request body
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Store not found
+   *       500:
+   *         description: Internal server error
+   */
+  static async updateStoreOperatingHours(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        return sendError(res, 400, "Invalid store ID");
+      }
+
+      const store = await StoreService.updateStoreOperatingHours(id, req.body);
+      if (!store) {
+        return sendError(res, 404, "Store not found");
+      }
+
+      createResponse(res, {
+        status: 200,
+        message: "Store operating hours updated successfully",
+        response: store,
+      });
+    } catch (error: unknown) {
+      return handleControllerError(res, error, 500);
+    }
+  }
 }
 

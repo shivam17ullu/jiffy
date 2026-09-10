@@ -21,6 +21,10 @@ sellerRouter.post('/reupload-docs', docsCtrl.reuploadDocs);
 sellerRouter.get('/profile', profileCtrl.getProfile);
 sellerRouter.get('/me', profileCtrl.getProfile);
 sellerRouter.get('/status', profileCtrl.getStatus);
+sellerRouter.put('/operating-hours', profileCtrl.updateOperatingHours);
+sellerRouter.patch('/operating-hours', profileCtrl.updateOperatingHours);
+sellerRouter.put('/operating-schedule', profileCtrl.updateOperatingHours);
+sellerRouter.patch('/operating-schedule', profileCtrl.updateOperatingHours);
 
 export default sellerRouter;
 
