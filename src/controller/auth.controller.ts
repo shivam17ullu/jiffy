@@ -575,6 +575,9 @@ export default class AuthController {
 	 *                 type: integer
 	 *               email:
 	 *                 type: string
+	 *               pickup_address_id:
+	 *                 type: integer
+	 *                 example: 123456
 	 *               store:
 	 *                 type: object
 	 *                 properties:
@@ -584,6 +587,9 @@ export default class AuthController {
 	 *                     type: string
 	 *                   pincode:
 	 *                     type: string
+	 *                   pickup_address_id:
+	 *                     type: integer
+	 *                     example: 123456
 	 *                   storeCategory:
 	 *                     type: array
 	 *                     items:
@@ -793,6 +799,74 @@ export default class AuthController {
 				status: 200,
 				message: "Device token registered successfully",
 				response: device,
+			});
+		} catch (error: unknown) {
+			return handleControllerError(res, error);
+		}
+	}
+
+	/**
+	 * @swagger
+	 * /api/auth/seller/pickup-address:
+	 *   post:
+	 *     summary: Store or update seller pickup address ID
+	 *     description: Store or update pickup_address_id for a seller using user_id and pickup_address_id
+	 *     tags: [Authentication, Seller]
+	 *     requestBody:
+	 *       required: true
+	 *       content:
+	 *         application/json:
+	 *           schema:
+	 *             type: object
+	 *             required:
+	 *               - user_id
+	 *               - pickup_address_id
+	 *             properties:
+	 *               user_id:
+	 *                 type: integer
+	 *                 example: 1
+	 *                 description: User ID of the seller
+	 *               pickup_address_id:
+	 *                 type: integer
+	 *                 example: 123456
+	 *                 description: Shiprocket/Pickup address ID
+	 *     responses:
+	 *       200:
+	 *         description: Pickup address ID saved successfully
+	 *       400:
+	 *         description: Missing or invalid parameters
+	 *       404:
+	 *         description: Seller profile not found
+	 */
+	static async storePickupAddress(req: Request, res: Response) {
+		try {
+			const rawUserId = req.body.user_id ?? req.body.userId ?? (req as any).userId;
+			const rawPickupAddressId = req.body.pickup_address_id ?? req.body.pickupAddressId;
+
+			if (rawUserId === undefined || rawUserId === null || rawUserId === "") {
+				return sendValidationError(res, "user_id is required", "user_id");
+			}
+
+			const userId = Number(rawUserId);
+			if (isNaN(userId)) {
+				return sendValidationError(res, "user_id must be a valid integer", "user_id");
+			}
+
+			if (rawPickupAddressId === undefined || rawPickupAddressId === null || rawPickupAddressId === "") {
+				return sendValidationError(res, "pickup_address_id is required", "pickup_address_id");
+			}
+
+			const pickupAddressId = Number(rawPickupAddressId);
+			if (isNaN(pickupAddressId)) {
+				return sendValidationError(res, "pickup_address_id must be a valid integer", "pickup_address_id");
+			}
+
+			const result = await AuthService.updatePickupAddress(userId, pickupAddressId);
+
+			return createResponse(res, {
+				status: 200,
+				message: "Pickup address ID saved successfully",
+				response: result,
 			});
 		} catch (error: unknown) {
 			return handleControllerError(res, error);

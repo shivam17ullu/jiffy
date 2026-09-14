@@ -484,6 +484,13 @@ export default class AuthService {
 			const bankPayload = (payload.bankDetails || (payload as any).bank_details || (payload as any).bank || {}) as any;
 			const docsPayload = (payload.documents || (payload as any).docs || (payload as any).document || {}) as any;
 
+			const rawPickupAddressId = payload.pickup_address_id ?? (payload as any).pickupAddressId ?? storePayload.pickup_address_id ?? storePayload.pickupAddressId ?? (payload as any).pickup_address ?? (payload as any).pickupAddress;
+			let parsedPickupAddressId: number | null = null;
+			if (rawPickupAddressId !== undefined && rawPickupAddressId !== null && rawPickupAddressId !== "") {
+				const parsed = Number(rawPickupAddressId);
+				parsedPickupAddressId = isNaN(parsed) ? null : parsed;
+			}
+
 			const seller = await SellerProfile.create(
 				{
 					userId: Number(payload.userId),
@@ -493,6 +500,7 @@ export default class AuthService {
 					address: storePayload.storeAddress || storePayload.store_address || (payload as any).address || (payload as any).storeAddress,
 					city: storePayload.city || (payload as any).city,
 					state: storePayload.state || (payload as any).state,
+					pickup_address_id: parsedPickupAddressId,
 				},
 				{ transaction }
 			);
@@ -542,6 +550,7 @@ export default class AuthService {
 					openingDays: storePayload.openingDays || storePayload.opening_days || storePayload.storeOpeningDays || storePayload.store_opening_days || (payload as any).openingDays || (payload as any).opening_days || (payload as any).storeOpeningDays || (payload as any).store_opening_days || [],
 					openingTime: storePayload.openingTime || storePayload.opening_time || storePayload.storeOpeningTime || storePayload.store_opening_time || (payload as any).openingTime || (payload as any).opening_time || (payload as any).storeOpeningTime || (payload as any).store_opening_time || null,
 					closingTime: storePayload.closingTime || storePayload.closing_time || storePayload.storeClosingTime || storePayload.store_closing_time || (payload as any).closingTime || (payload as any).closing_time || (payload as any).storeClosingTime || (payload as any).store_closing_time || null,
+					pickup_address_id: parsedPickupAddressId,
 				},
 				{ transaction }
 			);
@@ -630,6 +639,7 @@ export default class AuthService {
 					store,
 					bankDetails,
 					documents,
+					pickup_address_id: seller.pickup_address_id ?? parsedPickupAddressId,
 				},
 			};
 		} catch (error: unknown) {
@@ -641,6 +651,33 @@ export default class AuthService {
 			throw new Error(message);
 		}
 	}
+
+	static async updatePickupAddress(userId: number, pickupAddressId: number) {
+		const seller = await SellerProfile.findOne({
+			where: { userId }
+		});
+
+		if (!seller) {
+			const error: any = new Error("Seller profile not found for this user");
+			error.status = 404;
+			throw error;
+		}
+
+		seller.pickup_address_id = pickupAddressId;
+		await seller.save();
+
+		await Store.update(
+			{ pickup_address_id: pickupAddressId },
+			{ where: { sellerId: seller.id } }
+		);
+
+		return {
+			userId: Number(seller.userId),
+			sellerId: seller.id,
+			pickup_address_id: seller.pickup_address_id,
+		};
+	}
+
 	static async adminLogin(
 		email: string,
 		password: string,

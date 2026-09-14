@@ -157,3 +157,30 @@ export const updateOperatingHours = async (userId: number, payload: UpdateOperat
     return store;
 };
 
+export const updatePickupAddress = async (userId: number, pickupAddressId: number) => {
+    const seller = await SellerProfile.findOne({
+        where: { userId }
+    });
+
+    if (!seller) {
+        const error: any = new Error("Seller profile not found for this user");
+        error.status = 404;
+        throw error;
+    }
+
+    seller.pickup_address_id = pickupAddressId;
+    await seller.save();
+
+    // Also update associated stores for consistency
+    await Store.update(
+        { pickup_address_id: pickupAddressId },
+        { where: { sellerId: seller.id } }
+    );
+
+    return {
+        userId: Number(seller.userId),
+        sellerId: seller.id,
+        pickup_address_id: seller.pickup_address_id,
+    };
+};
+

@@ -19,5 +19,9 @@ authRouter.post("/device-token", AuthController.registerDevice);
 
 authRouter.post("/email/send-otp", AuthController.sendEmailOtp);
 authRouter.post("/email/verify-otp", AuthController.verifyEmailOtp);
+authRouter.post("/seller/pickup-address", AuthController.storePickupAddress);
+authRouter.post("/pickup-address", AuthController.storePickupAddress);
+authRouter.put("/seller/pickup-address", AuthController.storePickupAddress);
+authRouter.put("/pickup-address", AuthController.storePickupAddress);
 
 export default authRouter;

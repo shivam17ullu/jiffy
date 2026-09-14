@@ -20,6 +20,7 @@ class Store extends Model<StoreAttributes, StoreCreationAttributes> implements S
   public openingDays?: string[];
   public openingTime?: string;
   public closingTime?: string;
+  public pickup_address_id?: number | null;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -51,6 +52,10 @@ Store.init(
     },
     closingTime: { 
       type: DataTypes.STRING(50), 
+      allowNull: true 
+    },
+    pickup_address_id: { 
+      type: DataTypes.INTEGER, 
       allowNull: true 
     },
   },

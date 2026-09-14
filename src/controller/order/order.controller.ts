@@ -57,7 +57,16 @@ export const createOrder = async (req: any, res: Response) => {
   try {
     const userId = req.userId || req.user?.id;
     const cartId = req.body.cartId;
-    const { shippingAddress, paymentInfo, isFullWalletPay, walletAmount } = req.body;
+    const {
+      shippingAddress,
+      paymentInfo,
+      isFullWalletPay,
+      walletAmount,
+      booking_order_id,
+      bookingOrderId,
+      public_tracking_id,
+      publicTrackingId,
+    } = req.body;
     if (!shippingAddress) {
       return sendValidationError(
         res,
@@ -71,7 +80,9 @@ export const createOrder = async (req: any, res: Response) => {
       paymentInfo,
       cartId,
       isFullWalletPay,
-      walletAmount
+      walletAmount,
+      booking_order_id || bookingOrderId,
+      public_tracking_id || publicTrackingId
     );
     res.status(201).json({ success: true, data: order });
   } catch (err: unknown) {
@@ -621,4 +632,95 @@ export const uploadVerificationImages = async (req: any, res: Response) => {
     return handleControllerError(res, err);
   }
 };
+
+/**
+ * @swagger
+ * /api/orders/{id}/tracking:
+ *   post:
+ *     summary: Store or update order booking and tracking details
+ *     description: Store booking_order_id and public_tracking_id after order creation.
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Order ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               booking_order_id:
+ *                 type: string
+ *                 example: "LMT202512090001"
+ *               public_tracking_id:
+ *                 type: string
+ *                 example: "a837db73-3fd1-4f82-9e8f-b2a04d1b234c"
+ *     responses:
+ *       200:
+ *         description: Order tracking details stored successfully
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Not your order
+ *       404:
+ *         description: Order not found
+ */
+export const updateTrackingDetails = async (req: any, res: Response) => {
+  try {
+    const userId = req.userId || req.user?.id;
+    const orderId = parseInt(req.params.id);
+
+    if (isNaN(orderId)) {
+      return sendValidationError(res, "Invalid order ID", "id");
+    }
+
+    const booking_order_id = req.body.booking_order_id || req.body.bookingOrderId;
+    const public_tracking_id = req.body.public_tracking_id || req.body.publicTrackingId;
+
+    if (!booking_order_id && !public_tracking_id) {
+      return sendValidationError(
+        res,
+        "At least one of booking_order_id or public_tracking_id is required",
+        "booking_order_id"
+      );
+    }
+
+    let isAdmin = false;
+    if (req.userRoles && Array.isArray(req.userRoles)) {
+      isAdmin = req.userRoles.includes("admin");
+    } else if (userId) {
+      const user = await User.findByPk(userId, { include: [Role] });
+      const roles = (user as any)?.Roles?.map((r: any) => r.name) || [];
+      isAdmin = roles.includes("admin");
+    }
+
+    const updatedOrder = await service.updateOrderTrackingDetails(
+      orderId,
+      userId,
+      {
+        booking_order_id,
+        public_tracking_id,
+      },
+      isAdmin
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Order tracking details stored successfully",
+      data: updatedOrder,
+    });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
+};
+
 

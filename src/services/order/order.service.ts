@@ -11,6 +11,8 @@ import {
   User,
   SellerProfile,
   BuyerProfile,
+  Location,
+  Store,
   WalletTransaction,
 } from "../../model/relations.js";
 import { Op } from "sequelize";
@@ -25,7 +27,9 @@ export const createOrdersFromCart = async (
   paymentInfo: any,
   cartId: number,
   isFullWalletPay?: boolean,
-  walletAmount?: number
+  walletAmount?: number,
+  booking_order_id?: string,
+  public_tracking_id?: string
 ) => {
   const t = await jiffy.transaction();
 
@@ -118,8 +122,8 @@ export const createOrdersFromCart = async (
         method: isFullWalletPay
           ? "Wallet"
           : orderWalletShare > 0
-          ? "Partial (Wallet + Online)"
-          : "Online",
+            ? "Partial (Wallet + Online)"
+            : "Online",
         status: isFullWalletPay ? "captured" : "pending",
         walletAmount: orderWalletShare,
         razorpayAmount: Number((total - orderWalletShare).toFixed(2)),
@@ -134,6 +138,8 @@ export const createOrdersFromCart = async (
           status: orderStatus,
           shippingAddress,
           paymentInfo: enrichedPaymentInfo,
+          booking_order_id: booking_order_id || null,
+          public_tracking_id: public_tracking_id || null,
         },
         { transaction: t }
       );
@@ -267,11 +273,20 @@ export const createOrdersFromCart = async (
         };
       });
 
+      const bookingDetails = await getBookingDetailsForOrder({
+        ...order.toJSON(),
+        items: orderItems,
+        shippingAddress,
+        sellerId: order.sellerId,
+        userId: order.userId,
+      });
+
       emitToUser(order.sellerId, "new_order", {
         orderId: String(order.id),
         total: Number(order.total),
         message: `You have received a new order #${order.id} of ₹${order.total.toFixed(2)}.`,
         items: itemsPayload,
+        bookingDetails,
       });
     }
 
@@ -370,6 +385,7 @@ export const listOrders = async (
                 "city",
                 "state",
                 "phone",
+                "pickup_address_id",
               ],
             },
           ],
@@ -389,6 +405,185 @@ export const listOrders = async (
     page: parseInt(page),
     limit: parseInt(limit),
     totalPages: Math.ceil(count / parseInt(limit)),
+  };
+};
+
+/**
+ * Extract clean booking details for Delivar create-booking API
+ * @param order - Order instance or object
+ */
+export const getBookingDetailsForOrder = async (order: any) => {
+  if (!order) return null;
+
+  // 1. Seller pickup_address_id
+  let pickup_address_id = (order.seller as any)?.SellerProfile?.pickup_address_id || null;
+  if (!pickup_address_id && order.sellerId) {
+    const sellerProfile = await SellerProfile.findOne({
+      where: { userId: order.sellerId },
+    });
+    pickup_address_id = sellerProfile?.pickup_address_id || null;
+
+    if (!pickup_address_id && sellerProfile) {
+      const store = await Store.findOne({
+        where: { sellerId: sellerProfile.id },
+      });
+      pickup_address_id = store?.pickup_address_id || null;
+    }
+  }
+
+  // 2. Parse shippingAddress
+  let shippingAddr = order.shippingAddress;
+  if (typeof shippingAddr === "string") {
+    try {
+      shippingAddr = JSON.parse(shippingAddr);
+    } catch {
+      shippingAddr = {};
+    }
+  }
+
+  const dropAddress =
+    shippingAddr?.address ||
+    shippingAddr?.addressLine1 ||
+    [
+      shippingAddr?.addressLine1,
+      shippingAddr?.addressLine2,
+      shippingAddr?.city,
+      shippingAddr?.state,
+      shippingAddr?.pincode || shippingAddr?.zipCode,
+    ]
+      .filter(Boolean)
+      .join(", ") ||
+    "";
+
+  const dropContactName =
+    shippingAddr?.fullName ||
+    shippingAddr?.name ||
+    shippingAddr?.dropContactName ||
+    (order.buyer as any)?.BuyerProfile?.fullName ||
+    "Customer";
+
+  const dropContactNumber =
+    shippingAddr?.phone ||
+    shippingAddr?.phone_number ||
+    shippingAddr?.mobile ||
+    shippingAddr?.dropContactNumber ||
+    (order.buyer as any)?.phone_number ||
+    "";
+
+  let rawLat =
+    shippingAddr?.lat ??
+    shippingAddr?.latitude ??
+    shippingAddr?.dropCoords?.lat ??
+    shippingAddr?.dropCoords?.latitude ??
+    shippingAddr?.coords?.lat ??
+    shippingAddr?.coords?.latitude ??
+    shippingAddr?.coordinates?.lat ??
+    shippingAddr?.coordinates?.latitude ??
+    (Array.isArray(shippingAddr?.coordinates) ? shippingAddr.coordinates[1] : undefined) ??
+    shippingAddr?.location?.lat ??
+    shippingAddr?.location?.latitude ??
+    null;
+
+  let rawLng =
+    shippingAddr?.lng ??
+    shippingAddr?.longitude ??
+    shippingAddr?.dropCoords?.lng ??
+    shippingAddr?.dropCoords?.longitude ??
+    shippingAddr?.coords?.lng ??
+    shippingAddr?.coords?.longitude ??
+    shippingAddr?.coordinates?.lng ??
+    shippingAddr?.coordinates?.longitude ??
+    (Array.isArray(shippingAddr?.coordinates) ? shippingAddr.coordinates[0] : undefined) ??
+    shippingAddr?.location?.lng ??
+    shippingAddr?.location?.longitude ??
+    null;
+
+  let lat = rawLat !== null && rawLat !== undefined && !isNaN(Number(rawLat)) ? Number(rawLat) : 0;
+  let lng = rawLng !== null && rawLng !== undefined && !isNaN(Number(rawLng)) ? Number(rawLng) : 0;
+
+  // Fallback: Check Location database table if lat/lng are 0 or missing
+  if (lat === 0 && lng === 0) {
+    const addressId = shippingAddr?.id || shippingAddr?.locationId || shippingAddr?.addressId;
+    let dbLocation = null;
+    if (addressId) {
+      dbLocation = await Location.findByPk(addressId);
+    }
+    if (!dbLocation && order.userId) {
+      dbLocation =
+        (await Location.findOne({
+          where: { userId: order.userId, isDefault: true },
+        })) ||
+        (await Location.findOne({
+          where: { userId: order.userId },
+          order: [["createdAt", "DESC"]],
+        }));
+    }
+    if (dbLocation) {
+      if (dbLocation.latitude && !isNaN(Number(dbLocation.latitude))) {
+        lat = Number(dbLocation.latitude);
+      }
+      if (dbLocation.longitude && !isNaN(Number(dbLocation.longitude))) {
+        lng = Number(dbLocation.longitude);
+      }
+    }
+  }
+
+  const dropCoords = {
+    lat,
+    lng,
+  };
+
+  const drop_address_details = {
+    city_name:
+      shippingAddr?.city ||
+      shippingAddr?.city_name ||
+      shippingAddr?.drop_address_details?.city_name ||
+      "",
+    state_name:
+      shippingAddr?.state ||
+      shippingAddr?.state_name ||
+      shippingAddr?.drop_address_details?.state_name ||
+      "",
+    pincode: String(
+      shippingAddr?.pincode ||
+      shippingAddr?.zipCode ||
+      shippingAddr?.postalCode ||
+      shippingAddr?.drop_address_details?.pincode ||
+      ""
+    ),
+  };
+
+  // 3. Package details calculation from order items
+  const items = order.items || [];
+  let totalWeight = 0;
+  let maxLength = 0;
+  let maxWidth = 0;
+  let maxHeight = 0;
+
+  for (const it of items) {
+    const v = (it as any).variant;
+    const qty = Number((it as any).qty || 1);
+    totalWeight += Number(v?.weight || 0.5) * qty;
+    maxLength = Math.max(maxLength, Number(v?.length || 10));
+    maxWidth = Math.max(maxWidth, Number(v?.width || 5));
+    maxHeight += Number(v?.height || 5) * qty;
+  }
+
+  const packageDetails = {
+    length: Number(maxLength.toFixed(2)) || 10,
+    width: Number(maxWidth.toFixed(2)) || 5,
+    height: Number(maxHeight.toFixed(2)) || 6,
+    weight: Number(totalWeight.toFixed(2)) || 2,
+  };
+
+  return {
+    pickup_address_id: pickup_address_id ? Number(pickup_address_id) : null,
+    dropAddress,
+    dropContactName,
+    dropContactNumber,
+    dropCoords,
+    drop_address_details,
+    packageDetails,
   };
 };
 
@@ -453,6 +648,7 @@ export const getOrderById = async (
                       "state",
                       "zipCode",
                       "phone",
+                      "pickup_address_id",
                     ],
                   },
                 ],
@@ -494,6 +690,7 @@ export const getOrderById = async (
               "state",
               "zipCode",
               "phone",
+              "pickup_address_id",
             ],
           },
         ],
@@ -501,7 +698,17 @@ export const getOrderById = async (
     ],
   });
 
-  return order;
+  if (!order) {
+    return null;
+  }
+
+  const bookingDetails = await getBookingDetailsForOrder(order);
+  const orderJson = typeof order.toJSON === "function" ? order.toJSON() : order;
+
+  return {
+    ...orderJson,
+    bookingDetails,
+  };
 };
 
 /**
@@ -551,7 +758,7 @@ export const updateOrderStatus = async (
     }
 
     const isRefunding = (status === "Refund Successful" || status === "Return Accepted") &&
-                        (lockedOrder.status !== "Refund Successful" && lockedOrder.status !== "Return Accepted");
+      (lockedOrder.status !== "Refund Successful" && lockedOrder.status !== "Return Accepted");
 
     let cancellationRefundAmount = 0;
     if (status === "Cancelled" && lockedOrder.status !== "Cancelled") {
@@ -763,3 +970,37 @@ export const uploadOrderVerificationImages = async (
 
   return order;
 };
+
+/**
+ * Update booking and tracking details for an order (Buyer, Seller, or Admin)
+ * @param orderId - Order ID
+ * @param userId - User ID
+ * @param details - { booking_order_id?: string, public_tracking_id?: string }
+ * @param isAdmin - Whether the user is an admin
+ */
+export const updateOrderTrackingDetails = async (
+  orderId: number,
+  userId: number,
+  details: { booking_order_id?: string; public_tracking_id?: string },
+  isAdmin: boolean = false
+) => {
+  const order = await Order.findByPk(orderId);
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  if (!isAdmin && Number(order.userId) !== Number(userId) && Number(order.sellerId) !== Number(userId)) {
+    throw new Error("You do not have permission to update tracking details for this order");
+  }
+
+  if (details.booking_order_id !== undefined) {
+    order.booking_order_id = details.booking_order_id;
+  }
+  if (details.public_tracking_id !== undefined) {
+    order.public_tracking_id = details.public_tracking_id;
+  }
+
+  await order.save();
+  return order;
+};
+

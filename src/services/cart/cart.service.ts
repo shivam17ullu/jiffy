@@ -5,6 +5,7 @@ import {
   Product,
   User,
   SellerProfile,
+  Store,
   Category,
 } from "../../model/relations.js";
 import { ApiError } from "../../utils/ApiError.js";
@@ -110,6 +111,28 @@ export const getCart = async (userId: number) => {
                   "businessName",
                   "city",
                   "state",
+                  "zipCode",
+                  "address",
+                  "phone",
+                  "pickup_address_id",
+                ],
+                include: [
+                  {
+                    model: Store,
+                    required: false,
+                    attributes: [
+                      "storeName",
+                      "storeAddress",
+                      "pincode",
+                      "latitude",
+                      "longitude",
+                      "isSellerOpen",
+                      "openingDays",
+                      "openingTime",
+                      "closingTime",
+                      "pickup_address_id",
+                    ],
+                  },
                 ],
               },
             ],
@@ -140,6 +163,29 @@ export const getCart = async (userId: number) => {
       const itemSubtotal = item.price * item.qty;
       subtotal += itemSubtotal;
 
+      const sellerStores = product?.seller?.SellerProfile?.Stores || [];
+      const firstStore = sellerStores.length > 0 ? sellerStores[0] : null;
+      const isSellerOpen = firstStore ? firstStore.isSellerOpen : true;
+      let openingDays = firstStore ? firstStore.openingDays : [];
+      if (typeof openingDays === "string") {
+        try {
+          openingDays = JSON.parse(openingDays);
+        } catch {
+          openingDays = [openingDays];
+        }
+      }
+      if (!Array.isArray(openingDays)) {
+        openingDays = openingDays ? [openingDays] : [];
+      }
+      const openingTime = firstStore ? (firstStore.openingTime ?? null) : null;
+      const closingTime = firstStore ? (firstStore.closingTime ?? null) : null;
+
+      const rawLat = firstStore?.latitude ?? null;
+      const rawLng = firstStore?.longitude ?? null;
+      const lat = rawLat !== null && rawLat !== undefined && rawLat !== "" ? Number(rawLat) : null;
+      const long = rawLng !== null && rawLng !== undefined && rawLng !== "" ? Number(rawLng) : null;
+      const pincode = firstStore?.pincode || (product?.seller as any)?.SellerProfile?.zipCode || null;
+
       return {
         id: item.id,
         productId: item.productId,
@@ -158,16 +204,46 @@ export const getCart = async (userId: number) => {
               images: product.images || [],
               tags: product.tags || [],
               categories: product.categories || [],
+              isSellerOpen,
+              openingDays,
+              openingTime,
+              closingTime,
+              latitude: lat,
+              longitude: long,
+              lat: lat,
+              long: long,
+              pincode: pincode,
               seller: product.seller
                 ? {
                     id: product.seller.id,
                     phone_number: product.seller.phone_number,
                     email: product.seller.email,
+                    isSellerOpen,
+                    openingDays,
+                    openingTime,
+                    closingTime,
+                    latitude: lat,
+                    longitude: long,
+                    lat: lat,
+                    long: long,
+                    pincode: pincode,
+                    zipCode: pincode,
                     profile: (product.seller as any).SellerProfile
                       ? {
                           businessName: (product.seller as any).SellerProfile.businessName,
                           city: (product.seller as any).SellerProfile.city,
                           state: (product.seller as any).SellerProfile.state,
+                          zipCode: (product.seller as any).SellerProfile.zipCode || pincode,
+                          pincode: pincode,
+                          latitude: lat,
+                          longitude: long,
+                          lat: lat,
+                          long: long,
+                          pickup_address_id: (product.seller as any).SellerProfile.pickup_address_id || null,
+                          isSellerOpen,
+                          openingDays,
+                          openingTime,
+                          closingTime,
                         }
                       : null,
                   }
@@ -184,6 +260,10 @@ export const getCart = async (userId: number) => {
               mrp: variant.mrp,
               stock: variant.stock,
               images: variant.images || [],
+              length: variant.length,
+              width: variant.width,
+              height: variant.height,
+              weight: variant.weight,
             }
           : null,
         stockAvailable: variant ? variant.stock >= item.qty : false,

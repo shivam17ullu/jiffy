@@ -14,9 +14,13 @@ interface VariantAttributes {
   isActive: boolean;
   isDefault: boolean;
   images?: string[];
+  length?: number;
+  width?: number;
+  height?: number;
+  weight?: number;
 }
 
-type VariantCreation = Optional<VariantAttributes, 'id' | 'sku' | 'size' | 'color' | 'mrp' | 'isActive' | 'isStock' | 'isDefault' | 'images'>;
+type VariantCreation = Optional<VariantAttributes, 'id' | 'sku' | 'size' | 'color' | 'mrp' | 'isActive' | 'isStock' | 'isDefault' | 'images' | 'length' | 'width' | 'height' | 'weight'>;
 
 class ProductVariant extends Model<VariantAttributes, VariantCreation> implements VariantAttributes {
   public id!: number;
@@ -31,6 +35,10 @@ class ProductVariant extends Model<VariantAttributes, VariantCreation> implement
   public isActive!: boolean;
   public isDefault!: boolean;
   public images?: string[];
+  public length?: number;
+  public width?: number;
+  public height?: number;
+  public weight?: number;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -47,7 +55,11 @@ ProductVariant.init({
   isStock: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
   isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
   isDefault: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
-  images: { type: DataTypes.JSON, allowNull: true, defaultValue: [] }
+  images: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
+  length: { type: DataTypes.FLOAT, allowNull: true },
+  width: { type: DataTypes.FLOAT, allowNull: true },
+  height: { type: DataTypes.FLOAT, allowNull: true },
+  weight: { type: DataTypes.FLOAT, allowNull: true }
 }, { tableName: 'product_variants', sequelize: jiffy });
 
 

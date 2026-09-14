@@ -11,11 +11,12 @@ interface SellerProfileAttributes {
   state?: string;
   zipCode?: string;
   phone?: string;
+  pickup_address_id?: number | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-type SellerProfileCreationAttributes = Optional<SellerProfileAttributes, "id" | "gstNumber" | "address" | "city" | "state" | "zipCode" | "phone" | "createdAt" | "updatedAt">;
+type SellerProfileCreationAttributes = Optional<SellerProfileAttributes, "id" | "gstNumber" | "address" | "city" | "state" | "zipCode" | "phone" | "pickup_address_id" | "createdAt" | "updatedAt">;
 
 class SellerProfile extends Model<SellerProfileAttributes, SellerProfileCreationAttributes>
   implements SellerProfileAttributes {
@@ -28,6 +29,7 @@ class SellerProfile extends Model<SellerProfileAttributes, SellerProfileCreation
   public state?: string;
   public zipCode?: string;
   public phone?: string;
+  public pickup_address_id?: number | null;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -43,6 +45,7 @@ SellerProfile.init(
     state: { type: DataTypes.STRING(100) },
     zipCode: { type: DataTypes.STRING(10) },
     phone: { type: DataTypes.STRING(15) },
+    pickup_address_id: { type: DataTypes.INTEGER, allowNull: true },
   },
   {
     sequelize: jiffy,
