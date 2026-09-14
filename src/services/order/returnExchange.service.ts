@@ -283,7 +283,7 @@ export const listRequests = async (userId: number, role: string, opts: any) => {
           include: [
             {
               association: "SellerProfile",
-              attributes: ["businessName"],
+              attributes: ["businessName", "pickup_address_id"],
             },
           ],
         },

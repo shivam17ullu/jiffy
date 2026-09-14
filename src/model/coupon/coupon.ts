@@ -30,8 +30,7 @@ export type CouponCreationAttributes = Optional<
 
 class Coupon
   extends Model<CouponAttributes, CouponCreationAttributes>
-  implements CouponAttributes
-{
+  implements CouponAttributes {
   public id!: number;
   public code!: string;
   public description?: string;
@@ -44,7 +43,7 @@ class Coupon
   public max_uses?: number;
   public max_uses_per_user?: number;
   public is_active!: boolean;
-  
+
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -59,7 +58,7 @@ Coupon.init(
     code: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true,
+      unique: "unique_coupon_code",
     },
     description: {
       type: DataTypes.TEXT,

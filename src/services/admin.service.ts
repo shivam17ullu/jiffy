@@ -24,6 +24,7 @@ import { jiffy } from "../config/sequelize.js";
 import { sendSellerApprovalEmail, sendSellerRejectionEmail } from "../utils/mailer.js";
 import { creditWallet } from "./wallet/wallet.service.js";
 import { createAndSendNotification } from "./notification/notification.service.js";
+import { getBookingDetailsForOrder } from "./order/order.service.js";
 
 
 export default class AdminService {
@@ -35,7 +36,7 @@ export default class AdminService {
 
 		const sellers = await SellerProfile.findAll({
 			order: [["createdAt", "DESC"]],
-			attributes: ["id", "userId", "businessName", "phone", "address", "city", "state", "zipCode", "gstNumber", "createdAt"],
+			attributes: ["id", "userId", "businessName", "phone", "address", "city", "state", "zipCode", "gstNumber", "pickup_address_id", "createdAt"],
 			include: [
 				{
 					model: VerifiedSellers,
@@ -117,7 +118,7 @@ export default class AdminService {
 					include: [
 						{
 							model: SellerProfile,
-							attributes: ["businessName", "city", "state"],
+							attributes: ["businessName", "city", "state", "pickup_address_id"],
 						},
 					],
 				},
@@ -487,7 +488,7 @@ export default class AdminService {
 							{
 								model: SellerProfile,
 								required: false,
-								attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone"],
+								attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone", "pickup_address_id"],
 							},
 						],
 					},
@@ -510,7 +511,7 @@ export default class AdminService {
 	}
 
 	static async getOrderDetail(orderId: number) {
-		return await Order.findByPk(orderId, {
+		const order = await Order.findByPk(orderId, {
 			include: [
 				{
 					association: "items",
@@ -555,12 +556,24 @@ export default class AdminService {
 						{
 							model: SellerProfile,
 							required: false,
-							attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone"],
+							attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone", "pickup_address_id"],
 						},
 					],
 				},
 			],
 		});
+
+		if (!order) {
+			return null;
+		}
+
+		const bookingDetails = await getBookingDetailsForOrder(order);
+		const orderJson = typeof order.toJSON === "function" ? order.toJSON() : order;
+
+		return {
+			...orderJson,
+			bookingDetails,
+		};
 	}
 
 	static async getPlatformRevenue() {
@@ -736,6 +749,7 @@ export default class AdminService {
 				businessName: profileData.businessName,
 				phone: profileData.phone || null,
 				email: profileData.User?.email || null,
+				pickup_address_id: profileData.pickup_address_id || null,
 				status: profileData.VerifiedSeller?.status || profileData.VerifiedSellers?.status || "pending",
 				isActive: profileData.VerifiedSeller?.is_active || profileData.VerifiedSellers?.is_active || false,
 			},
@@ -832,6 +846,7 @@ export default class AdminService {
 				businessName: profileData.businessName,
 				phone: profileData.phone || null,
 				email: profileData.User?.email || null,
+				pickup_address_id: profileData.pickup_address_id || null,
 			},
 			stats: {
 				totalRevenue,
@@ -1000,6 +1015,26 @@ export default class AdminService {
 			limit: Number(limit),
 			totalPages: Math.ceil(result.count / Number(limit)),
 		};
+	}
+
+	static async updateOrderTrackingDetails(
+		orderId: number,
+		details: { booking_order_id?: string; public_tracking_id?: string }
+	) {
+		const order = await Order.findByPk(orderId);
+		if (!order) {
+			throw new Error("Order not found");
+		}
+
+		if (details.booking_order_id !== undefined) {
+			order.booking_order_id = details.booking_order_id;
+		}
+		if (details.public_tracking_id !== undefined) {
+			order.public_tracking_id = details.public_tracking_id;
+		}
+
+		await order.save();
+		return order;
 	}
 }
 

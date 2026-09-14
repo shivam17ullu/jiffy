@@ -1,5 +1,9 @@
-import { Response } from "express";
-import { handleControllerError } from "../../middleware/responseHandler.js";
+import { Request, Response } from "express";
+import {
+    createResponse,
+    handleControllerError,
+    sendValidationError,
+} from "../../middleware/responseHandler.js";
 import * as service from '../../services/seller/sellerProfile.service.js';
 
 /**
@@ -21,7 +25,7 @@ export const getStatus = async (req: any, res: Response) => {
     try {
         const userId = req.userId;
         const statusData = await service.getSellerStatus(userId);
-        
+
         if (!statusData) {
             return handleControllerError(res, new Error("Seller profile not found"), 404);
         }
@@ -55,7 +59,7 @@ export const getProfile = async (req: any, res: Response) => {
     try {
         const userId = req.userId;
         const profileData = await service.getSellerProfile(userId);
-        
+
         if (!profileData) {
             return handleControllerError(res, new Error("Seller profile not found"), 404);
         }
@@ -134,4 +138,73 @@ export const updateOperatingHours = async (req: any, res: Response) => {
         return handleControllerError(res, err);
     }
 };
+
+/**
+ * @swagger
+ * /api/seller/pickup-address:
+ *   post:
+ *     summary: Store pickup address ID
+ *     description: Store or update pickup_address_id for a seller by user_id
+ *     tags: [Seller, Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - pickup_address_id
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *                 example: 1
+ *                 description: User ID of the seller
+ *               pickup_address_id:
+ *                 type: integer
+ *                 example: 123456
+ *                 description: Shiprocket/Pickup address ID
+ *     responses:
+ *       200:
+ *         description: Pickup address ID saved successfully
+ *       400:
+ *         description: Missing or invalid parameters
+ *       404:
+ *         description: Seller profile not found
+ */
+export const storePickupAddress = async (req: Request, res: Response) => {
+    try {
+        const rawUserId = req.body.user_id ?? req.body.userId ?? (req as any).userId;
+        const rawPickupAddressId = req.body.pickup_address_id ?? req.body.pickupAddressId;
+
+        if (rawUserId === undefined || rawUserId === null || rawUserId === "") {
+            return sendValidationError(res, "user_id is required", "user_id");
+        }
+
+        const userId = Number(rawUserId);
+        if (isNaN(userId)) {
+            return sendValidationError(res, "user_id must be a valid integer", "user_id");
+        }
+
+        if (rawPickupAddressId === undefined || rawPickupAddressId === null || rawPickupAddressId === "") {
+            return sendValidationError(res, "pickup_address_id is required", "pickup_address_id");
+        }
+
+        const pickupAddressId = Number(rawPickupAddressId);
+        if (isNaN(pickupAddressId)) {
+            return sendValidationError(res, "pickup_address_id must be a valid integer", "pickup_address_id");
+        }
+
+        const result = await service.updatePickupAddress(userId, pickupAddressId);
+
+        return createResponse(res, {
+            status: 200,
+            message: "Pickup address ID saved successfully",
+            response: result,
+        });
+    } catch (err: unknown) {
+        return handleControllerError(res, err);
+    }
+};
+
 

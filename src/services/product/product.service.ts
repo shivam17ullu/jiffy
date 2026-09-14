@@ -325,12 +325,13 @@ export const listProducts = async (opts: any) => {
 						"state",
 						"zipCode",
 						"phone",
+						"pickup_address_id",
 					],
 					include: [
 						{
 							model: Store,
 							required: false,
-							attributes: ["storeName", "isSellerOpen"],
+							attributes: ["storeName", "isSellerOpen", "openingDays", "openingTime", "closingTime"],
 						},
 						{
 							model: VerifiedSellers,
@@ -408,6 +409,19 @@ export const listProducts = async (opts: any) => {
 
 		const sellerStores = product.seller?.SellerProfile?.Stores || [];
 		const isSellerOpen = sellerStores.length > 0 ? sellerStores[0].isSellerOpen : true;
+		let openingDays = sellerStores.length > 0 ? sellerStores[0].openingDays : [];
+		if (typeof openingDays === "string") {
+			try {
+				openingDays = JSON.parse(openingDays);
+			} catch {
+				openingDays = [openingDays];
+			}
+		}
+		if (!Array.isArray(openingDays)) {
+			openingDays = openingDays ? [openingDays] : [];
+		}
+		const openingTime = sellerStores.length > 0 ? (sellerStores[0].openingTime ?? null) : null;
+		const closingTime = sellerStores.length > 0 ? (sellerStores[0].closingTime ?? null) : null;
 
 		const rawProduct = product.toJSON();
 		const mappedVariants = (rawProduct.variants || []).map((v: any) => ({
@@ -427,18 +441,28 @@ export const listProducts = async (opts: any) => {
 			},
 			isWishlisted: userId ? wishlistProductIds.has(product.id) : false,
 			isSellerOpen,
+			openingDays,
+			openingTime,
+			closingTime,
 			seller: product.seller
 				? {
 					id: product.seller.id,
 					phone_number: product.seller.phone_number,
 					email: product.seller.email,
 					isSellerOpen,
+					openingDays,
+					openingTime,
+					closingTime,
 					profile: (product.seller as any).SellerProfile
 						? {
 							businessName: (product.seller as any).SellerProfile.businessName,
 							city: (product.seller as any).SellerProfile.city,
 							state: (product.seller as any).SellerProfile.state,
+							pickup_address_id: (product.seller as any).SellerProfile.pickup_address_id || null,
 							isSellerOpen,
+							openingDays,
+							openingTime,
+							closingTime,
 						}
 						: null,
 				}
@@ -482,12 +506,13 @@ export const getProductById = async (id: number, userId?: number, checkSellerSta
 			"state",
 			"zipCode",
 			"phone",
+			"pickup_address_id",
 		],
 		include: [
 			{
 				model: Store,
 				required: false,
-				attributes: ["storeName", "isSellerOpen"],
+				attributes: ["storeName", "isSellerOpen", "openingDays", "openingTime", "closingTime"],
 			}
 		]
 	};
@@ -570,6 +595,19 @@ export const getProductById = async (id: number, userId?: number, checkSellerSta
 
 	const sellerStores = (product as any).seller?.SellerProfile?.Stores || [];
 	const isSellerOpen = sellerStores.length > 0 ? sellerStores[0].isSellerOpen : true;
+	let openingDays = sellerStores.length > 0 ? sellerStores[0].openingDays : [];
+	if (typeof openingDays === "string") {
+		try {
+			openingDays = JSON.parse(openingDays);
+		} catch {
+			openingDays = [openingDays];
+		}
+	}
+	if (!Array.isArray(openingDays)) {
+		openingDays = openingDays ? [openingDays] : [];
+	}
+	const openingTime = sellerStores.length > 0 ? (sellerStores[0].openingTime ?? null) : null;
+	const closingTime = sellerStores.length > 0 ? (sellerStores[0].closingTime ?? null) : null;
 
 	const rawProduct = product.toJSON() as any;
 	const mappedVariants = (rawProduct.variants || []).map((v: any) => ({
@@ -589,12 +627,18 @@ export const getProductById = async (id: number, userId?: number, checkSellerSta
 		},
 		isWishlisted,
 		isSellerOpen,
+		openingDays,
+		openingTime,
+		closingTime,
 		seller: (product as any).seller
 			? {
 				id: (product as any).seller.id,
 				phone_number: (product as any).seller.phone_number,
 				email: (product as any).seller.email,
 				isSellerOpen,
+				openingDays,
+				openingTime,
+				closingTime,
 				profile: (product as any).seller?.SellerProfile
 					? {
 						businessName: (product as any).seller.SellerProfile.businessName,
@@ -604,7 +648,11 @@ export const getProductById = async (id: number, userId?: number, checkSellerSta
 						state: (product as any).seller.SellerProfile.state,
 						zipCode: (product as any).seller.SellerProfile.zipCode,
 						phone: (product as any).seller.SellerProfile.phone,
+						pickup_address_id: (product as any).seller.SellerProfile.pickup_address_id || null,
 						isSellerOpen,
+						openingDays,
+						openingTime,
+						closingTime,
 					}
 					: null,
 			}
@@ -972,6 +1020,11 @@ export const searchAll = async (q: string, lat?: number, lng?: number) => {
 						required: true,
 						include: [
 							{
+								model: Store,
+								required: false,
+								attributes: ["storeName", "isSellerOpen", "openingDays", "openingTime", "closingTime"],
+							},
+							{
 								model: VerifiedSellers,
 								where: { is_active: true, status: "approved" },
 								required: true,
@@ -988,13 +1041,34 @@ export const searchAll = async (q: string, lat?: number, lng?: number) => {
 		limit: 20
 	});
 
-	const productResults = matchedProducts.map((p: any) => ({
-		id: p.id,
-		name: p.name,
-		type: "product",
-		image: (p.variants && p.variants.length > 0 && p.variants[0].images && p.variants[0].images.length > 0) ? p.variants[0].images[0] : null,
-		isSellerOpen: null
-	}));
+	const productResults = matchedProducts.map((p: any) => {
+		const sellerStores = (p as any).seller?.SellerProfile?.Stores || [];
+		const isSellerOpen = sellerStores.length > 0 ? sellerStores[0].isSellerOpen : true;
+		let openingDays = sellerStores.length > 0 ? sellerStores[0].openingDays : [];
+		if (typeof openingDays === "string") {
+			try {
+				openingDays = JSON.parse(openingDays);
+			} catch {
+				openingDays = [openingDays];
+			}
+		}
+		if (!Array.isArray(openingDays)) {
+			openingDays = openingDays ? [openingDays] : [];
+		}
+		const openingTime = sellerStores.length > 0 ? (sellerStores[0].openingTime ?? null) : null;
+		const closingTime = sellerStores.length > 0 ? (sellerStores[0].closingTime ?? null) : null;
+
+		return {
+			id: p.id,
+			name: p.name,
+			type: "product",
+			image: (p.variants && p.variants.length > 0 && p.variants[0].images && p.variants[0].images.length > 0) ? p.variants[0].images[0] : null,
+			isSellerOpen,
+			openingDays,
+			openingTime,
+			closingTime,
+		};
+	});
 
 	// 2. Search stores
 	const storeGeoWhere: any = { is_active: true };
@@ -1035,13 +1109,29 @@ export const searchAll = async (q: string, lat?: number, lng?: number) => {
 		limit: 20
 	});
 
-	const storeResults = matchedStores.map((store: any) => ({
-		id: store.id,
-		name: store.storeName,
-		type: "store",
-		image: store.SellerProfile?.Document?.storeImageUrl || null,
-		isSellerOpen: store.isSellerOpen
-	}));
+	const storeResults = matchedStores.map((store: any) => {
+		let openingDays = store.openingDays || [];
+		if (typeof openingDays === "string") {
+			try {
+				openingDays = JSON.parse(openingDays);
+			} catch {
+				openingDays = [openingDays];
+			}
+		}
+		if (!Array.isArray(openingDays)) {
+			openingDays = openingDays ? [openingDays] : [];
+		}
+		return {
+			id: store.id,
+			name: store.storeName,
+			type: "store",
+			image: store.SellerProfile?.Document?.storeImageUrl || null,
+			isSellerOpen: store.isSellerOpen,
+			openingDays,
+			openingTime: store.openingTime || null,
+			closingTime: store.closingTime || null,
+		};
+	});
 
 	// 3. Search brands
 	const brandWhere: any = {

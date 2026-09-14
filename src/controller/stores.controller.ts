@@ -107,6 +107,9 @@ export default class StoreController {
           storeData.distanceKm = firstStore.distanceKm;
           storeData.estimatedTimeMins = firstStore.estimatedTimeMins;
           storeData.isSellerOpen = firstStore.isSellerOpen;
+          storeData.openingDays = firstStore.openingDays;
+          storeData.openingTime = firstStore.openingTime;
+          storeData.closingTime = firstStore.closingTime;
         }
 
         return storeData;

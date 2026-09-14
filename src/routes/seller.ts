@@ -25,6 +25,9 @@ sellerRouter.put('/operating-hours', profileCtrl.updateOperatingHours);
 sellerRouter.patch('/operating-hours', profileCtrl.updateOperatingHours);
 sellerRouter.put('/operating-schedule', profileCtrl.updateOperatingHours);
 sellerRouter.patch('/operating-schedule', profileCtrl.updateOperatingHours);
+sellerRouter.post('/pickup-address', profileCtrl.storePickupAddress);
+sellerRouter.put('/pickup-address', profileCtrl.storePickupAddress);
+sellerRouter.patch('/pickup-address', profileCtrl.storePickupAddress);
 
 export default sellerRouter;
 

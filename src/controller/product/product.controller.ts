@@ -57,8 +57,8 @@ import { Product } from '../../model/relations.js';
  *                 description: JSON array string of category IDs
  *               variants:
  *                 type: string
- *                 example: '[{"sku":"BS-S-M","size":"M","color":"Blue","price":500,"mrp":800,"stock":100,"isStock":true,"isDefault":true}]'
- *                 description: JSON array string of variant objects
+ *                 example: '[{"sku":"BS-S-M","size":"M","color":"Blue","price":500,"mrp":800,"stock":100,"isStock":true,"isDefault":true,"length":25.5,"width":15.0,"height":2.5,"weight":0.35}]'
+ *                 description: JSON array string of variant objects (supports length, width, height in cm, weight in kg)
  *               isReturnable:
  *                 type: boolean
  *                 default: true

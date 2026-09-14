@@ -313,11 +313,13 @@ Complete seller profile setup. **Requires Authentication**
 ```json
 {
   "userId": 1,
+  "pickup_address_id": 123456,
   "store": {
     "storeName": "My Store",
     "storeAddress": "123 Main St",
     "pincode": "123456",
     "phone": "9876543210",
+    "pickup_address_id": 123456,
     "openingDays": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
     "openingTime": "09:00 AM",
     "closingTime": "09:00 PM"
@@ -349,7 +351,55 @@ Complete seller profile setup. **Requires Authentication**
 
 ---
 
-### 8. Refresh Token (Seller)
+### 8. Store / Update Pickup Address ID
+
+**POST** `/api/auth/seller/pickup-address` or `/api/seller/pickup-address` (also supports `PUT`)
+
+Store or update `pickup_address_id` for a seller by `user_id`.
+
+**Request Body:**
+
+```json
+{
+  "user_id": 1,
+  "pickup_address_id": 123456
+}
+```
+
+**Success Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "status": 200,
+  "message": "Pickup address ID saved successfully",
+  "response": {
+    "userId": 1,
+    "sellerId": 1,
+    "pickup_address_id": 123456
+  },
+  "data": {
+    "userId": 1,
+    "sellerId": 1,
+    "pickup_address_id": 123456
+  }
+}
+```
+
+**Error Response (404 Not Found):**
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Seller profile not found for this user",
+  "errors": []
+}
+```
+
+---
+
+### 9. Refresh Token (Seller)
 
 **POST** `/api/seller/refresh-token` or `/api/auth/seller/refresh-token`
 
@@ -566,7 +616,11 @@ Create a new product. **Requires Authentication**
       "color": "Blue",
       "price": 500,
       "mrp": 800,
-      "stock": 100
+      "stock": 100,
+      "length": 25.5,
+      "width": 15.0,
+      "height": 2.5,
+      "weight": 0.35
     }
   ]
 }
@@ -1213,6 +1267,74 @@ Upload between 1 and 3 product condition & packaging verification images after a
   "success": false,
   "status": 403,
   "message": "You do not have permission to upload verification images for this order",
+  "errors": []
+}
+```
+
+---
+
+### 6. Store / Update Order Tracking & Booking Details
+
+**POST** `/api/orders/:id/tracking` (Aliases: `PATCH /api/orders/:id/tracking`, `POST /api/orders/:id/booking-details`, `PATCH /api/orders/:id/booking-details`)
+
+Store or update `booking_order_id` and `public_tracking_id` for an order after order creation. These details are stored in the order record and returned in both order list (`GET /api/orders`) and order details (`GET /api/orders/:id`) APIs.
+
+**Authentication:** Required (Bearer Token - Buyer, Seller, or Admin)
+
+**Request Body:**
+
+```json
+{
+  "booking_order_id": "LMT202512090001",
+  "public_tracking_id": "a837db73-3fd1-4f82-9e8f-b2a04d1b234c"
+}
+```
+
+**Success Response:**
+
+```json
+{
+  "success": true,
+  "message": "Order tracking details stored successfully",
+  "data": {
+    "id": 1,
+    "userId": 10,
+    "sellerId": 2,
+    "total": 1500,
+    "status": "Confirmed",
+    "shippingAddress": { ... },
+    "paymentInfo": { ... },
+    "booking_order_id": "LMT202512090001",
+    "public_tracking_id": "a837db73-3fd1-4f82-9e8f-b2a04d1b234c",
+    "createdAt": "2026-09-12T11:45:00.000Z",
+    "updatedAt": "2026-09-12T11:45:10.000Z"
+  }
+}
+```
+
+**Error Response (Missing parameters):**
+
+```json
+{
+  "success": false,
+  "status": 400,
+  "message": "At least one of booking_order_id or public_tracking_id is required",
+  "errors": [
+    {
+      "field": "booking_order_id",
+      "message": "At least one of booking_order_id or public_tracking_id is required"
+    }
+  ]
+}
+```
+
+**Error Response (Forbidden - not buyer or seller of the order):**
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "message": "You do not have permission to update tracking details for this order",
   "errors": []
 }
 ```

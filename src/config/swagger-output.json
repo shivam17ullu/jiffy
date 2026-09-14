@@ -420,6 +420,134 @@
         }
       }
     },
+    "/api/auth/seller/pickup-address": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_id": {
+                  "example": "any"
+                },
+                "userId": {
+                  "example": "any"
+                },
+                "pickup_address_id": {
+                  "example": "any"
+                },
+                "pickupAddressId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_id": {
+                  "example": "any"
+                },
+                "userId": {
+                  "example": "any"
+                },
+                "pickup_address_id": {
+                  "example": "any"
+                },
+                "pickupAddressId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/auth/pickup-address": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_id": {
+                  "example": "any"
+                },
+                "userId": {
+                  "example": "any"
+                },
+                "pickup_address_id": {
+                  "example": "any"
+                },
+                "pickupAddressId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_id": {
+                  "example": "any"
+                },
+                "userId": {
+                  "example": "any"
+                },
+                "pickup_address_id": {
+                  "example": "any"
+                },
+                "pickupAddressId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/profile/{id}": {
       "get": {
         "description": "",
@@ -1199,6 +1327,71 @@
         }
       }
     },
+    "/api/orders/webhooks/delivar": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-delivar-secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-delivar-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_id": {
+                  "example": "any"
+                },
+                "new_status": {
+                  "example": "any"
+                },
+                "old_status": {
+                  "example": "any"
+                },
+                "changed_at": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/api/orders/": {
       "post": {
         "description": "",
@@ -1227,6 +1420,18 @@
                   "example": "any"
                 },
                 "walletAmount": {
+                  "example": "any"
+                },
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
                   "example": "any"
                 }
               }
@@ -1440,6 +1645,262 @@
                   "example": "any"
                 },
                 "razorpay_signature": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/orders/{id}/tracking": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/orders/{id}/booking-details": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
                   "example": "any"
                 }
               }
@@ -1884,6 +2345,101 @@
         }
       }
     },
+    "/api/seller/pickup-address": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_id": {
+                  "example": "any"
+                },
+                "userId": {
+                  "example": "any"
+                },
+                "pickup_address_id": {
+                  "example": "any"
+                },
+                "pickupAddressId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_id": {
+                  "example": "any"
+                },
+                "userId": {
+                  "example": "any"
+                },
+                "pickup_address_id": {
+                  "example": "any"
+                },
+                "pickupAddressId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_id": {
+                  "example": "any"
+                },
+                "userId": {
+                  "example": "any"
+                },
+                "pickup_address_id": {
+                  "example": "any"
+                },
+                "pickupAddressId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/admin/sellers": {
       "get": {
         "description": "",
@@ -2154,6 +2710,232 @@
               "type": "object",
               "properties": {
                 "status": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/admin/orders/{id}/tracking": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/admin/orders/{id}/booking-details": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
                   "example": "any"
                 }
               }

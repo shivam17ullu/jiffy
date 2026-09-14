@@ -6,6 +6,8 @@ export interface SellerFirstStepBody {
 export interface SellerOnboardingBody {
   userId: string;
   email?: string;
+  pickup_address_id?: number;
+  pickupAddressId?: number;
   store: StoreAttributes;
   bankDetails: BankDetailAttributes;
   documents: DocumentAttributes;
@@ -28,6 +30,8 @@ export interface StoreAttributes {
   openingDays?: string[];
   openingTime?: string;
   closingTime?: string;
+  pickup_address_id?: number | null;
+  pickupAddressId?: number | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

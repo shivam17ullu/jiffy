@@ -117,8 +117,14 @@ export const getWishlist = async (userId: number, opts: any = {}) => {
                   "state",
                   "zipCode",
                   "phone",
+                  "pickup_address_id",
                 ],
                 include: [
+                  {
+                    model: Store,
+                    required: false,
+                    attributes: ["storeName", "isSellerOpen", "openingDays", "openingTime", "closingTime"],
+                  },
                   {
                     model: VerifiedSellers,
                     where: { is_active: true, status: "approved" },
@@ -147,6 +153,22 @@ export const getWishlist = async (userId: number, opts: any = {}) => {
     const minPrice = prices.length > 0 ? Math.min(...prices) : null;
     const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
 
+    const sellerStores = product.seller?.SellerProfile?.Stores || [];
+    const isSellerOpen = sellerStores.length > 0 ? sellerStores[0].isSellerOpen : true;
+    let openingDays = sellerStores.length > 0 ? sellerStores[0].openingDays : [];
+    if (typeof openingDays === "string") {
+      try {
+        openingDays = JSON.parse(openingDays);
+      } catch {
+        openingDays = [openingDays];
+      }
+    }
+    if (!Array.isArray(openingDays)) {
+      openingDays = openingDays ? [openingDays] : [];
+    }
+    const openingTime = sellerStores.length > 0 ? (sellerStores[0].openingTime ?? null) : null;
+    const closingTime = sellerStores.length > 0 ? (sellerStores[0].closingTime ?? null) : null;
+
     return {
       id: item.id,
       productId: item.productId,
@@ -157,11 +179,19 @@ export const getWishlist = async (userId: number, opts: any = {}) => {
           min: minPrice,
           max: maxPrice,
         },
+        isSellerOpen,
+        openingDays,
+        openingTime,
+        closingTime,
         seller: product.seller
           ? {
               id: product.seller.id,
               phone_number: product.seller.phone_number,
               email: product.seller.email,
+              isSellerOpen,
+              openingDays,
+              openingTime,
+              closingTime,
               profile: (product.seller as any).SellerProfile
                 ? {
                     businessName: (product.seller as any).SellerProfile.businessName,
@@ -171,6 +201,11 @@ export const getWishlist = async (userId: number, opts: any = {}) => {
                     state: (product.seller as any).SellerProfile.state,
                     zipCode: (product.seller as any).SellerProfile.zipCode,
                     phone: (product.seller as any).SellerProfile.phone,
+                    pickup_address_id: (product.seller as any).SellerProfile.pickup_address_id || null,
+                    isSellerOpen,
+                    openingDays,
+                    openingTime,
+                    closingTime,
                   }
                 : null,
             }

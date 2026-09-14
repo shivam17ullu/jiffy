@@ -707,6 +707,80 @@ export default class AdminController {
 
 	/**
 	 * @swagger
+	 * /api/admin/orders/{id}/tracking:
+	 *   post:
+	 *     summary: Store or update order booking and tracking details (Admin)
+	 *     description: Store or update booking_order_id and public_tracking_id for an order
+	 *     tags: [Admin]
+	 *     security:
+	 *       - bearerAuth: []
+	 *     parameters:
+	 *       - in: path
+	 *         name: id
+	 *         required: true
+	 *         schema:
+	 *           type: integer
+	 *         description: Order ID
+	 *     requestBody:
+	 *       required: true
+	 *       content:
+	 *         application/json:
+	 *           schema:
+	 *             type: object
+	 *             properties:
+	 *               booking_order_id:
+	 *                 type: string
+	 *                 example: "LMT202512090001"
+	 *               public_tracking_id:
+	 *                 type: string
+	 *                 example: "a837db73-3fd1-4f82-9e8f-b2a04d1b234c"
+	 *     responses:
+	 *       200:
+	 *         description: Order tracking details stored successfully
+	 *       400:
+	 *         description: Bad request
+	 *       401:
+	 *         description: Unauthorized
+	 *       403:
+	 *         description: Forbidden - Admin role required
+	 *       404:
+	 *         description: Order not found
+	 */
+	static async updateOrderTrackingDetails(req: Request, res: Response) {
+		try {
+			const id = Number(req.params.id);
+			if (isNaN(id)) {
+				return handleControllerError(res, new Error("Invalid order ID"), 400);
+			}
+
+			const booking_order_id = req.body.booking_order_id || req.body.bookingOrderId;
+			const public_tracking_id = req.body.public_tracking_id || req.body.publicTrackingId;
+
+			if (!booking_order_id && !public_tracking_id) {
+				return handleControllerError(
+					res,
+					new Error("At least one of booking_order_id or public_tracking_id is required"),
+					400
+				);
+			}
+
+			const updatedOrder = await AdminService.updateOrderTrackingDetails(id, {
+				booking_order_id,
+				public_tracking_id,
+			});
+
+			return createResponse(res, {
+				status: 200,
+				message: "Order tracking details stored successfully",
+				response: updatedOrder,
+			});
+		} catch (error: unknown) {
+			return handleControllerError(res, error);
+		}
+	}
+
+	/**
+	 * @swagger
 	 * /api/admin/wallets:
 	 *   get:
 	 *     summary: Get all wallets

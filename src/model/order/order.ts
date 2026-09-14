@@ -11,11 +11,13 @@ export interface OrderAttributes {
   shippingAddress: any;
   paymentInfo?: any;
   verificationImages?: string[] | null;
+  booking_order_id?: string | null;
+  public_tracking_id?: string | null;
 }
 
 export type OrderCreation = Optional<
   OrderAttributes,
-  "id" | "status" | "paymentInfo" | "verificationImages"
+  "id" | "status" | "paymentInfo" | "verificationImages" | "booking_order_id" | "public_tracking_id"
 >;
 
 class Order
@@ -30,6 +32,8 @@ class Order
   public shippingAddress!: any;
   public paymentInfo?: any;
   public verificationImages?: string[] | null;
+  public booking_order_id?: string | null;
+  public public_tracking_id?: string | null;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -57,6 +61,16 @@ Order.init(
       allowNull: true,
       defaultValue: [],
     },
+    booking_order_id: {
+      type: DataTypes.STRING(128),
+      allowNull: true,
+      defaultValue: null,
+    },
+    public_tracking_id: {
+      type: DataTypes.STRING(128),
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     tableName: "orders",
@@ -65,3 +79,4 @@ Order.init(
 );
 
 export default Order;
+
