@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
-import { Order } from "../../model/relations.js";
+import { Order, ReturnExchangeRequest } from "../../model/relations.js";
 import { createAndSendNotification } from "../../services/notification/notification.service.js";
 import { getIO } from "../../services/socket/socket.service.js";
+import { processReturnExchangeWebhook } from "../../services/order/returnExchange.service.js";
 
 /**
  * Handle incoming status updates from Delivar Webhook
@@ -71,8 +72,21 @@ export const handleDelivarWebhook = async (req: any, res: Response) => {
         });
 
         if (!order) {
+          // Check if this booking belongs to a Return / Exchange request
+          const returnReq = await ReturnExchangeRequest.findOne({
+            where: { booking_order_id: String(booking_id) },
+          });
+
+          if (returnReq) {
+            console.log(
+              `[Delivar Webhook] Found ReturnExchangeRequest #${returnReq.id} for booking_id: ${booking_id}`
+            );
+            await processReturnExchangeWebhook(req.body);
+            return;
+          }
+
           console.warn(
-            `[Delivar Webhook] Order not found for booking_id: ${booking_id}`
+            `[Delivar Webhook] Order or Return Request not found for booking_id: ${booking_id}`
           );
           return;
         }

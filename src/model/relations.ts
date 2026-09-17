@@ -24,7 +24,7 @@ import UserDevice from "./auth/userDevice.js";
 import Notification from "./notification/notification.js";
 import Wallet from "./wallet/wallet.js";
 import WalletTransaction from "./wallet/walletTransaction.js";
-import ReturnExchangeRequest from "./order/returnExchangeRequest.js";
+import ReturnExchangeRequest, { ReturnExchangeAttributes } from "./order/returnExchangeRequest.js";
 import ReturnExchangeItem from "./order/returnExchangeItem.js";
 import Coupon from "./coupon/coupon.js";
 import CouponUsage from "./coupon/couponUsage.js";
@@ -200,6 +200,7 @@ export {
   Wallet,
   WalletTransaction,
   ReturnExchangeRequest,
+  ReturnExchangeAttributes,
   ReturnExchangeItem,
   Coupon,
   CouponUsage

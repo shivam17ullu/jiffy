@@ -41,6 +41,11 @@ export class ApiError extends Error {
     return new ApiError(409, message, errors);
   }
 
+  static tooManyRequests(message = "Too many requests. Please try again later", field?: string): ApiError {
+    const errors = field ? [{ field, message }] : [];
+    return new ApiError(429, message, errors);
+  }
+
   static internal(message = "An unexpected error occurred. Please try again later"): ApiError {
     return new ApiError(500, message);
   }

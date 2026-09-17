@@ -1,6 +1,7 @@
 import { jiffy } from "../../config/sequelize.js";
 import {
   ReturnExchangeRequest,
+  ReturnExchangeAttributes,
   ReturnExchangeItem,
   Order,
   OrderItem,
@@ -13,8 +14,10 @@ import {
   Location,
 } from "../../model/relations.js";
 import { Op, Transaction } from "sequelize";
+import crypto from "crypto";
 import { creditWallet } from "../wallet/wallet.service.js";
 import { createAndSendNotification } from "../notification/notification.service.js";
+import { getIO, emitToUser } from "../socket/socket.service.js";
 
 /**
  * Helper to enrich Return & Exchange Request with comprehensive buyer/seller pickup IDs, locations with lat/lng, packageDetails, names and contacts
@@ -520,7 +523,76 @@ export const createReturnExchangeRequest = async (
       ],
     });
 
-    return await enrichReturnExchangeDetails(createdReq);
+    const enriched = await enrichReturnExchangeDetails(createdReq);
+
+    // Build rich real-time popup payload for the Seller App
+    const popupPayload = {
+      popupType: "RETURN_EXCHANGE_POPUP",
+      event: "new_return_exchange",
+      title: `New ${type === "RETURN" ? "Return" : "Exchange"} Request #${request.id}`,
+      message: `Buyer requested ${type.toLowerCase()} for Order #${order.id}. Please review and accept.`,
+      requestId: request.id,
+      orderId: order.id,
+      type: request.type,
+      status: request.status,
+      reason: request.reason,
+      comments: request.comments || "",
+      images: request.images || [],
+      buyer: {
+        id: request.userId,
+        name: enriched?.buyerName || "Customer",
+        phone: enriched?.buyerContactNumber || "",
+        location: enriched?.buyerLocation,
+      },
+      seller: {
+        id: request.sellerId,
+        name: enriched?.sellerName || "Seller",
+        phone: enriched?.sellerContactNumber || "",
+        location: enriched?.sellerLocation,
+      },
+      items: enriched?.items || [],
+      packageDetails: enriched?.packageDetails,
+      actions: {
+        accept: {
+          method: "PATCH",
+          endpoint: `/api/return-exchange/${request.id}/status`,
+          body: { status: "APPROVED" },
+        },
+        reject: {
+          method: "PATCH",
+          endpoint: `/api/return-exchange/${request.id}/status`,
+          body: { status: "REJECTED" },
+        },
+        webhookAccept: {
+          method: "POST",
+          endpoint: `/api/return-exchange/webhook/action`,
+          body: { requestId: request.id, action: "ACCEPT" },
+        },
+      },
+      details: enriched,
+    };
+
+    // 1. Emit real-time popup to Seller so their app opens the accept popup immediately
+    emitToUser(order.sellerId, "new_return_exchange", popupPayload);
+    emitToUser(order.sellerId, "return_request_popup", popupPayload);
+    emitToUser(order.sellerId, "new_return_exchange_request", popupPayload);
+
+    // 2. Emit confirmation to Buyer
+    emitToUser(userId, "return_exchange_created", {
+      requestId: request.id,
+      orderId: order.id,
+      type: request.type,
+      status: request.status,
+      message: `Your ${type.toLowerCase()} request has been submitted. Waiting for seller acceptance.`,
+      details: enriched,
+    });
+
+    // 3. Dispatch to seller's external webhook URL if registered
+    dispatchSellerWebhook(order.sellerId, "return_exchange.requested", popupPayload).catch((e) =>
+      console.error("[Seller Webhook Dispatch Error]", e)
+    );
+
+    return enriched;
   } catch (err) {
     await t.rollback();
     throw err;
@@ -990,3 +1062,379 @@ export const updateRequestStatus = async (
     throw err;
   }
 };
+
+/**
+ * Fetch a fully populated and enriched Return/Exchange request with all details
+ */
+export const getFullReturnExchangeById = async (requestId: number) => {
+  const request = await ReturnExchangeRequest.findByPk(requestId, {
+    include: [
+      {
+        association: "items",
+        include: [
+          { association: "originalVariant", include: [{ association: "product" }] },
+          { association: "exchangeVariant", include: [{ association: "product" }] },
+          { association: "product" },
+        ],
+      },
+      {
+        association: "order",
+        include: [
+          {
+            association: "items",
+            include: [{ association: "variant" }, { association: "product" }],
+          },
+          {
+            association: "buyer",
+            attributes: ["id", "phone_number", "email"],
+            include: [{ model: BuyerProfile, required: false }],
+          },
+          {
+            association: "seller",
+            attributes: ["id", "phone_number", "email"],
+            include: [
+              {
+                model: SellerProfile,
+                required: false,
+                include: [{ model: Store, required: false }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        association: "buyer",
+        attributes: ["id", "phone_number", "email"],
+        include: [{ model: BuyerProfile, required: false }],
+      },
+      {
+        association: "seller",
+        attributes: ["id", "phone_number", "email"],
+        include: [
+          {
+            model: SellerProfile,
+            required: false,
+            include: [{ model: Store, required: false }],
+          },
+        ],
+      },
+    ],
+  });
+
+  if (!request) return null;
+  return await enrichReturnExchangeDetails(request);
+};
+
+/**
+ * Update Return / Exchange booking and tracking details
+ */
+export const updateReturnExchangeTrackingDetails = async (
+  requestId: number,
+  userId: number,
+  trackingData: { booking_order_id?: string; public_tracking_id?: string },
+  isAdmin: boolean = false
+) => {
+  const request = await ReturnExchangeRequest.findByPk(requestId);
+  if (!request) {
+    throw new Error("Return/Exchange request not found.");
+  }
+
+  if (!isAdmin && request.userId != userId && request.sellerId != userId) {
+    throw new Error("You do not have permission to update tracking details for this request.");
+  }
+
+  const updates: Partial<ReturnExchangeAttributes> = {};
+  if (trackingData.booking_order_id !== undefined && trackingData.booking_order_id !== null) {
+    updates.booking_order_id = String(trackingData.booking_order_id).trim();
+  }
+  if (trackingData.public_tracking_id !== undefined && trackingData.public_tracking_id !== null) {
+    updates.public_tracking_id = String(trackingData.public_tracking_id).trim();
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await request.update(updates);
+  }
+
+  return await getFullReturnExchangeById(requestId);
+};
+
+/**
+ * Process incoming Return / Exchange status webhook from Delivar / Logistics
+ * Returns all enriched details of the return or exchange order
+ */
+export const processReturnExchangeWebhook = async (payload: {
+  booking_id?: string | number;
+  booking_order_id?: string | number;
+  request_id?: string | number;
+  order_id?: string | number;
+  new_status?: string;
+  status?: string;
+  old_status?: string;
+  changed_at?: string;
+  public_tracking_id?: string;
+}) => {
+  const bookingId = payload.booking_id || payload.booking_order_id;
+  const requestId = payload.request_id;
+  const orderId = payload.order_id;
+  const newStatus = payload.new_status || payload.status;
+  const changedAt = payload.changed_at || new Date().toISOString();
+  const publicTrackingId = payload.public_tracking_id;
+
+  // 1. Locate the ReturnExchangeRequest
+  let request: any = null;
+
+  if (bookingId) {
+    request = await ReturnExchangeRequest.findOne({
+      where: { booking_order_id: String(bookingId) },
+    });
+  }
+
+  if (!request && requestId && !isNaN(Number(requestId))) {
+    request = await ReturnExchangeRequest.findByPk(Number(requestId));
+  }
+
+  if (!request && bookingId && !isNaN(Number(bookingId))) {
+    request = await ReturnExchangeRequest.findByPk(Number(bookingId));
+  }
+
+  if (!request && orderId && !isNaN(Number(orderId))) {
+    request = await ReturnExchangeRequest.findOne({
+      where: {
+        orderId: Number(orderId),
+        status: { [Op.in]: ["PENDING", "APPROVED"] },
+      },
+      order: [["createdAt", "DESC"]],
+    });
+  }
+
+  if (!request && publicTrackingId) {
+    request = await ReturnExchangeRequest.findOne({
+      where: { public_tracking_id: String(publicTrackingId) },
+    });
+  }
+
+  if (!request) {
+    throw new Error(
+      `Return/Exchange request not found for identifier: ${
+        bookingId || requestId || orderId || publicTrackingId
+      }`
+    );
+  }
+
+  // 2. Map rider / delivery status
+  let deliveryStatus = request.delivery_status;
+  let targetRequestStatus = request.status;
+  const normalized = String(newStatus || "").toLowerCase().trim();
+
+  if (
+    normalized === "assigned" ||
+    normalized === "rider.assigned" ||
+    normalized === "rider_assigned"
+  ) {
+    deliveryStatus = "Rider Assigned";
+  } else if (
+    normalized === "picked up" ||
+    normalized === "order.picked_up" ||
+    normalized === "in_transit" ||
+    normalized === "in transit" ||
+    normalized === "out for delivery" ||
+    normalized === "out_for_delivery"
+  ) {
+    deliveryStatus = "In Transit";
+  } else if (
+    normalized === "delivered" ||
+    normalized === "order.delivered" ||
+    normalized === "completed" ||
+    normalized === "order.completed"
+  ) {
+    deliveryStatus = "Delivered";
+    targetRequestStatus = "COMPLETED";
+  } else if (
+    normalized === "cancelled" ||
+    normalized === "order.cancelled"
+  ) {
+    deliveryStatus = "Cancelled";
+    targetRequestStatus = "CANCELLED";
+  } else if (
+    normalized === "rejected" ||
+    normalized === "order.rejected"
+  ) {
+    deliveryStatus = "Rejected";
+    targetRequestStatus = "REJECTED";
+  } else if (
+    normalized === "failed" ||
+    normalized === "undelivered" ||
+    normalized === "delivery_failed"
+  ) {
+    deliveryStatus = "Delivery Failed";
+  } else if (normalized) {
+    deliveryStatus = newStatus;
+  }
+
+  // 3. Update tracking details if provided
+  if (publicTrackingId && !request.public_tracking_id) {
+    request.public_tracking_id = publicTrackingId;
+  }
+  if (bookingId && !request.booking_order_id) {
+    request.booking_order_id = String(bookingId);
+  }
+  request.delivery_status = deliveryStatus;
+
+  // 4. Handle Status Transitions and Completion triggers
+  const isRequestStatusChanged = request.status !== targetRequestStatus;
+
+  if (isRequestStatusChanged && targetRequestStatus === "COMPLETED") {
+    // Perform full completion logic (refunds, inventory replenishment, order sync)
+    return await updateRequestStatus(
+      request.id,
+      request.userId,
+      "admin",
+      "COMPLETED"
+    );
+  } else if (isRequestStatusChanged && targetRequestStatus === "CANCELLED" && request.status !== "COMPLETED") {
+    return await updateRequestStatus(
+      request.id,
+      request.userId,
+      "admin",
+      "CANCELLED"
+    );
+  } else {
+    await request.save();
+  }
+
+  // 5. Fetch complete enriched details
+  const enrichedData = await getFullReturnExchangeById(request.id);
+
+  // 6. Broadcast Real-time Socket.IO events to buyer and seller
+  try {
+    const io = getIO();
+    if (io && enrichedData) {
+      const socketPayload = {
+        requestId: request.id,
+        orderId: request.orderId,
+        type: request.type,
+        status: request.status,
+        delivery_status: request.delivery_status,
+        booking_order_id: request.booking_order_id,
+        public_tracking_id: request.public_tracking_id,
+        changed_at: changedAt,
+        delivar_status: newStatus,
+        details: enrichedData,
+      };
+
+      io.to(`user_${request.userId}`).emit("return_exchange_status_updated", socketPayload);
+      io.to(`user_${request.sellerId}`).emit("return_exchange_status_updated", socketPayload);
+      io.to(`user_${request.userId}`).emit("return_status_updated", socketPayload);
+      io.to(`user_${request.sellerId}`).emit("return_status_updated", socketPayload);
+    }
+  } catch (socketErr) {
+    console.error("[Return/Exchange Webhook] Socket broadcast error:", socketErr);
+  }
+
+  // 7. Send Push Notifications on key milestones
+  if (deliveryStatus === "In Transit" || normalized === "picked up") {
+    createAndSendNotification(
+      request.userId,
+      `${request.type === "RETURN" ? "Return" : "Exchange"} Items Picked Up 🛵`,
+      `The delivery rider has picked up the items for ${request.type.toLowerCase()} request #${request.id}.`,
+      "return_exchange_status_update",
+      request.id,
+      "buyer"
+    ).catch((e) => console.error("[Notification Error]", e));
+
+    createAndSendNotification(
+      request.sellerId,
+      `${request.type === "RETURN" ? "Return" : "Exchange"} Items in Transit 🛵`,
+      `Rider has picked up items for ${request.type.toLowerCase()} request #${request.id} and is on the way.`,
+      "return_exchange_status_update",
+      request.id,
+      "seller"
+    ).catch((e) => console.error("[Notification Error]", e));
+  } else if (deliveryStatus === "Delivered" || targetRequestStatus === "COMPLETED") {
+    createAndSendNotification(
+      request.userId,
+      `${request.type === "RETURN" ? "Return" : "Exchange"} Completed 🎉`,
+      `Your ${request.type.toLowerCase()} request #${request.id} for order #${request.orderId} has been completed.`,
+      "return_exchange_status_update",
+      request.id,
+      "buyer"
+    ).catch((e) => console.error("[Notification Error]", e));
+
+    createAndSendNotification(
+      request.sellerId,
+      `${request.type === "RETURN" ? "Return" : "Exchange"} Delivered & Processed 🎉`,
+      `${request.type} request #${request.id} for order #${request.orderId} has been successfully delivered and completed.`,
+      "return_exchange_status_update",
+      request.id,
+      "seller"
+    ).catch((e) => console.error("[Notification Error]", e));
+  }
+
+  return enrichedData;
+};
+
+/**
+ * Dispatch real-time webhook payload to seller's webhook endpoint if configured
+ */
+export const dispatchSellerWebhook = async (
+  sellerId: number,
+  event: string,
+  payload: any
+) => {
+  try {
+    const seller = await User.findByPk(sellerId, {
+      include: [
+        {
+          model: SellerProfile,
+          include: [{ model: Store, required: false }],
+        },
+      ],
+    });
+
+    const sellerProfile: any = (seller as any)?.SellerProfile;
+    const store: any = sellerProfile?.Store || sellerProfile?.Stores?.[0];
+
+    const targetUrl =
+      sellerProfile?.webhookUrl ||
+      sellerProfile?.webhook_url ||
+      store?.webhookUrl ||
+      store?.webhook_url ||
+      process.env.SELLER_RETURN_WEBHOOK_URL ||
+      process.env.SELLER_WEBHOOK_URL;
+
+    if (!targetUrl) return;
+
+    const secret =
+      sellerProfile?.webhookSecret ||
+      sellerProfile?.webhook_secret ||
+      process.env.DELIVAR_WEBHOOK_SECRET ||
+      "jiffy_secret";
+
+    const bodyString = JSON.stringify({
+      event,
+      timestamp: new Date().toISOString(),
+      sellerId,
+      data: payload,
+    });
+
+    const signature = crypto
+      .createHmac("sha256", secret)
+      .update(bodyString)
+      .digest("hex");
+
+    fetch(targetUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-webhook-signature": signature,
+        "x-webhook-event": event,
+      },
+      body: bodyString,
+    }).catch((e: any) => {
+      console.error(`[Seller Webhook Dispatch Error] target: ${targetUrl}:`, e?.message);
+    });
+  } catch (err) {
+    console.error("[Seller Webhook Dispatch Error]", err);
+  }
+};
+
