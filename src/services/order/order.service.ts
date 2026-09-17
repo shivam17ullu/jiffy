@@ -29,11 +29,40 @@ export const createOrdersFromCart = async (
   isFullWalletPay?: boolean,
   walletAmount?: number,
   booking_order_id?: string,
-  public_tracking_id?: string
+  public_tracking_id?: string,
+  buyerPickupAddressId?: number | string | null,
+  deliveryFee?: number,
+  discountAmount?: number,
+  couponCode?: string | null,
+  couponId?: number | string | null
 ) => {
   const t = await jiffy.transaction();
 
   try {
+    let finalBuyerPickupAddressId =
+      buyerPickupAddressId !== undefined && buyerPickupAddressId !== null && buyerPickupAddressId !== ""
+        ? isNaN(Number(buyerPickupAddressId)) ? buyerPickupAddressId : Number(buyerPickupAddressId)
+        : null;
+
+    if (!finalBuyerPickupAddressId && shippingAddress) {
+      if (shippingAddress.buyerPickupAddressId || shippingAddress.buyer_pickup_address_id) {
+        const raw = shippingAddress.buyerPickupAddressId ?? shippingAddress.buyer_pickup_address_id;
+        finalBuyerPickupAddressId = isNaN(Number(raw)) ? raw : Number(raw);
+      } else {
+        const addrId = shippingAddress.id || shippingAddress.locationId || shippingAddress.addressId;
+        if (addrId) {
+          const dbLoc = await Location.findByPk(addrId, { transaction: t });
+          if (dbLoc?.buyerPickupAddressId) {
+            finalBuyerPickupAddressId = Number(dbLoc.buyerPickupAddressId);
+          }
+        }
+      }
+    }
+
+    if (!finalBuyerPickupAddressId) {
+      throw new Error("Buyer pickup address ID is required");
+    }
+
     const items = await CartItem.findAll({
       where: { cartId: cartId },
       include: [
@@ -45,21 +74,25 @@ export const createOrdersFromCart = async (
 
     if (!items.length) throw new Error("Cart is empty");
 
-    // Calculate overall cart total first and verify stock
-    let overallCartTotal = 0;
+    // Calculate overall cart items subtotal first and verify stock
+    let overallCartSubtotal = 0;
     for (const item of items) {
       const variant = item.variant;
       if (variant.stock < item.qty) {
         throw new Error("Insufficient stock for variant: " + variant.id);
       }
-      overallCartTotal += (item.price || variant.price) * item.qty;
+      overallCartSubtotal += (item.price || variant.price) * item.qty;
     }
+
+    const fee = Number(deliveryFee) || 0;
+    const discount = Number(discountAmount) || 0;
+    const grandTotal = Math.max(0, Number((overallCartSubtotal + fee - discount).toFixed(2)));
 
     let finalWalletDeduction = 0;
     if (isFullWalletPay) {
-      finalWalletDeduction = overallCartTotal;
+      finalWalletDeduction = grandTotal;
     } else if (walletAmount && walletAmount > 0) {
-      if (walletAmount >= overallCartTotal) {
+      if (walletAmount >= grandTotal) {
         throw new Error("Partial wallet payment amount must be less than the total order amount.");
       }
       finalWalletDeduction = walletAmount;
@@ -92,6 +125,8 @@ export const createOrdersFromCart = async (
     const sellerIds = Object.keys(groups);
 
     let allocatedWallet = 0;
+    let allocatedDelivery = 0;
+    let allocatedDiscount = 0;
 
     // Create one order per seller
     for (let i = 0; i < sellerIds.length; i++) {
@@ -99,11 +134,23 @@ export const createOrdersFromCart = async (
       const groupItems = groups[sellerId];
       const isLastOrder = i === sellerIds.length - 1;
 
-      let total = 0;
+      let itemsSubtotal = 0;
       for (const it of groupItems) {
         const variant = it.variant;
-        total += (it.price || variant.price) * it.qty;
+        itemsSubtotal += (it.price || variant.price) * it.qty;
       }
+
+      const orderDeliveryFee = isLastOrder
+        ? Number((fee - allocatedDelivery).toFixed(2))
+        : Number(((itemsSubtotal / overallCartSubtotal) * fee).toFixed(2));
+      allocatedDelivery += orderDeliveryFee;
+
+      const orderDiscount = isLastOrder
+        ? Number((discount - allocatedDiscount).toFixed(2))
+        : Number(((itemsSubtotal / overallCartSubtotal) * discount).toFixed(2));
+      allocatedDiscount += orderDiscount;
+
+      const total = Math.max(0, Number((itemsSubtotal + orderDeliveryFee - orderDiscount).toFixed(2)));
 
       let orderWalletShare = 0;
       if (finalWalletDeduction > 0) {
@@ -112,7 +159,7 @@ export const createOrdersFromCart = async (
         } else {
           orderWalletShare = isLastOrder
             ? Number((finalWalletDeduction - allocatedWallet).toFixed(2))
-            : Number(((total / overallCartTotal) * finalWalletDeduction).toFixed(2));
+            : Number(((total / grandTotal) * finalWalletDeduction).toFixed(2));
           allocatedWallet += orderWalletShare;
         }
       }
@@ -123,8 +170,14 @@ export const createOrdersFromCart = async (
           ? "Wallet"
           : orderWalletShare > 0
             ? "Partial (Wallet + Online)"
-            : "Online",
+            : (paymentInfo?.method || paymentInfo?.mode || "Online"),
         status: isFullWalletPay ? "captured" : "pending",
+        itemsSubtotal: Number(itemsSubtotal.toFixed(2)),
+        deliveryFee: orderDeliveryFee,
+        deliveryCharge: orderDeliveryFee,
+        discountAmount: orderDiscount,
+        couponCode: couponCode || null,
+        couponId: couponId || null,
         walletAmount: orderWalletShare,
         razorpayAmount: Number((total - orderWalletShare).toFixed(2)),
         ...(paymentInfo || {}),
@@ -140,6 +193,7 @@ export const createOrdersFromCart = async (
           paymentInfo: enrichedPaymentInfo,
           booking_order_id: booking_order_id || null,
           public_tracking_id: public_tracking_id || null,
+          buyerPickupAddressId: finalBuyerPickupAddressId,
         },
         { transaction: t }
       );
@@ -415,21 +469,117 @@ export const listOrders = async (
 export const getBookingDetailsForOrder = async (order: any) => {
   if (!order) return null;
 
-  // 1. Seller pickup_address_id
-  let pickup_address_id = (order.seller as any)?.SellerProfile?.pickup_address_id || null;
-  if (!pickup_address_id && order.sellerId) {
-    const sellerProfile = await SellerProfile.findOne({
-      where: { userId: order.sellerId },
-    });
-    pickup_address_id = sellerProfile?.pickup_address_id || null;
-
-    if (!pickup_address_id && sellerProfile) {
-      const store = await Store.findOne({
-        where: { sellerId: sellerProfile.id },
+  // 1. Seller profile, store, and pickup_address_id
+  let sellerProfile = (order.seller as any)?.SellerProfile || null;
+  if (!sellerProfile || !sellerProfile.id) {
+    if (order.sellerId) {
+      sellerProfile = await SellerProfile.findOne({
+        where: {
+          [Op.or]: [{ userId: order.sellerId }, { id: order.sellerId }],
+        },
+        include: [{ model: Store, required: false }],
       });
-      pickup_address_id = store?.pickup_address_id || null;
     }
   }
+
+  const sellerProfileId = sellerProfile?.id;
+  const sellerUserId = sellerProfile?.userId || order.sellerId;
+
+  let store: any =
+    (sellerProfile as any)?.Store ||
+    (sellerProfile as any)?.Stores?.[0] ||
+    null;
+
+  if (!store && (sellerProfileId || sellerUserId)) {
+    store = await Store.findOne({
+      where: {
+        [Op.or]: [
+          ...(sellerProfileId ? [{ sellerId: sellerProfileId }] : []),
+          ...(sellerUserId ? [{ sellerId: sellerUserId }] : []),
+        ],
+      },
+      order: [["createdAt", "DESC"]],
+    });
+  }
+
+  let sellerLocationDb: any = null;
+  if (sellerProfileId || sellerUserId) {
+    sellerLocationDb = await Location.findOne({
+      where: {
+        [Op.or]: [
+          ...(sellerProfileId ? [{ sellerId: sellerProfileId }] : []),
+          ...(sellerUserId ? [{ userId: sellerUserId }] : []),
+        ],
+      },
+      order: [["createdAt", "DESC"]],
+    });
+  }
+
+  let pickup_address_id =
+    sellerProfile?.pickup_address_id ||
+    store?.pickup_address_id ||
+    sellerLocationDb?.id ||
+    null;
+
+  const sellerName =
+    sellerProfile?.businessName ||
+    store?.storeName ||
+    (order.seller as any)?.name ||
+    "Seller";
+
+  const sellerContactNumber =
+    sellerProfile?.phone ||
+    (order.seller as any)?.phone_number ||
+    store?.phone ||
+    "";
+
+  const sellerAddress =
+    store?.storeAddress ||
+    sellerLocationDb?.addressLine1 ||
+    sellerProfile?.address ||
+    "";
+
+  const sellerCity =
+    sellerLocationDb?.city ||
+    sellerProfile?.city ||
+    "";
+
+  const sellerState =
+    sellerLocationDb?.state ||
+    sellerProfile?.state ||
+    "";
+
+  const sellerPincode =
+    store?.pincode ||
+    sellerLocationDb?.pincode ||
+    sellerProfile?.zipCode ||
+    "";
+
+  let sellerLat = 0;
+  let sellerLng = 0;
+
+  if (store?.latitude !== undefined && store?.latitude !== null && !isNaN(Number(store.latitude))) {
+    sellerLat = Number(store.latitude);
+  } else if (sellerLocationDb?.latitude !== undefined && sellerLocationDb?.latitude !== null && !isNaN(Number(sellerLocationDb.latitude))) {
+    sellerLat = Number(sellerLocationDb.latitude);
+  }
+
+  if (store?.longitude !== undefined && store?.longitude !== null && !isNaN(Number(store.longitude))) {
+    sellerLng = Number(store.longitude);
+  } else if (sellerLocationDb?.longitude !== undefined && sellerLocationDb?.longitude !== null && !isNaN(Number(sellerLocationDb.longitude))) {
+    sellerLng = Number(sellerLocationDb.longitude);
+  }
+
+  const sellerLocation = {
+    address: sellerAddress,
+    addressLine1: sellerAddress,
+    city: sellerCity,
+    state: sellerState,
+    pincode: sellerPincode,
+    country: sellerLocationDb?.country || "India",
+    lat: sellerLat,
+    lng: sellerLng,
+  };
 
   // 2. Parse shippingAddress
   let shippingAddr = order.shippingAddress;
@@ -460,6 +610,7 @@ export const getBookingDetailsForOrder = async (order: any) => {
     shippingAddr?.name ||
     shippingAddr?.dropContactName ||
     (order.buyer as any)?.BuyerProfile?.fullName ||
+    (order.buyer as any)?.name ||
     "Customer";
 
   const dropContactNumber =
@@ -467,6 +618,7 @@ export const getBookingDetailsForOrder = async (order: any) => {
     shippingAddr?.phone_number ||
     shippingAddr?.mobile ||
     shippingAddr?.dropContactNumber ||
+    (order.buyer as any)?.BuyerProfile?.phone ||
     (order.buyer as any)?.phone_number ||
     "";
 
@@ -502,29 +654,27 @@ export const getBookingDetailsForOrder = async (order: any) => {
   let lng = rawLng !== null && rawLng !== undefined && !isNaN(Number(rawLng)) ? Number(rawLng) : 0;
 
   // Fallback: Check Location database table if lat/lng are 0 or missing
-  if (lat === 0 && lng === 0) {
-    const addressId = shippingAddr?.id || shippingAddr?.locationId || shippingAddr?.addressId;
-    let dbLocation = null;
-    if (addressId) {
-      dbLocation = await Location.findByPk(addressId);
+  let dbLocation = null;
+  const addressId = shippingAddr?.id || shippingAddr?.locationId || shippingAddr?.addressId;
+  if (addressId) {
+    dbLocation = await Location.findByPk(addressId);
+  }
+  if (!dbLocation && order.userId) {
+    dbLocation =
+      (await Location.findOne({
+        where: { userId: order.userId, isDefault: true },
+      })) ||
+      (await Location.findOne({
+        where: { userId: order.userId },
+        order: [["createdAt", "DESC"]],
+      }));
+  }
+  if (dbLocation) {
+    if (lat === 0 && dbLocation.latitude && !isNaN(Number(dbLocation.latitude))) {
+      lat = Number(dbLocation.latitude);
     }
-    if (!dbLocation && order.userId) {
-      dbLocation =
-        (await Location.findOne({
-          where: { userId: order.userId, isDefault: true },
-        })) ||
-        (await Location.findOne({
-          where: { userId: order.userId },
-          order: [["createdAt", "DESC"]],
-        }));
-    }
-    if (dbLocation) {
-      if (dbLocation.latitude && !isNaN(Number(dbLocation.latitude))) {
-        lat = Number(dbLocation.latitude);
-      }
-      if (dbLocation.longitude && !isNaN(Number(dbLocation.longitude))) {
-        lng = Number(dbLocation.longitude);
-      }
+    if (lng === 0 && dbLocation.longitude && !isNaN(Number(dbLocation.longitude))) {
+      lng = Number(dbLocation.longitude);
     }
   }
 
@@ -538,20 +688,42 @@ export const getBookingDetailsForOrder = async (order: any) => {
       shippingAddr?.city ||
       shippingAddr?.city_name ||
       shippingAddr?.drop_address_details?.city_name ||
+      dbLocation?.city ||
       "",
     state_name:
       shippingAddr?.state ||
       shippingAddr?.state_name ||
       shippingAddr?.drop_address_details?.state_name ||
+      dbLocation?.state ||
       "",
     pincode: String(
       shippingAddr?.pincode ||
       shippingAddr?.zipCode ||
       shippingAddr?.postalCode ||
       shippingAddr?.drop_address_details?.pincode ||
+      dbLocation?.pincode ||
       ""
     ),
   };
+
+  const buyerLocation = {
+    address: dropAddress,
+    addressLine1: shippingAddr?.addressLine1 || shippingAddr?.address || dbLocation?.addressLine1 || "",
+    addressLine2: shippingAddr?.addressLine2 || dbLocation?.addressLine2 || "",
+    city: drop_address_details.city_name,
+    state: drop_address_details.state_name,
+    pincode: drop_address_details.pincode,
+    country: shippingAddr?.country || dbLocation?.country || "India",
+    lat,
+    lng,
+  };
+
+  const buyerPickupAddressId =
+    order.buyerPickupAddressId ? (isNaN(Number(order.buyerPickupAddressId)) ? order.buyerPickupAddressId : Number(order.buyerPickupAddressId)) :
+    shippingAddr?.buyerPickupAddressId ? (isNaN(Number(shippingAddr.buyerPickupAddressId)) ? shippingAddr.buyerPickupAddressId : Number(shippingAddr.buyerPickupAddressId)) :
+    shippingAddr?.buyer_pickup_address_id ? (isNaN(Number(shippingAddr.buyer_pickup_address_id)) ? shippingAddr.buyer_pickup_address_id : Number(shippingAddr.buyer_pickup_address_id)) :
+    dbLocation?.buyerPickupAddressId ? (isNaN(Number(dbLocation.buyerPickupAddressId)) ? dbLocation.buyerPickupAddressId : Number(dbLocation.buyerPickupAddressId)) :
+    null;
 
   // 3. Package details calculation from order items
   const items = order.items || [];
@@ -577,12 +749,19 @@ export const getBookingDetailsForOrder = async (order: any) => {
   };
 
   return {
-    pickup_address_id: pickup_address_id ? Number(pickup_address_id) : null,
+    sellerPickUpId: pickup_address_id ? Number(pickup_address_id) : null,
+    buyerPickupAddressId,
     dropAddress,
     dropContactName,
     dropContactNumber,
     dropCoords,
     drop_address_details,
+    buyerLocation,
+    sellerLocation,
+    buyerName: dropContactName,
+    buyerContactNumber: dropContactNumber,
+    sellerName,
+    sellerContactNumber,
     packageDetails,
   };
 };
@@ -664,14 +843,6 @@ export const getOrderById = async (
           {
             model: BuyerProfile,
             required: false,
-            attributes: [
-              "fullName",
-              "phone",
-              "address",
-              "city",
-              "state",
-              "zipCode",
-            ],
           },
         ],
       },
@@ -682,15 +853,19 @@ export const getOrderById = async (
           {
             model: SellerProfile,
             required: false,
-            attributes: [
-              "businessName",
-              "gstNumber",
-              "address",
-              "city",
-              "state",
-              "zipCode",
-              "phone",
-              "pickup_address_id",
+            include: [{ model: Store, required: false }],
+          },
+        ],
+      },
+      {
+        association: "returnRequests",
+        include: [
+          {
+            association: "items",
+            include: [
+              { association: "originalVariant" },
+              { association: "exchangeVariant" },
+              { association: "product" },
             ],
           },
         ],
@@ -707,6 +882,15 @@ export const getOrderById = async (
 
   return {
     ...orderJson,
+    buyerPickupAddressId: bookingDetails?.buyerPickupAddressId || (order as any).buyerPickupAddressId || null,
+    sellerPickUpId: bookingDetails?.sellerPickUpId || null,
+    buyerLocation: bookingDetails?.buyerLocation || null,
+    sellerLocation: bookingDetails?.sellerLocation || null,
+    packageDetails: bookingDetails?.packageDetails || null,
+    buyerName: bookingDetails?.buyerName || null,
+    buyerContactNumber: bookingDetails?.buyerContactNumber || null,
+    sellerName: bookingDetails?.sellerName || null,
+    sellerContactNumber: bookingDetails?.sellerContactNumber || null,
     bookingDetails,
   };
 };

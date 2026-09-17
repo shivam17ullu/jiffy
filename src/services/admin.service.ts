@@ -556,7 +556,20 @@ export default class AdminService {
 						{
 							model: SellerProfile,
 							required: false,
-							attributes: ["businessName", "gstNumber", "address", "city", "state", "zipCode", "phone", "pickup_address_id"],
+							include: [{ model: Store, required: false }],
+						},
+					],
+				},
+				{
+					association: "returnRequests",
+					include: [
+						{
+							association: "items",
+							include: [
+								{ association: "originalVariant" },
+								{ association: "exchangeVariant" },
+								{ association: "product" },
+							],
 						},
 					],
 				},
@@ -572,6 +585,15 @@ export default class AdminService {
 
 		return {
 			...orderJson,
+			buyerPickupAddressId: bookingDetails?.buyerPickupAddressId || (order as any).buyerPickupAddressId || null,
+			sellerPickUpId: bookingDetails?.sellerPickUpId || null,
+			buyerLocation: bookingDetails?.buyerLocation || null,
+			sellerLocation: bookingDetails?.sellerLocation || null,
+			packageDetails: bookingDetails?.packageDetails || null,
+			buyerName: bookingDetails?.buyerName || null,
+			buyerContactNumber: bookingDetails?.buyerContactNumber || null,
+			sellerName: bookingDetails?.sellerName || null,
+			sellerContactNumber: bookingDetails?.sellerContactNumber || null,
 			bookingDetails,
 		};
 	}

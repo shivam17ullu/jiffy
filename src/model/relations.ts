@@ -158,6 +158,8 @@ ReturnExchangeRequest.belongsTo(User, { foreignKey: "userId", as: "buyer" });
 
 ReturnExchangeItem.belongsTo(ProductVariant, { as: "originalVariant", foreignKey: "variantId" });
 ReturnExchangeItem.belongsTo(ProductVariant, { as: "exchangeVariant", foreignKey: "exchangeVariantId" });
+ReturnExchangeItem.belongsTo(Product, { as: "product", foreignKey: "productId" });
+Product.hasMany(ReturnExchangeItem, { as: "returnExchangeItems", foreignKey: "productId" });
 
 // Coupon relations
 Coupon.hasMany(CouponUsage, { foreignKey: "coupon_id", as: "usages" });

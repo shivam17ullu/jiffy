@@ -9,10 +9,298 @@ import {
   User,
   SellerProfile,
   BuyerProfile,
+  Store,
+  Location,
 } from "../../model/relations.js";
 import { Op, Transaction } from "sequelize";
 import { creditWallet } from "../wallet/wallet.service.js";
 import { createAndSendNotification } from "../notification/notification.service.js";
+
+/**
+ * Helper to enrich Return & Exchange Request with comprehensive buyer/seller pickup IDs, locations with lat/lng, packageDetails, names and contacts
+ */
+export const enrichReturnExchangeDetails = async (request: any) => {
+  if (!request) return null;
+  const reqJson = typeof request.toJSON === "function" ? request.toJSON() : { ...request };
+
+  const order = reqJson.order;
+  const buyer = reqJson.buyer || order?.buyer;
+  const seller = reqJson.seller || order?.seller;
+  const sellerId = reqJson.sellerId || order?.sellerId;
+  const userId = reqJson.userId || order?.userId;
+
+  // 1. Seller Profile, Store, & Location
+  let sellerProfile = seller?.SellerProfile || order?.seller?.SellerProfile;
+  if (!sellerProfile || !sellerProfile.id) {
+    if (sellerId) {
+      sellerProfile = await SellerProfile.findOne({
+        where: {
+          [Op.or]: [{ userId: sellerId }, { id: sellerId }],
+        },
+        include: [{ model: Store, required: false }],
+      });
+    }
+  }
+
+  const sellerProfileId = sellerProfile?.id;
+  const sellerUserId = sellerProfile?.userId || sellerId;
+
+  let store: any =
+    (sellerProfile as any)?.Store ||
+    (sellerProfile as any)?.Stores?.[0] ||
+    null;
+
+  if (!store && (sellerProfileId || sellerUserId)) {
+    store = await Store.findOne({
+      where: {
+        [Op.or]: [
+          ...(sellerProfileId ? [{ sellerId: sellerProfileId }] : []),
+          ...(sellerUserId ? [{ sellerId: sellerUserId }] : []),
+        ],
+      },
+      order: [["createdAt", "DESC"]],
+    });
+  }
+
+  let sellerLocationDb: any = null;
+  if (sellerProfileId || sellerUserId) {
+    sellerLocationDb = await Location.findOne({
+      where: {
+        [Op.or]: [
+          ...(sellerProfileId ? [{ sellerId: sellerProfileId }] : []),
+          ...(sellerUserId ? [{ userId: sellerUserId }] : []),
+        ],
+      },
+      order: [["createdAt", "DESC"]],
+    });
+  }
+
+  // Seller pickup address ID
+  const sellerPickUpId =
+    sellerProfile?.pickup_address_id ? Number(sellerProfile.pickup_address_id) :
+    store?.pickup_address_id ? Number(store.pickup_address_id) :
+    sellerLocationDb?.id ? Number(sellerLocationDb.id) :
+    null;
+
+  // Seller Contact & Name
+  const sellerName =
+    sellerProfile?.businessName ||
+    store?.storeName ||
+    seller?.name ||
+    "Seller";
+
+  const sellerContactNumber =
+    sellerProfile?.phone ||
+    seller?.phone_number ||
+    store?.phone ||
+    "";
+
+  // Seller Location & Coordinates
+  const sellerAddress =
+    store?.storeAddress ||
+    sellerLocationDb?.addressLine1 ||
+    sellerProfile?.address ||
+    "";
+
+  const sellerCity =
+    sellerLocationDb?.city ||
+    sellerProfile?.city ||
+    "";
+
+  const sellerState =
+    sellerLocationDb?.state ||
+    sellerProfile?.state ||
+    "";
+
+  const sellerPincode =
+    store?.pincode ||
+    sellerLocationDb?.pincode ||
+    sellerProfile?.zipCode ||
+    "";
+
+  let sellerLat = 0;
+  let sellerLng = 0;
+
+  if (store?.latitude !== undefined && store?.latitude !== null && !isNaN(Number(store.latitude))) {
+    sellerLat = Number(store.latitude);
+  } else if (sellerLocationDb?.latitude !== undefined && sellerLocationDb?.latitude !== null && !isNaN(Number(sellerLocationDb.latitude))) {
+    sellerLat = Number(sellerLocationDb.latitude);
+  }
+
+  if (store?.longitude !== undefined && store?.longitude !== null && !isNaN(Number(store.longitude))) {
+    sellerLng = Number(store.longitude);
+  } else if (sellerLocationDb?.longitude !== undefined && sellerLocationDb?.longitude !== null && !isNaN(Number(sellerLocationDb.longitude))) {
+    sellerLng = Number(sellerLocationDb.longitude);
+  }
+
+  const sellerLocation = {
+    address: sellerAddress,
+    addressLine1: sellerAddress,
+    city: sellerCity,
+    state: sellerState,
+    pincode: sellerPincode,
+    country: sellerLocationDb?.country || "India",
+    lat: sellerLat,
+    lng: sellerLng,
+  };
+
+  // 2. Buyer Profile & Shipping Address & Location
+  let shippingAddr = order?.shippingAddress;
+  if (typeof shippingAddr === "string") {
+    try {
+      shippingAddr = JSON.parse(shippingAddr);
+    } catch {
+      shippingAddr = {};
+    }
+  }
+
+  const buyerProfile = buyer?.BuyerProfile;
+
+  let buyerLocationDb: any = null;
+  const addressId = shippingAddr?.id || shippingAddr?.locationId || shippingAddr?.addressId;
+  if (addressId) {
+    buyerLocationDb = await Location.findByPk(addressId);
+  }
+  if (!buyerLocationDb && userId) {
+    buyerLocationDb =
+      (await Location.findOne({
+        where: { userId, isDefault: true },
+      })) ||
+      (await Location.findOne({
+        where: { userId },
+        order: [["createdAt", "DESC"]],
+      }));
+  }
+
+  const dropAddress =
+    shippingAddr?.address ||
+    shippingAddr?.addressLine1 ||
+    [
+      shippingAddr?.addressLine1,
+      shippingAddr?.addressLine2,
+      shippingAddr?.city,
+      shippingAddr?.state,
+      shippingAddr?.pincode || shippingAddr?.zipCode,
+    ]
+      .filter(Boolean)
+      .join(", ") ||
+    buyerLocationDb?.addressLine1 ||
+    buyerProfile?.address ||
+    "";
+
+  const buyerName =
+    shippingAddr?.fullName ||
+    shippingAddr?.name ||
+    shippingAddr?.dropContactName ||
+    buyerProfile?.fullName ||
+    buyer?.name ||
+    "Customer";
+
+  const buyerContactNumber =
+    shippingAddr?.phone ||
+    shippingAddr?.phone_number ||
+    shippingAddr?.mobile ||
+    shippingAddr?.dropContactNumber ||
+    buyerProfile?.phone ||
+    buyer?.phone_number ||
+    "";
+
+  let rawBuyerLat =
+    shippingAddr?.lat ??
+    shippingAddr?.latitude ??
+    shippingAddr?.dropCoords?.lat ??
+    shippingAddr?.dropCoords?.latitude ??
+    shippingAddr?.coords?.lat ??
+    shippingAddr?.coords?.latitude ??
+    shippingAddr?.coordinates?.lat ??
+    shippingAddr?.coordinates?.latitude ??
+    (Array.isArray(shippingAddr?.coordinates) ? shippingAddr.coordinates[1] : undefined) ??
+    shippingAddr?.location?.lat ??
+    shippingAddr?.location?.latitude ??
+    null;
+
+  let rawBuyerLng =
+    shippingAddr?.lng ??
+    shippingAddr?.longitude ??
+    shippingAddr?.dropCoords?.lng ??
+    shippingAddr?.dropCoords?.longitude ??
+    shippingAddr?.coords?.lng ??
+    shippingAddr?.coords?.longitude ??
+    shippingAddr?.coordinates?.lng ??
+    shippingAddr?.coordinates?.longitude ??
+    (Array.isArray(shippingAddr?.coordinates) ? shippingAddr.coordinates[0] : undefined) ??
+    shippingAddr?.location?.lng ??
+    shippingAddr?.location?.longitude ??
+    null;
+
+  let buyerLat = rawBuyerLat !== null && rawBuyerLat !== undefined && !isNaN(Number(rawBuyerLat)) ? Number(rawBuyerLat) : 0;
+  let buyerLng = rawBuyerLng !== null && rawBuyerLng !== undefined && !isNaN(Number(rawBuyerLng)) ? Number(rawBuyerLng) : 0;
+
+  if (buyerLat === 0 && buyerLng === 0 && buyerLocationDb) {
+    if (buyerLocationDb.latitude && !isNaN(Number(buyerLocationDb.latitude))) {
+      buyerLat = Number(buyerLocationDb.latitude);
+    }
+    if (buyerLocationDb.longitude && !isNaN(Number(buyerLocationDb.longitude))) {
+      buyerLng = Number(buyerLocationDb.longitude);
+    }
+  }
+
+  // Buyer Pickup Address ID
+  const buyerPickupAddressId =
+    order?.buyerPickupAddressId ? (isNaN(Number(order.buyerPickupAddressId)) ? order.buyerPickupAddressId : Number(order.buyerPickupAddressId)) :
+    shippingAddr?.buyerPickupAddressId ? (isNaN(Number(shippingAddr.buyerPickupAddressId)) ? shippingAddr.buyerPickupAddressId : Number(shippingAddr.buyerPickupAddressId)) :
+    shippingAddr?.buyer_pickup_address_id ? (isNaN(Number(shippingAddr.buyer_pickup_address_id)) ? shippingAddr.buyer_pickup_address_id : Number(shippingAddr.buyer_pickup_address_id)) :
+    buyerLocationDb?.buyerPickupAddressId ? (isNaN(Number(buyerLocationDb.buyerPickupAddressId)) ? buyerLocationDb.buyerPickupAddressId : Number(buyerLocationDb.buyerPickupAddressId)) :
+    null;
+
+  const buyerLocation = {
+    address: dropAddress,
+    addressLine1: shippingAddr?.addressLine1 || shippingAddr?.address || buyerLocationDb?.addressLine1 || buyerProfile?.address || "",
+    addressLine2: shippingAddr?.addressLine2 || buyerLocationDb?.addressLine2 || "",
+    city: shippingAddr?.city || shippingAddr?.city_name || buyerLocationDb?.city || buyerProfile?.city || "",
+    state: shippingAddr?.state || shippingAddr?.state_name || buyerLocationDb?.state || buyerProfile?.state || "",
+    pincode: String(shippingAddr?.pincode || shippingAddr?.zipCode || buyerLocationDb?.pincode || buyerProfile?.zipCode || ""),
+    country: shippingAddr?.country || buyerLocationDb?.country || "India",
+    lat: buyerLat,
+    lng: buyerLng,
+  };
+
+  // 3. Package Details Calculation
+  const items = (order?.items && order.items.length > 0) ? order.items : (reqJson.items || []);
+  let totalWeight = 0;
+  let maxLength = 0;
+  let maxWidth = 0;
+  let maxHeight = 0;
+
+  for (const it of items) {
+    const v = (it as any).variant || (it as any).originalVariant || (it as any).exchangeVariant;
+    const qty = Number((it as any).qty || 1);
+    totalWeight += Number(v?.weight || 0.5) * qty;
+    maxLength = Math.max(maxLength, Number(v?.length || 10));
+    maxWidth = Math.max(maxWidth, Number(v?.width || 5));
+    maxHeight += Number(v?.height || 5) * qty;
+  }
+
+  const packageDetails = {
+    length: Number(maxLength.toFixed(2)) || 10,
+    width: Number(maxWidth.toFixed(2)) || 5,
+    height: Number(maxHeight.toFixed(2)) || 6,
+    weight: Number(totalWeight.toFixed(2)) || 2,
+  };
+
+  return {
+    ...reqJson,
+    buyerPickupAddressId,
+    sellerPickUpId,
+    buyerLocation,
+    sellerLocation,
+    packageDetails,
+    buyerName,
+    buyerContactNumber,
+    sellerName,
+    sellerContactNumber,
+  };
+};
 
 /**
  * Create a new Return or Exchange request (Buyer only)
@@ -194,9 +482,6 @@ export const createReturnExchangeRequest = async (
 
     // 7. Update overall Order status to initial return/exchange status
     const initialOrderStatus = type === "RETURN" ? "Return Requested" : "Exchange Requested";
-    // Optional: You could remove the global Order.update if you want to rely purely on item status.
-    // For backwards compatibility, we'll keep it but also update OrderItem.
-    
     for (const item of verifiedItems) {
       await OrderItem.update(
         { status: initialOrderStatus },
@@ -218,15 +503,30 @@ export const createReturnExchangeRequest = async (
       console.error(`Failed to send notification to seller #${order.sellerId} for request #${request.id}:`, err);
     });
 
-    // Reload with items
-    return await ReturnExchangeRequest.findByPk(request.id, {
-      include: [{ association: "items" }],
+    // Reload with items and order
+    const createdReq = await ReturnExchangeRequest.findByPk(request.id, {
+      include: [
+        { association: "items", include: [{ association: "originalVariant" }, { association: "exchangeVariant" }, { association: "product" }] },
+        {
+          association: "order",
+          include: [
+            { association: "items", include: [{ association: "variant" }, { association: "product" }] },
+            { association: "buyer", include: [{ model: BuyerProfile, required: false }] },
+            { association: "seller", include: [{ model: SellerProfile, required: false }] },
+          ],
+        },
+        { association: "buyer", include: [{ model: BuyerProfile, required: false }] },
+        { association: "seller", include: [{ model: SellerProfile, required: false }] },
+      ],
     });
+
+    return await enrichReturnExchangeDetails(createdReq);
   } catch (err) {
     await t.rollback();
     throw err;
   }
 };
+
 
 /**
  * Get paginated list of Return & Exchange requests
@@ -269,21 +569,60 @@ export const listRequests = async (userId: number, role: string, opts: any) => {
         {
           association: "items",
           include: [
-            { association: "originalVariant", attributes: ["size", "color", "price"] },
-            { association: "exchangeVariant", attributes: ["size", "color", "price"] },
+            { association: "originalVariant", attributes: ["size", "color", "price", "weight", "length", "width", "height"] },
+            { association: "exchangeVariant", attributes: ["size", "color", "price", "weight", "length", "width", "height"] },
+            { association: "product" },
           ],
         },
         {
           association: "order",
-          attributes: ["id", "total", "status", "createdAt"],
+          attributes: ["id", "total", "status", "buyerPickupAddressId", "shippingAddress", "sellerId", "userId", "createdAt"],
+          include: [
+            {
+              association: "items",
+              include: [{ association: "variant" }, { association: "product" }],
+            },
+            {
+              association: "buyer",
+              attributes: ["id", "phone_number", "email"],
+              include: [
+                {
+                  model: BuyerProfile,
+                  required: false,
+                },
+              ],
+            },
+            {
+              association: "seller",
+              attributes: ["id", "phone_number", "email"],
+              include: [
+                {
+                  model: SellerProfile,
+                  required: false,
+                  include: [{ model: Store, required: false }],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          association: "buyer",
+          attributes: ["id", "phone_number", "email"],
+          include: [
+            {
+              model: BuyerProfile,
+              required: false,
+            },
+          ],
         },
         {
           association: "seller",
-          attributes: ["id", "email"],
+          attributes: ["id", "phone_number", "email"],
           include: [
             {
-              association: "SellerProfile",
-              attributes: ["businessName", "pickup_address_id"],
+              model: SellerProfile,
+              required: false,
+              include: [{ model: Store, required: false }],
             },
           ],
         },
@@ -296,8 +635,10 @@ export const listRequests = async (userId: number, role: string, opts: any) => {
     });
   }
 
+  const enrichedItems = await Promise.all(fullRows.map(enrichReturnExchangeDetails));
+
   return {
-    items: fullRows,
+    items: enrichedItems,
     total: count,
     page: parseInt(page),
     limit: parseInt(limit),
@@ -318,12 +659,72 @@ export const getRequestById = async (
       {
         association: "items",
         include: [
-          { association: "originalVariant" },
-          { association: "exchangeVariant" },
+          {
+            association: "originalVariant",
+            include: [{ association: "product" }],
+          },
+          {
+            association: "exchangeVariant",
+            include: [{ association: "product" }],
+          },
+          {
+            association: "product",
+          },
         ],
       },
       {
         association: "order",
+        include: [
+          {
+            association: "items",
+            include: [
+              { association: "variant" },
+              { association: "product" },
+            ],
+          },
+          {
+            association: "buyer",
+            attributes: ["id", "phone_number", "email"],
+            include: [
+              {
+                model: BuyerProfile,
+                required: false,
+              },
+            ],
+          },
+          {
+            association: "seller",
+            attributes: ["id", "phone_number", "email"],
+            include: [
+              {
+                model: SellerProfile,
+                required: false,
+                include: [{ model: Store, required: false }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        association: "buyer",
+        attributes: ["id", "phone_number", "email"],
+        include: [
+          {
+            model: BuyerProfile,
+            required: false,
+          },
+        ],
+      },
+      {
+        association: "seller",
+        attributes: ["id", "phone_number", "email"],
+        include: [
+          {
+            model: SellerProfile,
+            required: false,
+            include: [{ model: Store, required: false }],
+          },
+        ],
       },
     ],
   });
@@ -337,8 +738,9 @@ export const getRequestById = async (
     throw new Error("You do not have permission to view this request.");
   }
 
-  return request;
+  return await enrichReturnExchangeDetails(request);
 };
+
 
 /**
  * Update request status (Approvals by Seller/Admin, Cancel by Buyer)
@@ -566,9 +968,23 @@ export const updateRequestStatus = async (
       console.error(`Failed to send status update notification to buyer #${request.userId}:`, err);
     });
 
-    return await ReturnExchangeRequest.findByPk(requestId, {
-      include: [{ association: "items" }],
+    const updatedReq = await ReturnExchangeRequest.findByPk(requestId, {
+      include: [
+        { association: "items", include: [{ association: "originalVariant" }, { association: "exchangeVariant" }, { association: "product" }] },
+        {
+          association: "order",
+          include: [
+            { association: "items", include: [{ association: "variant" }, { association: "product" }] },
+            { association: "buyer", include: [{ model: BuyerProfile, required: false }] },
+            { association: "seller", include: [{ model: SellerProfile, required: false }] },
+          ],
+        },
+        { association: "buyer", include: [{ model: BuyerProfile, required: false }] },
+        { association: "seller", include: [{ model: SellerProfile, required: false }] },
+      ],
     });
+
+    return await enrichReturnExchangeDetails(updatedReq);
   } catch (err) {
     await t.rollback();
     throw err;

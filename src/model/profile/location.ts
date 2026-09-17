@@ -19,13 +19,14 @@ export interface LocationAttributes {
   phone_number?: string;
   name?: string;
   alternate_number?: string;
+  buyerPickupAddressId?: number | string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 type LocationCreationAttributes = Optional<
   LocationAttributes,
-  "id" | "sellerId" | "buyerId" | "latitude" | "longitude" | "createdAt" | "updatedAt"
+  "id" | "sellerId" | "buyerId" | "latitude" | "longitude" | "buyerPickupAddressId" | "createdAt" | "updatedAt"
 >;
 
 class Location extends Model<LocationAttributes, LocationCreationAttributes> implements LocationAttributes {
@@ -46,6 +47,7 @@ class Location extends Model<LocationAttributes, LocationCreationAttributes> imp
   public phone_number?: string;
   public name?: string;
   public alternate_number?: string;
+  public buyerPickupAddressId?: number | string | null;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -93,6 +95,11 @@ Location.init(
     phone_number: { type: DataTypes.STRING(15) },
     name: { type: DataTypes.STRING },
     alternate_number: { type: DataTypes.STRING(15) },
+    buyerPickupAddressId: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      field: "buyer_pickup_address_id",
+    },
   },
   {
     sequelize: jiffy,

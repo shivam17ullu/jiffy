@@ -1069,13 +1069,14 @@ All order APIs require authentication.
 
 **POST** `/api/orders`
 
-Creates separate orders for each seller (groups cart items by seller).
+Creates separate orders for each seller (groups cart items by seller). `buyerPickupAddressId` is a required field.
 
 **Request Body:**
 
 ```json
 {
   "cartId": 1,
+  "buyerPickupAddressId": 12345,
   "shippingAddress": {
     "fullName": "John Doe",
     "address": "123 Main St",
@@ -1103,6 +1104,7 @@ Creates separate orders for each seller (groups cart items by seller).
       "sellerId": 2,
       "total": 1000,
       "status": "created",
+      "buyerPickupAddressId": 12345,
       "items": [...]
     }
   ]
@@ -1434,7 +1436,8 @@ Add a new shipping address.
 ```json
 {
   "userId": 1,
-  "address": "123 Main St",
+  "buyerPickupAddressId": 12345,
+  "addressLine1": "123 Main St",
   "city": "Mumbai",
   "state": "Maharashtra",
   "zipCode": "400001",
@@ -1795,6 +1798,130 @@ Update operating days, opening time, and closing time for the authenticated sell
 }
 ```
 
+
+---
+
+## 🔄 Return & Exchange APIs
+
+### 1. Create Return / Exchange Request
+
+**POST** `/api/return-exchange`
+
+Create a return or exchange request (Buyer only).
+
+**Request Body:**
+```json
+{
+  "orderId": 123,
+  "type": "RETURN",
+  "reason": "Damaged product received",
+  "comments": "The item is torn at the seam",
+  "images": ["https://s3.amazonaws.com/..."],
+  "items": [
+    {
+      "orderItemId": 456,
+      "productId": 789,
+      "variantId": 101,
+      "qty": 1,
+      "exchangeVariantId": null
+    }
+  ]
+}
+```
+
+---
+
+### 2. List Return / Exchange Requests
+
+**GET** `/api/return-exchange?role=buyer&status=PENDING&type=RETURN&page=1&limit=20`
+
+---
+
+### 3. Get Return / Exchange Details
+
+**GET** `/api/return-exchange/:id`
+
+Returns complete return/exchange details including buyer & seller pickup IDs, location coordinates (`lat`, `lng`), package details, buyer & seller names, and contact numbers.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "orderId": 123,
+    "userId": 45,
+    "sellerId": 67,
+    "type": "RETURN",
+    "status": "PENDING",
+    "reason": "Damaged product received",
+    "comments": "The item is torn at the seam",
+    "images": ["https://s3.amazonaws.com/..."],
+    "buyerPickupAddressId": 98765,
+    "sellerPickUpId": 54321,
+    "buyerLocation": {
+      "address": "123 Main St, Apartment 4B, Mumbai, Maharashtra 400001",
+      "city": "Mumbai",
+      "state": "Maharashtra",
+      "pincode": "400001",
+      "country": "India",
+      "lat": 19.0760,
+      "lng": 72.8777
+    },
+    "sellerLocation": {
+      "address": "456 Market Road, Bandra West, Mumbai, Maharashtra 400050",
+      "city": "Mumbai",
+      "state": "Maharashtra",
+      "pincode": "400050",
+      "country": "India",
+      "lat": 19.0596,
+      "lng": 72.8295
+    },
+    "packageDetails": {
+      "length": 15,
+      "width": 10,
+      "height": 5,
+      "weight": 1.2
+    },
+    "buyerName": "John Doe",
+    "buyerContactNumber": "+919876543210",
+    "sellerName": "Fashion Store",
+    "sellerContactNumber": "+919123456780",
+    "items": [
+      {
+        "id": 1,
+        "requestId": 1,
+        "orderItemId": 456,
+        "productId": 789,
+        "variantId": 101,
+        "qty": 1,
+        "price": 999,
+        "originalVariant": { "size": "M", "color": "Blue", "price": 999 },
+        "exchangeVariant": null,
+        "product": { ... }
+      }
+    ],
+    "order": {
+      "id": 123,
+      "total": 999,
+      "status": "Return Requested",
+      "buyerPickupAddressId": 98765,
+      "sellerPickUpId": 54321,
+      "buyerLocation": { ... },
+      "sellerLocation": { ... },
+      "packageDetails": { ... }
+    }
+  }
+}
+```
+
+---
+
+### 4. Update Return / Exchange Status
+
+**PATCH** `/api/return-exchange/:id/status`
+
+Update request status (`APPROVED`, `REJECTED`, `COMPLETED`, `CANCELLED`).
 
 ---
 
