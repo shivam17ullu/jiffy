@@ -30,6 +30,7 @@ import {
 	assertSellerCanAccessByPhone,
 	userHasSellerRole,
 } from "./sellerAccess.service.js";
+import { OtpThrottler } from "../utils/otpThrottle.js";
 
 const ACCESS_TOKEN_EXP = "1d";
 const REFRESH_TOKEN_EXP_MIN = 60 * 24 * 7; // 7 days
@@ -71,6 +72,11 @@ export default class AuthService {
 	}
 
 	static async generateOtp(phone_number: string, role?: string) {
+		const throttleCheck = OtpThrottler.checkSendOtpThrottle(phone_number);
+		if (!throttleCheck.allowed) {
+			throw ApiError.tooManyRequests(throttleCheck.message, "phone_number");
+		}
+
 		if (role === 'seller') {
 			const user = await User.findOne({ where: { phone_number } });
 			if (!user) {
@@ -82,6 +88,24 @@ export default class AuthService {
 		}
 
 		await assertSellerCanAccessByPhone(phone_number);
+
+		OtpThrottler.recordSendOtp(phone_number);
+
+		// Bypass external OTP provider for test buyer number 9999999999
+		if (phone_number === "9999999999") {
+			const otp = "123456";
+			const otpSession = "test-session-9999999999";
+			const expires_at = addMinutes(new Date(), 10);
+
+			await OtpLogin.create({
+				phone_number,
+				otp,
+				otp_session: otpSession,
+				expires_at,
+			});
+
+			return { otp, otpSession };
+		}
 
 		// Send via Muzztech
 		const { otpSession, otp } = await sendOtpMuzztech(phone_number);
@@ -105,36 +129,68 @@ export default class AuthService {
 		role?: string,
 		otp_session?: string
 	) {
-		const whereClause: any = { phone_number, is_used: false };
-		if (otp_session) {
-			whereClause.otp_session = otp_session;
+		const throttleCheck = OtpThrottler.checkVerifyOtpThrottle(phone_number);
+		if (!throttleCheck.allowed) {
+			throw ApiError.tooManyRequests(throttleCheck.message, "otp");
 		}
 
-		const otpRecord = await OtpLogin.findOne({
-			where: whereClause,
-			order: [["created_at", "DESC"]],
-		});
-
-		if (!otpRecord) throw new Error("Invalid OTP");
-		if (isBefore(otpRecord.expires_at, new Date()))
-			throw new Error("OTP expired");
-
-		const sessionToVerify = otp_session || otpRecord.otp_session;
-
-		if (sessionToVerify) {
-			const verificationResult = await verifyOtpMuzztech(sessionToVerify, otp);
-			if (!verificationResult.verified) {
-				throw new Error(verificationResult.message || "Invalid OTP");
-			}
-		} else {
-			if (otpRecord.otp !== otp) {
+		if (phone_number === "9999999999") {
+			if (otp !== "123456") {
+				OtpThrottler.recordVerifyFailure(phone_number);
 				throw new Error("Invalid OTP");
 			}
+
+			// Mark active OTP record as used if it exists
+			const otpRecord = await OtpLogin.findOne({
+				where: { phone_number, is_used: false },
+				order: [["created_at", "DESC"]],
+			});
+			if (otpRecord) {
+				otpRecord.is_used = true;
+				await otpRecord.save();
+			}
+		} else {
+			const whereClause: any = { phone_number, is_used: false };
+			if (otp_session) {
+				whereClause.otp_session = otp_session;
+			}
+
+			const otpRecord = await OtpLogin.findOne({
+				where: whereClause,
+				order: [["created_at", "DESC"]],
+			});
+
+			if (!otpRecord) {
+				OtpThrottler.recordVerifyFailure(phone_number);
+				throw new Error("Invalid OTP");
+			}
+			if (isBefore(otpRecord.expires_at, new Date())) {
+				OtpThrottler.recordVerifyFailure(phone_number);
+				throw new Error("OTP expired");
+			}
+
+			const sessionToVerify = otp_session || otpRecord.otp_session;
+
+			if (sessionToVerify) {
+				const verificationResult = await verifyOtpMuzztech(sessionToVerify, otp);
+				if (!verificationResult.verified) {
+					OtpThrottler.recordVerifyFailure(phone_number);
+					throw new Error(verificationResult.message || "Invalid OTP");
+				}
+			} else {
+				if (otpRecord.otp !== otp) {
+					OtpThrottler.recordVerifyFailure(phone_number);
+					throw new Error("Invalid OTP");
+				}
+			}
+
+			// mark OTP as used
+			otpRecord.is_used = true;
+			await otpRecord.save();
 		}
 
-		// mark OTP as used
-		otpRecord.is_used = true;
-		await otpRecord.save();
+		// Reset verify failures upon successful verification
+		OtpThrottler.resetVerifyAttempts(phone_number);
 
 		let user = await User.findOne({
 			where: { phone_number },
@@ -410,6 +466,11 @@ export default class AuthService {
 		ip?: string,
 		otp_session?: string
 	) {
+		const throttleCheck = OtpThrottler.checkVerifyOtpThrottle(phone_number);
+		if (!throttleCheck.allowed) {
+			throw ApiError.tooManyRequests(throttleCheck.message, "otp");
+		}
+
 		const whereClause: any = { phone_number, is_used: false };
 		if (otp_session) {
 			whereClause.otp_session = otp_session;
@@ -421,8 +482,12 @@ export default class AuthService {
 			order: [["created_at", "DESC"]],
 		});
 
-		if (!otpRecord) throw new Error("Invalid OTP or session");
+		if (!otpRecord) {
+			OtpThrottler.recordVerifyFailure(phone_number);
+			throw new Error("Invalid OTP or session");
+		}
 		if (isBefore(otpRecord.expires_at, new Date())) {
+			OtpThrottler.recordVerifyFailure(phone_number);
 			throw new Error("OTP expired");
 		}
 
@@ -431,10 +496,12 @@ export default class AuthService {
 		if (sessionToVerify) {
 			const verificationResult = await verifyOtpMuzztech(sessionToVerify, otp);
 			if (!verificationResult.verified) {
+				OtpThrottler.recordVerifyFailure(phone_number);
 				throw new Error(verificationResult.message || "Invalid OTP");
 			}
 		} else {
 			if (otpRecord.otp !== otp) {
+				OtpThrottler.recordVerifyFailure(phone_number);
 				throw new Error("Invalid OTP");
 			}
 		}
@@ -442,6 +509,9 @@ export default class AuthService {
 		// Mark OTP as used
 		otpRecord.is_used = true;
 		await otpRecord.save();
+
+		// Reset verify failures upon successful verification
+		OtpThrottler.resetVerifyAttempts(phone_number);
 
 		// Fetch the user
 		const user = await User.findOne({
