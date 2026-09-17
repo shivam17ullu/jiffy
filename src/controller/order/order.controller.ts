@@ -1,7 +1,7 @@
 import * as service from '../../services/order/order.service.js';
 import { getOrCreateWallet, debitWallet } from "../../services/wallet/wallet.service.js";
 import { Response } from "express";
-import { User, Role, Order } from "../../model/relations.js";
+import { User, Role, Order, Location } from "../../model/relations.js";
 import {
   handleControllerError,
   sendError,
@@ -26,7 +26,10 @@ import { uploadMultipleToS3, uploadMultipleBase64ToS3 } from "../../utils/s3Uplo
  *             type: object
  *             required:
  *               - shippingAddress
+ *               - buyerPickupAddressId
  *             properties:
+ *               buyerPickupAddressId:
+ *                 type: integer
  *               shippingAddress:
  *                 type: object
  *                 properties:
@@ -66,6 +69,16 @@ export const createOrder = async (req: any, res: Response) => {
       bookingOrderId,
       public_tracking_id,
       publicTrackingId,
+      buyerPickupAddressId,
+      buyer_pickup_address_id,
+      deliveryFee,
+      deliveryCharge,
+      discountAmount,
+      discount,
+      couponCode,
+      coupon_code,
+      couponId,
+      coupon_id,
     } = req.body;
     if (!shippingAddress) {
       return sendValidationError(
@@ -74,6 +87,46 @@ export const createOrder = async (req: any, res: Response) => {
         "shippingAddress"
       );
     }
+
+    const rawBuyerPickupAddressId =
+      buyerPickupAddressId ??
+      buyer_pickup_address_id ??
+      shippingAddress?.buyerPickupAddressId ??
+      shippingAddress?.buyer_pickup_address_id;
+
+    let resolvedBuyerPickupAddressId =
+      rawBuyerPickupAddressId !== undefined &&
+        rawBuyerPickupAddressId !== null &&
+        rawBuyerPickupAddressId !== ""
+        ? rawBuyerPickupAddressId
+        : null;
+
+    if (!resolvedBuyerPickupAddressId && shippingAddress) {
+      const addrId =
+        shippingAddress.id ||
+        shippingAddress.locationId ||
+        shippingAddress.addressId;
+      if (addrId) {
+        const dbLoc = await Location.findByPk(addrId);
+        if (dbLoc?.buyerPickupAddressId) {
+          resolvedBuyerPickupAddressId = dbLoc.buyerPickupAddressId;
+        }
+      }
+    }
+
+    if (!resolvedBuyerPickupAddressId) {
+      return sendValidationError(
+        res,
+        "Buyer pickup address ID is required",
+        "buyerPickupAddressId"
+      );
+    }
+
+    const parsedDeliveryFee = Number(deliveryFee ?? deliveryCharge ?? 0) || 0;
+    const parsedDiscountAmount = Number(discountAmount ?? discount ?? 0) || 0;
+    const parsedCouponCode = couponCode ?? coupon_code ?? null;
+    const parsedCouponId = couponId ?? coupon_id ?? null;
+
     const order = await service.createOrdersFromCart(
       userId,
       shippingAddress,
@@ -82,7 +135,12 @@ export const createOrder = async (req: any, res: Response) => {
       isFullWalletPay,
       walletAmount,
       booking_order_id || bookingOrderId,
-      public_tracking_id || publicTrackingId
+      public_tracking_id || publicTrackingId,
+      resolvedBuyerPickupAddressId,
+      parsedDeliveryFee,
+      parsedDiscountAmount,
+      parsedCouponCode,
+      parsedCouponId
     );
     res.status(201).json({ success: true, data: order });
   } catch (err: unknown) {
@@ -146,7 +204,7 @@ export const createOrder = async (req: any, res: Response) => {
 export const listOrders = async (req: any, res: Response) => {
   try {
     const userId = req.userId || req.user?.id;
-    
+
     // Get user roles to determine if buyer or seller
     const user = await User.findByPk(userId, { include: [Role] });
     if (!user) {
@@ -154,7 +212,7 @@ export const listOrders = async (req: any, res: Response) => {
     }
 
     const roles = (user as any).Roles.map((r: any) => r.name);
-    
+
     // Support an optional 'role' query param to filter specifically by buyer or seller orders.
     // If not provided, fetch 'all' (orders where they are either buyer or seller).
     let role = (req.query.role as string) || "all";
@@ -214,6 +272,8 @@ export const listOrders = async (req: any, res: Response) => {
  *                       type: number
  *                     status:
  *                       type: string
+ *                     buyerPickupAddressId:
+ *                       type: integer
  *                     shippingAddress:
  *                       type: object
  *                     paymentInfo:
@@ -248,7 +308,7 @@ export const getOrderById = async (req: any, res: Response) => {
     const role = "all";
 
     const order = await service.getOrderById(orderId, userId, role);
-    
+
     if (!order) {
       return sendError(
         res,
@@ -384,7 +444,7 @@ export const upgradeOrderPayment = async (req: any, res: Response) => {
 
     const currentWalletDeducted = Number(pInfo.walletAmount || 0);
     const remainingAmount = Number((order.total - currentWalletDeducted).toFixed(2));
-    
+
     if (remainingAmount <= 0) {
       return sendError(res, 400, "Order is already fully paid");
     }
@@ -395,7 +455,7 @@ export const upgradeOrderPayment = async (req: any, res: Response) => {
       if (debitAmount > remainingAmount) {
         return sendError(res, 400, "Wallet amount cannot exceed remaining order total");
       }
-      
+
       const wallet = await getOrCreateWallet(userId);
       if (Number(wallet.balance) < debitAmount) {
         return sendError(res, 400, "Insufficient wallet balance");
@@ -451,7 +511,7 @@ export const upgradeOrderPayment = async (req: any, res: Response) => {
 
     // Update Order
     const newWalletTotal = currentWalletDeducted + debitAmount;
-    
+
     pInfo = {
       ...pInfo,
       mode: isFullWallet ? "Wallet" : "Online",
@@ -471,7 +531,7 @@ export const upgradeOrderPayment = async (req: any, res: Response) => {
     if (currentStatusLower === "created") {
       order.status = "confirmed";
     }
-    
+
     order.changed("paymentInfo", true);
     await order.save();
 

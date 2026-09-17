@@ -13,11 +13,14 @@ export interface OrderAttributes {
   verificationImages?: string[] | null;
   booking_order_id?: string | null;
   public_tracking_id?: string | null;
+  buyerPickupAddressId?: number | string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export type OrderCreation = Optional<
   OrderAttributes,
-  "id" | "status" | "paymentInfo" | "verificationImages" | "booking_order_id" | "public_tracking_id"
+  "id" | "status" | "paymentInfo" | "verificationImages" | "booking_order_id" | "public_tracking_id" | "buyerPickupAddressId"
 >;
 
 class Order
@@ -34,6 +37,7 @@ class Order
   public verificationImages?: string[] | null;
   public booking_order_id?: string | null;
   public public_tracking_id?: string | null;
+  public buyerPickupAddressId?: number | string | null;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -70,6 +74,11 @@ Order.init(
       type: DataTypes.STRING(128),
       allowNull: true,
       defaultValue: null,
+    },
+    buyerPickupAddressId: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      field: "buyer_pickup_address_id",
     },
   },
   {

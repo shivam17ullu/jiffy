@@ -24,9 +24,12 @@ import {
  *             type: object
  *             required:
  *               - userId
- *               - address
+ *               - addressLine1
+ *               - buyerPickupAddressId
  *             properties:
  *               userId:
+ *                 type: integer
+ *               buyerPickupAddressId:
  *                 type: integer
  *               addressLine1:
  *                 type: string
@@ -59,15 +62,35 @@ class LocationController {
     try {
       const userId = (req as any).userId || req.body.userId;
       const { addressLine1 } = req.body;
+      const rawBuyerPickupAddressId =
+        req.body.buyerPickupAddressId ?? req.body.buyer_pickup_address_id;
+
       if (!userId) {
         return sendValidationError(res, "User ID is required", "userId");
       }
       if (!addressLine1) {
         return sendValidationError(res, "Address is required", "addressLine1");
       }
+      if (
+        rawBuyerPickupAddressId === undefined ||
+        rawBuyerPickupAddressId === null ||
+        rawBuyerPickupAddressId === ""
+      ) {
+        return sendValidationError(
+          res,
+          "Buyer pickup address ID is required",
+          "buyerPickupAddressId"
+        );
+      }
+
+      const buyerPickupAddressId = isNaN(Number(rawBuyerPickupAddressId))
+        ? rawBuyerPickupAddressId
+        : Number(rawBuyerPickupAddressId);
+
       const result = await LocationService.createLocation({
         ...req.body,
         userId: Number(userId),
+        buyerPickupAddressId,
       });
       return createResponse(res, {
         status: 201,
@@ -141,6 +164,8 @@ class LocationController {
    *             properties:
    *               userId:
    *                 type: integer
+   *               buyerPickupAddressId:
+   *                 type: integer
    *               addressLine1:
    *                 type: string
    *               addressLine2:
@@ -182,10 +207,21 @@ class LocationController {
         userId = Number((loc as any).userId);
       }
 
+      const updateData = { ...req.body };
+      if (
+        updateData.buyerPickupAddressId !== undefined ||
+        updateData.buyer_pickup_address_id !== undefined
+      ) {
+        const raw =
+          updateData.buyerPickupAddressId ?? updateData.buyer_pickup_address_id;
+        updateData.buyerPickupAddressId =
+          raw !== null && !isNaN(Number(raw)) ? Number(raw) : raw;
+      }
+
       const result = await LocationService.updateLocation(
         locationId,
         userId,
-        req.body
+        updateData
       );
 
       return createResponse(res, {

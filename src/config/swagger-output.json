@@ -1433,6 +1433,12 @@
                 },
                 "publicTrackingId": {
                   "example": "any"
+                },
+                "buyerPickupAddressId": {
+                  "example": "any"
+                },
+                "buyer_pickup_address_id": {
+                  "example": "any"
                 }
               }
             }
@@ -1930,6 +1936,12 @@
               "type": "object",
               "properties": {
                 "userId": {
+                  "example": "any"
+                },
+                "buyerPickupAddressId": {
+                  "example": "any"
+                },
+                "buyer_pickup_address_id": {
                   "example": "any"
                 },
                 "addressLine1": {
