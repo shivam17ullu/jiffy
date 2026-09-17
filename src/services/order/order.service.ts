@@ -259,7 +259,7 @@ export const createOrdersFromCart = async (
       await WalletTransaction.update(
         {
           referenceId: String(createdOrders[0].id),
-          description: `Payment for checkout: Jiffy Order(s) #${orderIdsStr}`,
+          description: `Payment for checkout: Drapeit Order(s) #${orderIdsStr}`,
         },
         {
           where: { referenceId: `cart_${cartId}`, userId },
@@ -720,10 +720,10 @@ export const getBookingDetailsForOrder = async (order: any) => {
 
   const buyerPickupAddressId =
     order.buyerPickupAddressId ? (isNaN(Number(order.buyerPickupAddressId)) ? order.buyerPickupAddressId : Number(order.buyerPickupAddressId)) :
-    shippingAddr?.buyerPickupAddressId ? (isNaN(Number(shippingAddr.buyerPickupAddressId)) ? shippingAddr.buyerPickupAddressId : Number(shippingAddr.buyerPickupAddressId)) :
-    shippingAddr?.buyer_pickup_address_id ? (isNaN(Number(shippingAddr.buyer_pickup_address_id)) ? shippingAddr.buyer_pickup_address_id : Number(shippingAddr.buyer_pickup_address_id)) :
-    dbLocation?.buyerPickupAddressId ? (isNaN(Number(dbLocation.buyerPickupAddressId)) ? dbLocation.buyerPickupAddressId : Number(dbLocation.buyerPickupAddressId)) :
-    null;
+      shippingAddr?.buyerPickupAddressId ? (isNaN(Number(shippingAddr.buyerPickupAddressId)) ? shippingAddr.buyerPickupAddressId : Number(shippingAddr.buyerPickupAddressId)) :
+        shippingAddr?.buyer_pickup_address_id ? (isNaN(Number(shippingAddr.buyer_pickup_address_id)) ? shippingAddr.buyer_pickup_address_id : Number(shippingAddr.buyer_pickup_address_id)) :
+          dbLocation?.buyerPickupAddressId ? (isNaN(Number(dbLocation.buyerPickupAddressId)) ? dbLocation.buyerPickupAddressId : Number(dbLocation.buyerPickupAddressId)) :
+            null;
 
   // 3. Package details calculation from order items
   const items = order.items || [];

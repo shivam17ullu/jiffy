@@ -1439,6 +1439,30 @@
                 },
                 "buyer_pickup_address_id": {
                   "example": "any"
+                },
+                "deliveryFee": {
+                  "example": "any"
+                },
+                "deliveryCharge": {
+                  "example": "any"
+                },
+                "discountAmount": {
+                  "example": "any"
+                },
+                "discount": {
+                  "example": "any"
+                },
+                "couponCode": {
+                  "example": "any"
+                },
+                "coupon_code": {
+                  "example": "any"
+                },
+                "couponId": {
+                  "example": "any"
+                },
+                "coupon_id": {
+                  "example": "any"
                 }
               }
             }
@@ -3165,6 +3189,298 @@
         }
       }
     },
+    "/api/return-exchange/webhooks/delivar": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-delivar-secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-delivar-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_id": {
+                  "example": "any"
+                },
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "request_id": {
+                  "example": "any"
+                },
+                "order_id": {
+                  "example": "any"
+                },
+                "new_status": {
+                  "example": "any"
+                },
+                "status": {
+                  "example": "any"
+                },
+                "event": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/return-exchange/webhook": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-delivar-secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-delivar-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_id": {
+                  "example": "any"
+                },
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "request_id": {
+                  "example": "any"
+                },
+                "order_id": {
+                  "example": "any"
+                },
+                "new_status": {
+                  "example": "any"
+                },
+                "status": {
+                  "example": "any"
+                },
+                "event": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/return-exchange/webhook/action": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "example": "any"
+                },
+                "id": {
+                  "example": "any"
+                },
+                "action": {
+                  "example": "any"
+                },
+                "status": {
+                  "example": "any"
+                },
+                "sellerId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/return-exchange/webhooks/action": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "example": "any"
+                },
+                "id": {
+                  "example": "any"
+                },
+                "action": {
+                  "example": "any"
+                },
+                "status": {
+                  "example": "any"
+                },
+                "sellerId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/return-exchange/webhooks/accept": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "example": "any"
+                },
+                "id": {
+                  "example": "any"
+                },
+                "action": {
+                  "example": "any"
+                },
+                "status": {
+                  "example": "any"
+                },
+                "sellerId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/return-exchange/webhooks/reject": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "example": "any"
+                },
+                "id": {
+                  "example": "any"
+                },
+                "action": {
+                  "example": "any"
+                },
+                "status": {
+                  "example": "any"
+                },
+                "sellerId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
     "/api/return-exchange/": {
       "post": {
         "description": "",
@@ -3289,6 +3605,280 @@
               "type": "object",
               "properties": {
                 "status": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/return-exchange/{id}/tracking": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "booking_id": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "booking_id": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "booking_id": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/return-exchange/{id}/booking-details": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "booking_id": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "booking_id": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "booking_order_id": {
+                  "example": "any"
+                },
+                "bookingOrderId": {
+                  "example": "any"
+                },
+                "booking_id": {
+                  "example": "any"
+                },
+                "public_tracking_id": {
+                  "example": "any"
+                },
+                "publicTrackingId": {
                   "example": "any"
                 }
               }

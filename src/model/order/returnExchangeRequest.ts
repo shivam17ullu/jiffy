@@ -11,13 +11,22 @@ export interface ReturnExchangeAttributes {
   reason: string;
   comments?: string;
   images?: any; // JSON array of image strings
+  booking_order_id?: string | null;
+  public_tracking_id?: string | null;
+  delivery_status?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type ReturnExchangeCreation = Optional<
   ReturnExchangeAttributes,
-  "id" | "status" | "images" | "comments"
+  | "id"
+  | "status"
+  | "images"
+  | "comments"
+  | "booking_order_id"
+  | "public_tracking_id"
+  | "delivery_status"
 >;
 
 class ReturnExchangeRequest
@@ -32,6 +41,9 @@ class ReturnExchangeRequest
   public reason!: string;
   public comments?: string;
   public images?: any;
+  public booking_order_id?: string | null;
+  public public_tracking_id?: string | null;
+  public delivery_status?: string | null;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -76,6 +88,21 @@ ReturnExchangeRequest.init(
     images: {
       type: DataTypes.JSON,
       allowNull: true,
+    },
+    booking_order_id: {
+      type: DataTypes.STRING(128),
+      allowNull: true,
+      defaultValue: null,
+    },
+    public_tracking_id: {
+      type: DataTypes.STRING(128),
+      allowNull: true,
+      defaultValue: null,
+    },
+    delivery_status: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      defaultValue: null,
     },
   },
   {
