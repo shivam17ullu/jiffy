@@ -78,6 +78,118 @@ export const getProfile = async (req: any, res: Response) => {
 
 /**
  * @swagger
+ * /api/seller/profile:
+ *   put:
+ *     summary: Update seller profile details
+ *     description: Update business information, store details, operating hours, and bank details without requiring admin approval (excluding KYC documents).
+ *     tags: [Seller]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               businessName:
+ *                 type: string
+ *                 example: "Acme Retailers"
+ *               phone:
+ *                 type: string
+ *                 example: "9876543210"
+ *               email:
+ *                 type: string
+ *                 example: "seller@example.com"
+ *               address:
+ *                 type: string
+ *                 example: "123 Main Street"
+ *               city:
+ *                 type: string
+ *                 example: "Bengaluru"
+ *               state:
+ *                 type: string
+ *                 example: "Karnataka"
+ *               zipCode:
+ *                 type: string
+ *                 example: "560001"
+ *               gstNumber:
+ *                 type: string
+ *                 example: "29AAAAA0000A1Z5"
+ *               pickup_address_id:
+ *                 type: integer
+ *                 example: 12345
+ *               store:
+ *                 type: object
+ *                 properties:
+ *                   storeName:
+ *                     type: string
+ *                   storeAddress:
+ *                     type: string
+ *                   pincode:
+ *                     type: string
+ *                   storeCategory:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   latitude:
+ *                     type: number
+ *                   longitude:
+ *                     type: number
+ *                   openingDays:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   openingTime:
+ *                     type: string
+ *                   closingTime:
+ *                     type: string
+ *                   isSellerOpen:
+ *                     type: boolean
+ *               bankDetails:
+ *                 type: object
+ *                 properties:
+ *                   accountHolderName:
+ *                     type: string
+ *                     example: "John Doe"
+ *                   accountNumber:
+ *                     type: string
+ *                     example: "123456789012"
+ *                   ifscCode:
+ *                     type: string
+ *                     example: "HDFC0001234"
+ *                   termsAccepted:
+ *                     type: boolean
+ *                     example: true
+ *     responses:
+ *       200:
+ *         description: Seller profile updated successfully
+ *       400:
+ *         description: Invalid input or conflict
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Seller profile not found
+ */
+export const updateProfile = async (req: any, res: Response) => {
+    try {
+        const userId = req.userId;
+        const updatedData = await service.updateSellerProfile(userId, req.body);
+
+        res.json({
+            success: true,
+            status: 200,
+            message: "Seller profile updated successfully",
+            response: updatedData,
+            data: updatedData
+        });
+    } catch (err: unknown) {
+        return handleControllerError(res, err);
+    }
+};
+
+/**
+ * @swagger
  * /api/seller/operating-hours:
  *   put:
  *     summary: Update seller operating hours and days
