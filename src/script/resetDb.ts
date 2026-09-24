@@ -1,7 +1,7 @@
 import { jiffy } from "../config/sequelize.js";
 import "../model/relations.js"; // Load all models and associations
 import seedRoles from "./seedRoles.js";
-import seedAdmin from "./seedAdmin.js";
+import seedUsers from "./seedUsers.js";
 import seedCategory from "./seedCategory.js";
 
 async function resetDatabase() {
@@ -37,9 +37,9 @@ async function resetDatabase() {
     await seedRoles();
     console.log("");
 
-    // 2. Seed Admin
-    console.log("📋 [2/3] Seeding Super Admin...");
-    await seedAdmin();
+    // 2. Seed Users & Profiles (Admin, Seller, Buyer)
+    console.log("📋 [2/3] Seeding Default Users & Profiles...");
+    await seedUsers();
     console.log("");
 
     // 3. Seed Categories

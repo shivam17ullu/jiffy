@@ -39,21 +39,23 @@ async function seedUsers() {
 		// ----------------------------------------------------------------
 		// ADMIN USER
 		// ----------------------------------------------------------------
-		const [adminUser, adminCreated] = await User.findOrCreate({
+		const [adminUser] = await User.findOrCreate({
 			where: { phone_number: adminPhone },
 			defaults: {
 				phone_number: adminPhone,
 				email: adminEmail,
 				password: defaultPassword,
 				is_active: true,
+				is_email_verified: true,
 			},
 			transaction: t,
 		});
 
-		if (adminCreated) {
+		const adminRoles = await (adminUser as any).getRoles({ transaction: t });
+		if (!adminRoles.some((r: any) => r.name === "admin")) {
 			await (adminUser as any).addRole(adminRole, { transaction: t });
-			console.log(`✅ Created admin user`);
 		}
+		console.log(`✅ Admin user seeded (${adminUser.phone_number})`);
 
 		// ----------------------------------------------------------------
 		// SELLERS LIST
@@ -94,60 +96,74 @@ async function seedUsers() {
 			const { sellerProfile, store, bankDetails, documents, ...userData } = sellerData;
 
 			// 1️⃣ Create/find user
-			const [sellerUser, sellerCreated] = await User.findOrCreate({
+			const [sellerUser] = await User.findOrCreate({
 				where: { phone_number: userData.phone_number },
 				defaults: {
 					...userData,
 					password: defaultPassword,
 					is_active: true,
+					is_email_verified: true,
 				},
 				transaction: t,
 			});
 
-			if (sellerCreated) {
+			const userRoles = await (sellerUser as any).getRoles({ transaction: t });
+			if (!userRoles.some((r: any) => r.name === "seller")) {
 				await (sellerUser as any).addRole(sellerRole, { transaction: t });
-
-				// 2️⃣ Create SellerProfile FIRST
-				const sellerProfileRecord = await SellerProfile.create(
-					{
-						userId: sellerUser.id,
-						...sellerProfile,
-					},
-					{ transaction: t }
-				);
-
-				console.log("SellerProfile Created:", sellerProfileRecord.id);
-
-				// 3️⃣ NOW create VerifiedSeller with correct FK (NO 0!)
-				await VerifiedSellers.create(
-					{
-						sellerId: sellerProfileRecord.id,
-						is_active: true,
-						status: "approved",
-					},
-					{ transaction: t }
-				);
-
-				// 4️⃣ Store
-				await Store.create(
-					{ sellerId: sellerProfileRecord.id, ...store },
-					{ transaction: t }
-				);
-
-				// 5️⃣ Bank Details
-				await BankDetail.create(
-					{ sellerId: sellerProfileRecord.id, ...bankDetails },
-					{ transaction: t }
-				);
-
-				// 6️⃣ Documents
-				await Document.create(
-					{ sellerId: sellerProfileRecord.id, ...documents },
-					{ transaction: t }
-				);
-
-				console.log(`✅ Complete seller seeded: ${sellerUser.phone_number}`);
 			}
+
+			// 2️⃣ Create or find SellerProfile
+			const [sellerProfileRecord] = await SellerProfile.findOrCreate({
+				where: { userId: sellerUser.id },
+				defaults: {
+					userId: sellerUser.id,
+					...sellerProfile,
+				},
+				transaction: t,
+			});
+
+			// 3️⃣ VerifiedSeller
+			await VerifiedSellers.findOrCreate({
+				where: { sellerId: sellerProfileRecord.id },
+				defaults: {
+					sellerId: sellerProfileRecord.id,
+					is_active: true,
+					status: "approved",
+				},
+				transaction: t,
+			});
+
+			// 4️⃣ Store
+			await Store.findOrCreate({
+				where: { sellerId: sellerProfileRecord.id },
+				defaults: {
+					sellerId: sellerProfileRecord.id,
+					...store,
+				},
+				transaction: t,
+			});
+
+			// 5️⃣ Bank Details
+			await BankDetail.findOrCreate({
+				where: { sellerId: sellerProfileRecord.id },
+				defaults: {
+					sellerId: sellerProfileRecord.id,
+					...bankDetails,
+				},
+				transaction: t,
+			});
+
+			// 6️⃣ Documents
+			await Document.findOrCreate({
+				where: { sellerId: sellerProfileRecord.id },
+				defaults: {
+					sellerId: sellerProfileRecord.id,
+					...documents,
+				},
+				transaction: t,
+			});
+
+			console.log(`✅ Complete seller seeded: ${sellerUser.phone_number}`);
 		}
 
 		// ----------------------------------------------------------------
@@ -171,29 +187,32 @@ async function seedUsers() {
 		for (const buyerData of buyers) {
 			const { buyerProfile, ...userData } = buyerData;
 
-			const [buyerUser, buyerCreated] = await User.findOrCreate({
+			const [buyerUser] = await User.findOrCreate({
 				where: { phone_number: userData.phone_number },
 				defaults: {
 					...userData,
 					password: defaultPassword,
 					is_active: true,
+					is_email_verified: true,
 				},
 				transaction: t,
 			});
 
-			if (buyerCreated) {
+			const userRoles = await (buyerUser as any).getRoles({ transaction: t });
+			if (!userRoles.some((r: any) => r.name === "buyer")) {
 				await (buyerUser as any).addRole(buyerRole, { transaction: t });
-
-				await BuyerProfile.create(
-					{
-						userId: buyerUser.id,
-						...buyerProfile,
-					},
-					{ transaction: t }
-				);
-
-				console.log(`✅ Buyer created: ${buyerUser.phone_number}`);
 			}
+
+			await BuyerProfile.findOrCreate({
+				where: { userId: buyerUser.id },
+				defaults: {
+					userId: buyerUser.id,
+					...buyerProfile,
+				},
+				transaction: t,
+			});
+
+			console.log(`✅ Buyer seeded: ${buyerUser.phone_number}`);
 		}
 
 		await t.commit();

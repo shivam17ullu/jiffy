@@ -2,29 +2,24 @@ import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client
 import { randomUUID } from "crypto";
 import { ApiError } from "./ApiError.js";
 
+import dotenv from "dotenv";
+dotenv.config();
+
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
-// Initialize S3 configuration
-const AWS_REGION = process.env.AWS_REGION || "ap-southeast-2";
-const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || "drapeit-products";
-const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
-const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+// Helper getters for S3 configuration
+export const getAwsRegion = (): string => process.env.AWS_REGION || "ap-southeast-2";
+export const getBucketName = (): string => process.env.AWS_S3_BUCKET || process.env.AWS_S3_BUCKET_NAME || "drapeit-dev-products";
+export const getAwsAccessKeyId = (): string | undefined => process.env.AWS_ACCESS_KEY_ID;
+export const getAwsSecretAccessKey = (): string | undefined => process.env.AWS_SECRET_ACCESS_KEY;
 
 // Validate AWS credentials
 const validateAWSCredentials = () => {
-	if (!AWS_ACCESS_KEY_ID || AWS_ACCESS_KEY_ID.trim() === '') {
+	const bucketName = getBucketName();
+
+	if (!bucketName || bucketName.trim() === '') {
 		throw new Error(
-			"AWS_ACCESS_KEY_ID is not configured. Please set it in your .env file. See AWS_CREDENTIALS_SETUP.md for instructions."
-		);
-	}
-	if (!AWS_SECRET_ACCESS_KEY || AWS_SECRET_ACCESS_KEY.trim() === '') {
-		throw new Error(
-			"AWS_SECRET_ACCESS_KEY is not configured. Please set it in your .env file. See AWS_CREDENTIALS_SETUP.md for instructions."
-		);
-	}
-	if (!BUCKET_NAME || BUCKET_NAME.trim() === '') {
-		throw new Error(
-			"AWS_S3_BUCKET_NAME is not configured. Please set it in your .env file. See AWS_CREDENTIALS_SETUP.md for instructions."
+			"AWS_S3_BUCKET is not configured. Please set it in your .env file."
 		);
 	}
 };
@@ -35,13 +30,24 @@ let s3Client: S3Client | null = null;
 const getS3Client = (): S3Client => {
 	if (!s3Client) {
 		validateAWSCredentials();
-		s3Client = new S3Client({
-			region: AWS_REGION,
-			credentials: {
-				accessKeyId: AWS_ACCESS_KEY_ID!,
-				secretAccessKey: AWS_SECRET_ACCESS_KEY!,
-			},
-		});
+		const accessKeyId = getAwsAccessKeyId();
+		const secretAccessKey = getAwsSecretAccessKey();
+
+		const clientConfig: {
+			region: string;
+			credentials?: { accessKeyId: string; secretAccessKey: string };
+		} = {
+			region: getAwsRegion(),
+		};
+
+		if (accessKeyId && accessKeyId.trim() && secretAccessKey && secretAccessKey.trim()) {
+			clientConfig.credentials = {
+				accessKeyId: accessKeyId.trim(),
+				secretAccessKey: secretAccessKey.trim(),
+			};
+		}
+
+		s3Client = new S3Client(clientConfig);
 	}
 	return s3Client;
 };
@@ -133,6 +139,8 @@ export const uploadToS3 = async (
 		}
 
 		const client = getS3Client();
+		const bucketName = getBucketName();
+		const region = getAwsRegion();
 
 		// Generate unique filename
 		const fileExtension = file.originalname.split(".").pop();
@@ -142,7 +150,7 @@ export const uploadToS3 = async (
 		// Note: ACL is removed because newer S3 buckets have ACLs disabled by default
 		// Use bucket policy for public read access instead
 		const command = new PutObjectCommand({
-			Bucket: BUCKET_NAME,
+			Bucket: bucketName,
 			Key: fileName,
 			Body: file.buffer,
 			ContentType: file.mimetype,
@@ -152,7 +160,7 @@ export const uploadToS3 = async (
 		await client.send(command);
 
 		// Return public URL - Format: https://bucket-name.s3.region.amazonaws.com/key
-		const fileUrl = `https://${BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${fileName}`;
+		const fileUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${fileName}`;
 		return fileUrl;
 	} catch (error: any) {
 		if (error instanceof ApiError) throw error;
@@ -198,6 +206,8 @@ export const uploadBase64ToS3 = async (
 ): Promise<string> => {
 	try {
 		const client = getS3Client();
+		const bucketName = getBucketName();
+		const region = getAwsRegion();
 		const { buffer, mimeType, extension } = base64ToBuffer(base64String, maxSizeBytes);
 
 		// Generate unique filename
@@ -207,7 +217,7 @@ export const uploadBase64ToS3 = async (
 		// Note: ACL is removed because newer S3 buckets have ACLs disabled by default
 		// Use bucket policy for public read access instead
 		const command = new PutObjectCommand({
-			Bucket: BUCKET_NAME,
+			Bucket: bucketName,
 			Key: fileName,
 			Body: buffer,
 			ContentType: mimeType,
@@ -217,7 +227,7 @@ export const uploadBase64ToS3 = async (
 		await client.send(command);
 
 		// Return public URL
-		const fileUrl = `https://${BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${fileName}`;
+		const fileUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${fileName}`;
 		return fileUrl;
 	} catch (error: any) {
 		if (error instanceof ApiError) throw error;
@@ -255,6 +265,7 @@ export const uploadMultipleBase64ToS3 = async (
 export const deleteFromS3 = async (fileUrl: string): Promise<void> => {
 	try {
 		const client = getS3Client();
+		const bucketName = getBucketName();
 
 		// Extract key from URL
 		const urlParts = fileUrl.split(".com/");
@@ -264,7 +275,7 @@ export const deleteFromS3 = async (fileUrl: string): Promise<void> => {
 		const key = urlParts[1];
 
 		const command = new DeleteObjectCommand({
-			Bucket: BUCKET_NAME,
+			Bucket: bucketName,
 			Key: key,
 		});
 
