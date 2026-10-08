@@ -501,8 +501,18 @@ export default class AdminService {
 			});
 		}
 
+		const sanitizedRows = fullRows.map((row: any) => {
+			const orderObj = typeof row.toJSON === "function" ? row.toJSON() : { ...row };
+			const paymentInfo = typeof orderObj.paymentInfo === "string"
+				? (() => { try { return JSON.parse(orderObj.paymentInfo); } catch { return {}; } })()
+				: (orderObj.paymentInfo || {});
+			const deliveryFee = Number(paymentInfo?.deliveryFee ?? paymentInfo?.deliveryCharge ?? 0) || 0;
+			orderObj.total = Math.max(0, Number((Number(orderObj.total || 0) - deliveryFee).toFixed(2)));
+			return orderObj;
+		});
+
 		return {
-			items: fullRows,
+			items: sanitizedRows,
 			total: count,
 			page,
 			limit,
@@ -581,7 +591,12 @@ export default class AdminService {
 		}
 
 		const bookingDetails = await getBookingDetailsForOrder(order);
-		const orderJson = typeof order.toJSON === "function" ? order.toJSON() : order;
+		const orderJson = typeof order.toJSON === "function" ? order.toJSON() : { ...order };
+		const paymentInfo = typeof orderJson.paymentInfo === "string"
+			? (() => { try { return JSON.parse(orderJson.paymentInfo); } catch { return {}; } })()
+			: (orderJson.paymentInfo || {});
+		const deliveryFee = Number(paymentInfo?.deliveryFee ?? paymentInfo?.deliveryCharge ?? 0) || 0;
+		orderJson.total = Math.max(0, Number((Number(orderJson.total || 0) - deliveryFee).toFixed(2)));
 
 		return {
 			...orderJson,
@@ -638,7 +653,12 @@ export default class AdminService {
 				sellerId: { [Op.in]: sellerUserIds },
 			},
 			attributes: [
-				[Sequelize.fn("SUM", Sequelize.col("total")), "totalRevenue"],
+				[
+					Sequelize.literal(
+						"SUM(GREATEST(0, total - CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryFee')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryCharge')), 'null'), 0) AS DECIMAL(10, 2))))"
+					),
+					"totalRevenue",
+				],
 				[Sequelize.fn("COUNT", Sequelize.col("id")), "totalOrders"],
 			],
 			raw: true,
@@ -655,7 +675,12 @@ export default class AdminService {
 			},
 			attributes: [
 				"sellerId",
-				[Sequelize.fn("SUM", Sequelize.col("total")), "revenue"],
+				[
+					Sequelize.literal(
+						"SUM(GREATEST(0, total - CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryFee')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryCharge')), 'null'), 0) AS DECIMAL(10, 2))))"
+					),
+					"revenue",
+				],
 				[Sequelize.fn("COUNT", Sequelize.col("id")), "orderCount"],
 			],
 			group: ["sellerId"],
@@ -728,7 +753,12 @@ export default class AdminService {
 		const overallResult = await Order.findAll({
 			where: { sellerId: sellerUserId, status: { [Op.ne]: "cancelled" } },
 			attributes: [
-				[Sequelize.fn("SUM", Sequelize.col("total")), "totalRevenue"],
+				[
+					Sequelize.literal(
+						"SUM(GREATEST(0, total - CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryFee')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryCharge')), 'null'), 0) AS DECIMAL(10, 2))))"
+					),
+					"totalRevenue",
+				],
 				[Sequelize.fn("COUNT", Sequelize.col("id")), "totalOrders"],
 			],
 			raw: true,
@@ -743,7 +773,12 @@ export default class AdminService {
 			attributes: [
 				[Sequelize.fn("YEAR", Sequelize.col("createdAt")), "year"],
 				[Sequelize.fn("MONTH", Sequelize.col("createdAt")), "month"],
-				[Sequelize.fn("SUM", Sequelize.col("total")), "revenue"],
+				[
+					Sequelize.literal(
+						"SUM(GREATEST(0, total - CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryFee')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryCharge')), 'null'), 0) AS DECIMAL(10, 2))))"
+					),
+					"revenue",
+				],
 				[Sequelize.fn("COUNT", Sequelize.col("id")), "orderCount"],
 			],
 			group: [
@@ -801,11 +836,16 @@ export default class AdminService {
 		const profileData = sellerProfile.toJSON() as any;
 		const sellerUserId = Number(profileData.userId);
 
-		// 2. Calculate Total Revenue: sum of 'total' where status is not 'cancelled'
+		// 2. Calculate Total Revenue: sum of 'total' minus delivery fee where status is not 'cancelled'
 		const revenueResult = await Order.findAll({
 			where: { sellerId: sellerUserId, status: { [Op.ne]: "cancelled" } },
 			attributes: [
-				[Sequelize.fn("SUM", Sequelize.col("total")), "totalRevenue"],
+				[
+					Sequelize.literal(
+						"SUM(GREATEST(0, total - CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryFee')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryCharge')), 'null'), 0) AS DECIMAL(10, 2))))"
+					),
+					"totalRevenue",
+				],
 				[Sequelize.fn("COUNT", Sequelize.col("id")), "totalOrders"],
 			],
 			raw: true,
@@ -814,11 +854,16 @@ export default class AdminService {
 		const totalRevenue = parseFloat((revenueResult[0] as any)?.totalRevenue) || 0;
 		const totalOrders = parseInt((revenueResult[0] as any)?.totalOrders) || 0;
 
-		// 3. Calculate Total Refunded Amount: sum of 'total' where status is 'Refund Successful'
+		// 3. Calculate Total Refunded Amount: sum of 'total' minus delivery fee where status is 'Refund Successful'
 		const refundResult = await Order.findAll({
 			where: { sellerId: sellerUserId, status: "Refund Successful" },
 			attributes: [
-				[Sequelize.fn("SUM", Sequelize.col("total")), "totalRefund"],
+				[
+					Sequelize.literal(
+						"SUM(GREATEST(0, total - CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryFee')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryCharge')), 'null'), 0) AS DECIMAL(10, 2))))"
+					),
+					"totalRefund",
+				],
 			],
 			raw: true,
 		});
@@ -875,14 +920,22 @@ export default class AdminService {
 				totalRefundedAmount,
 				totalOrders,
 			},
-			recentOrders: recentOrders.map((order: any) => ({
-				id: order.id,
-				total: order.total,
-				status: order.status,
-				createdAt: order.createdAt,
-				buyer: order.buyer,
-				items: order.items,
-			})),
+			recentOrders: recentOrders.map((order: any) => {
+				const paymentInfo = typeof order.paymentInfo === "string"
+					? (() => { try { return JSON.parse(order.paymentInfo); } catch { return {}; } })()
+					: (order.paymentInfo || {});
+				const deliveryFee = Number(paymentInfo?.deliveryFee ?? paymentInfo?.deliveryCharge ?? 0) || 0;
+				const totalWithoutDelivery = Math.max(0, Number((Number(order.total || 0) - deliveryFee).toFixed(2)));
+
+				return {
+					id: order.id,
+					total: totalWithoutDelivery,
+					status: order.status,
+					createdAt: order.createdAt,
+					buyer: order.buyer,
+					items: order.items,
+				};
+			}),
 		};
 	}
 
