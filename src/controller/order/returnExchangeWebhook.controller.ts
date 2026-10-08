@@ -64,42 +64,71 @@ export const handleReturnExchangeWebhook = async (req: any, res: Response) => {
   try {
     const configuredSecret = process.env.DELIVAR_WEBHOOK_SECRET?.trim();
 
-    // 1. Validate Secret Key / Signature
-    const secretKeyHeader = (
+    // 1. Extract Secret Key from headers, query params, or body
+    const secretKeyCandidate = (
       req.headers["secret-key"] ||
       req.headers["secret_key"] ||
+      req.headers["secretkey"] ||
       req.headers["x-secret-key"] ||
+      req.headers["x-secret"] ||
+      req.headers["secret"] ||
       req.headers["x-delivar-secret-key"] ||
-      req.headers["authorization"]?.replace(/^Bearer\s+/i, "")
+      req.headers["x-delivar-secret"] ||
+      req.headers["api-key"] ||
+      req.headers["apikey"] ||
+      req.headers["x-api-key"] ||
+      req.headers["x-apikey"] ||
+      req.headers["x-auth-token"] ||
+      req.headers["authorization"]?.replace(/^Bearer\s+/i, "") ||
+      req.query?.secret_key ||
+      req.query?.secretKey ||
+      req.query?.secret ||
+      req.query?.token ||
+      req.body?.secret_key ||
+      req.body?.secretKey ||
+      req.body?.secret ||
+      req.body?.webhook_secret
     )?.toString().trim();
 
-    const signatureHeader = (
+    // Extract Signature from headers, query params, or body
+    const signatureCandidate = (
       req.headers["signature"] ||
       req.headers["x-signature"] ||
       req.headers["x-delivar-signature"] ||
-      req.headers["delivar-signature"]
+      req.headers["delivar-signature"] ||
+      req.headers["x-webhook-signature"] ||
+      req.headers["webhook-signature"] ||
+      req.headers["x-hub-signature-256"]?.replace(/^sha256=/i, "") ||
+      req.headers["x-hub-signature"]?.replace(/^sha1=/i, "") ||
+      req.query?.signature ||
+      req.body?.signature
     )?.toString().trim();
 
     if (configuredSecret) {
-      const isHeaderKeyValid = secretKeyHeader && secretKeyHeader === configuredSecret;
+      const isHeaderKeyValid = secretKeyCandidate && secretKeyCandidate === configuredSecret;
       let isSignatureValid = false;
 
       const rawPayload = req.rawBody || (typeof req.body === "string" ? req.body : JSON.stringify(req.body));
-      if (signatureHeader && rawPayload) {
+      if (signatureCandidate && rawPayload) {
         const hash = crypto
           .createHmac("sha256", configuredSecret)
           .update(rawPayload)
           .digest("hex");
-        isSignatureValid = crypto.timingSafeEqual(
-          Buffer.from(hash, "utf-8"),
-          Buffer.from(signatureHeader, "utf-8")
-        ) || hash.toLowerCase() === signatureHeader.toLowerCase();
+        isSignatureValid =
+          hash.toLowerCase() === signatureCandidate.toLowerCase() ||
+          (signatureCandidate.length === hash.length &&
+            crypto.timingSafeEqual(
+              Buffer.from(hash, "utf-8"),
+              Buffer.from(signatureCandidate, "utf-8")
+            ));
       }
 
       if (!isHeaderKeyValid && !isSignatureValid) {
         console.warn(
-          `[Return/Exchange Webhook] Unauthorized request received - Invalid Secret/Signature. Provided secretKey: ${secretKeyHeader ? "YES" : "NO"}, signatureHeader: ${signatureHeader ? "YES" : "NO"}`
+          `[Return/Exchange Webhook] Unauthorized request received - Invalid Secret/Signature.`
         );
+        console.warn("[Return/Exchange Webhook Received Headers]:", JSON.stringify(req.headers, null, 2));
+        console.warn("[Return/Exchange Webhook Received Body]:", JSON.stringify(req.body, null, 2));
         return res
           .status(401)
           .json({ success: false, message: "Invalid secret key or signature" });
