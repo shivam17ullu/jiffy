@@ -401,3 +401,171 @@ export const sendEmailVerificationOTP = async (email: string, otp: string, phone
     console.error("Error sending email verification OTP:", error);
   }
 };
+
+export interface DelivarOrderFailureEmailDetails {
+  orderId: string;
+  errorMsg: string;
+  errorType: string;
+  sellerName?: string;
+  sellerEmail?: string;
+  sellerPhone?: string;
+  buyerName?: string;
+  buyerPhone?: string;
+  totalAmount?: number | string;
+  status?: string;
+  deliveryAddress?: string;
+  pickupAddressId?: number | string | null;
+  timestamp?: string;
+  extraInfo?: any;
+}
+
+export const sendDelivarOrderFailureEmail = async (details: DelivarOrderFailureEmailDetails) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER || process.env.EMAIL_FROM,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    const fromEmail = process.env.EMAIL_FROM || 'ranjitkumarbgs61@gmail.com';
+    const adminEmails = process.env.ADMIN_EMAILS || 'Sharmaankit7860@gmail.com, ranjitkumarbgs61@gmail.com';
+    const currentTimestamp = details.timestamp || new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+
+    const extraInfoHtml = details.extraInfo && Object.keys(details.extraInfo).length > 0
+      ? `
+        <div style="margin-top: 16px; background-color: #f1f5f9; border-radius: 6px; padding: 12px;">
+          <div style="font-weight: 600; font-size: 13px; color: #475569; margin-bottom: 6px;">Additional Payload / Context:</div>
+          <pre style="margin: 0; font-family: monospace; font-size: 12px; color: #334155; white-space: pre-wrap; word-break: break-all;">${JSON.stringify(details.extraInfo, null, 2)}</pre>
+        </div>
+      `
+      : '';
+
+    const textContent = `[CRITICAL ALERT] Delivar Order Creation Failed\n\n` +
+      `Order ID: #${details.orderId}\n` +
+      `Error Type: ${details.errorType}\n` +
+      `Error Message: ${details.errorMsg}\n` +
+      `Timestamp: ${currentTimestamp}\n\n` +
+      `Buyer: ${details.buyerName || 'N/A'} (${details.buyerPhone || 'N/A'})\n` +
+      `Delivery Address: ${details.deliveryAddress || 'N/A'}\n` +
+      `Seller: ${details.sellerName || 'N/A'} (Phone: ${details.sellerPhone || 'N/A'})\n` +
+      `Pickup Address ID: ${details.pickupAddressId || 'N/A'}\n` +
+      `Order Total: ₹${details.totalAmount || '0'}\n` +
+      `Order Status: ${details.status || 'N/A'}\n\n` +
+      `Please review and take action in the admin dashboard: https://www.drapeit.in/admin/orders/${details.orderId}`;
+
+    const htmlContent = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background-color: #ffffff; color: #1e293b; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        <!-- Alert Header -->
+        <div style="background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%); padding: 28px 24px; text-align: center; color: #ffffff;">
+          <div style="display: inline-block; background-color: rgba(255, 255, 255, 0.2); padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">
+            ⚠️ High Priority Logistics Alert
+          </div>
+          <h1 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Delivar Order Booking Failed</h1>
+          <p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.9;">Order #${details.orderId} failed during Delivar delivery order creation.</p>
+        </div>
+
+        <div style="padding: 24px 28px;">
+          <!-- Error Details Callout -->
+          <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-left: 5px solid #dc2626; border-radius: 8px; padding: 16px 18px; margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; background-color: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px;">
+                ${details.errorType}
+              </span>
+              <span style="font-size: 12px; color: #991b1b;">
+                ${currentTimestamp}
+              </span>
+            </div>
+            <div style="font-size: 14px; font-weight: 600; color: #991b1b; margin-top: 4px; line-height: 1.4;">
+              ${details.errorMsg}
+            </div>
+          </div>
+
+          <!-- Order & Customer Information -->
+          <h3 style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">
+            Order & Dispatch Details
+          </h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 14px;">
+            <tbody>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 0; color: #64748b; font-weight: 500; width: 35%;">Order ID:</td>
+                <td style="padding: 10px 0; font-weight: 700; color: #0f172a;">#${details.orderId}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 0; color: #64748b; font-weight: 500;">Order Status:</td>
+                <td style="padding: 10px 0; font-weight: 600; color: #2563eb;">${details.status || 'N/A'}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 0; color: #64748b; font-weight: 500;">Order Total:</td>
+                <td style="padding: 10px 0; font-weight: 700; color: #0f172a;">₹${details.totalAmount ?? '0'}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 0; color: #64748b; font-weight: 500;">Customer / Buyer:</td>
+                <td style="padding: 10px 0; color: #334155;">
+                  <strong>${details.buyerName || 'N/A'}</strong> 
+                  ${details.buyerPhone ? `<span style="color: #64748b;">(${details.buyerPhone})</span>` : ''}
+                </td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 0; color: #64748b; font-weight: 500;">Delivery Destination:</td>
+                <td style="padding: 10px 0; color: #334155; line-height: 1.4;">${details.deliveryAddress || 'N/A'}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 0; color: #64748b; font-weight: 500;">Seller / Merchant:</td>
+                <td style="padding: 10px 0; color: #334155;">
+                  <strong>${details.sellerName || 'N/A'}</strong>
+                  ${details.sellerPhone ? `<span style="color: #64748b;">(${details.sellerPhone})</span>` : ''}
+                </td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 0; color: #64748b; font-weight: 500;">Pickup Address ID:</td>
+                <td style="padding: 10px 0; color: #0f172a; font-family: monospace; font-weight: 600;">${details.pickupAddressId || 'N/A'}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          ${extraInfoHtml}
+
+          <!-- Recommended Action Box -->
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 24px 0;">
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a; margin-bottom: 8px;">Recommended Next Steps:</div>
+            <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: #475569; line-height: 1.6;">
+              <li>Verify that the seller's pickup address ID and buyer's destination pincode are valid in Delivar.</li>
+              <li>Log in to the Drapeit Admin Portal to manually re-trigger booking or update logistics parameters.</li>
+              <li>If the issue persists, check Delivar service status or contact Delivar support.</li>
+            </ul>
+          </div>
+
+          <!-- Admin Portal CTA Button -->
+          <div style="text-align: center; margin: 30px 0 10px 0;">
+            <a href="https://www.drapeit.in/admin/orders/${details.orderId}" target="_blank" style="background-color: #0f172a; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              Open Order in Admin Panel &rarr;
+            </a>
+          </div>
+
+          <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8;">
+            This is an automated system notification from the <strong>Drapeit Backend System</strong>.
+          </div>
+        </div>
+      </div>
+    `;
+
+    const info = await transporter.sendMail({
+      from: `"Drapeit System Alert" <${fromEmail}>`,
+      to: adminEmails,
+      subject: `🚨 [ALERT] Delivar Order Creation Failed - Order #${details.orderId}`,
+      text: textContent,
+      html: htmlContent,
+    });
+
+    console.log("Delivar order failure alert email sent: %s to %s", info.messageId, adminEmails);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("Error sending Delivar order failure email:", error);
+    throw error;
+  }
+};
+

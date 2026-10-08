@@ -164,7 +164,7 @@ export const createOrdersFromCart = async (
         }
       }
 
-      const orderStatus = isFullWalletPay ? "Confirmed" : "Created";
+      const orderStatus = "Created";
       const enrichedPaymentInfo = {
         method: isFullWalletPay
           ? "Wallet"
@@ -453,8 +453,20 @@ export const listOrders = async (
     });
   }
 
+  const sanitizedRows = fullRows.map((row: any) => {
+    const orderObj = typeof row.toJSON === "function" ? row.toJSON() : { ...row };
+    if (role === "seller" || (role === "all" && orderObj.sellerId === userId)) {
+      const paymentInfo = typeof orderObj.paymentInfo === "string"
+        ? (() => { try { return JSON.parse(orderObj.paymentInfo); } catch { return {}; } })()
+        : (orderObj.paymentInfo || {});
+      const deliveryFee = Number(paymentInfo?.deliveryFee ?? paymentInfo?.deliveryCharge ?? 0) || 0;
+      orderObj.total = Math.max(0, Number((Number(orderObj.total || 0) - deliveryFee).toFixed(2)));
+    }
+    return orderObj;
+  });
+
   return {
-    items: fullRows,
+    items: sanitizedRows,
     total: count,
     page: parseInt(page),
     limit: parseInt(limit),
@@ -878,7 +890,14 @@ export const getOrderById = async (
   }
 
   const bookingDetails = await getBookingDetailsForOrder(order);
-  const orderJson = typeof order.toJSON === "function" ? order.toJSON() : order;
+  const orderJson = typeof order.toJSON === "function" ? order.toJSON() : { ...order };
+  if (role === "seller" || (role === "all" && orderJson.sellerId === userId)) {
+    const paymentInfo = typeof orderJson.paymentInfo === "string"
+      ? (() => { try { return JSON.parse(orderJson.paymentInfo); } catch { return {}; } })()
+      : (orderJson.paymentInfo || {});
+    const deliveryFee = Number(paymentInfo?.deliveryFee ?? paymentInfo?.deliveryCharge ?? 0) || 0;
+    orderJson.total = Math.max(0, Number((Number(orderJson.total || 0) - deliveryFee).toFixed(2)));
+  }
 
   return {
     ...orderJson,

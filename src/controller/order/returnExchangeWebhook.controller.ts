@@ -62,29 +62,44 @@ import { processReturnExchangeWebhook } from "../../services/order/returnExchang
  */
 export const handleReturnExchangeWebhook = async (req: any, res: Response) => {
   try {
-    const configuredSecret = process.env.DELIVAR_WEBHOOK_SECRET;
+    const configuredSecret = process.env.DELIVAR_WEBHOOK_SECRET?.trim();
 
     // 1. Validate Secret Key / Signature
-    const secretKeyHeader =
+    const secretKeyHeader = (
       req.headers["secret-key"] ||
+      req.headers["secret_key"] ||
       req.headers["x-secret-key"] ||
-      req.headers["x-delivar-secret-key"];
-    const signatureHeader = req.headers["x-delivar-signature"];
+      req.headers["x-delivar-secret-key"] ||
+      req.headers["authorization"]?.replace(/^Bearer\s+/i, "")
+    )?.toString().trim();
+
+    const signatureHeader = (
+      req.headers["signature"] ||
+      req.headers["x-signature"] ||
+      req.headers["x-delivar-signature"] ||
+      req.headers["delivar-signature"]
+    )?.toString().trim();
 
     if (configuredSecret) {
-      const isHeaderKeyValid = secretKeyHeader === configuredSecret;
+      const isHeaderKeyValid = secretKeyHeader && secretKeyHeader === configuredSecret;
       let isSignatureValid = false;
 
-      if (signatureHeader && req.rawBody) {
+      const rawPayload = req.rawBody || (typeof req.body === "string" ? req.body : JSON.stringify(req.body));
+      if (signatureHeader && rawPayload) {
         const hash = crypto
           .createHmac("sha256", configuredSecret)
-          .update(req.rawBody)
+          .update(rawPayload)
           .digest("hex");
-        isSignatureValid = hash === signatureHeader;
+        isSignatureValid = crypto.timingSafeEqual(
+          Buffer.from(hash, "utf-8"),
+          Buffer.from(signatureHeader, "utf-8")
+        ) || hash.toLowerCase() === signatureHeader.toLowerCase();
       }
 
       if (!isHeaderKeyValid && !isSignatureValid) {
-        console.warn("[Return/Exchange Webhook] Unauthorized request received - Invalid Secret/Signature");
+        console.warn(
+          `[Return/Exchange Webhook] Unauthorized request received - Invalid Secret/Signature. Provided secretKey: ${secretKeyHeader ? "YES" : "NO"}, signatureHeader: ${signatureHeader ? "YES" : "NO"}`
+        );
         return res
           .status(401)
           .json({ success: false, message: "Invalid secret key or signature" });

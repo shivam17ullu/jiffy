@@ -1,13 +1,14 @@
 import * as service from '../../services/order/order.service.js';
 import { getOrCreateWallet, debitWallet } from "../../services/wallet/wallet.service.js";
 import { Response } from "express";
-import { User, Role, Order, Location } from "../../model/relations.js";
+import { User, Role, Order, Location, SellerProfile } from "../../model/relations.js";
 import {
   handleControllerError,
   sendError,
   sendValidationError,
 } from "../../middleware/responseHandler.js";
 import { uploadMultipleToS3, uploadMultipleBase64ToS3 } from "../../utils/s3Upload.js";
+import { sendDelivarOrderFailureEmail } from "../../utils/mailer.js";
 
 /**
  * @swagger
@@ -782,5 +783,131 @@ export const updateTrackingDetails = async (req: any, res: Response) => {
     return handleControllerError(res, err);
   }
 };
+
+/**
+ * @swagger
+ * /api/orders/delivar-failure-alert:
+ *   post:
+ *     summary: Send an email alert to admins when Delivar order creation fails
+ *     description: Accepts orderId, errorMsg, and errorType, queries order context if available, and sends an urgent notification email to all ADMIN_EMAILS.
+ *     tags: [Orders]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderId
+ *               - errorMsg
+ *               - errorType
+ *             properties:
+ *               orderId:
+ *                 type: string
+ *                 example: "12345"
+ *               errorMsg:
+ *                 type: string
+ *                 example: "Delivar booking failed: Pickup address ID is invalid or unserviceable"
+ *               errorType:
+ *                 type: string
+ *                 example: "DELIVAR_CREATE_ORDER_FAILED"
+ *     responses:
+ *       200:
+ *         description: Delivar failure alert email sent successfully
+ *       400:
+ *         description: Validation error
+ */
+export const sendDelivarFailureAlert = async (req: any, res: Response) => {
+  try {
+    const { orderId, errorMsg, errorType, ...extraData } = req.body;
+
+    if (!orderId && orderId !== 0) {
+      return sendValidationError(res, "orderId is required", "orderId");
+    }
+    if (!errorMsg) {
+      return sendValidationError(res, "errorMsg is required", "errorMsg");
+    }
+    if (!errorType) {
+      return sendValidationError(res, "errorType is required", "errorType");
+    }
+
+    const orderIdStr = String(orderId).trim();
+    const errorMsgStr = String(errorMsg).trim();
+    const errorTypeStr = String(errorType).trim();
+
+    // Query order context if orderId is numeric
+    let orderDetails: any = null;
+    const numericOrderId = Number(orderIdStr);
+    if (!isNaN(numericOrderId) && numericOrderId > 0) {
+      orderDetails = await Order.findByPk(numericOrderId, {
+        include: [
+          {
+            association: "buyer",
+            attributes: ["id", "phone_number", "email"],
+          },
+          {
+            association: "seller",
+            attributes: ["id", "phone_number", "email"],
+            include: [
+              {
+                model: SellerProfile,
+                required: false,
+                attributes: ["businessName", "phone", "city", "state", "pickup_address_id"],
+              },
+            ],
+          },
+        ],
+      });
+    }
+
+    const shippingAddress = orderDetails?.shippingAddress || {};
+    const buyerName = shippingAddress.fullName || shippingAddress.name || "N/A";
+    const buyerPhone = shippingAddress.phone || (orderDetails?.buyer as any)?.phone_number || "N/A";
+    const deliveryAddress = [
+      shippingAddress.address || shippingAddress.street,
+      shippingAddress.city,
+      shippingAddress.state,
+      shippingAddress.zipCode || shippingAddress.pincode,
+    ]
+      .filter(Boolean)
+      .join(", ") || "N/A";
+
+    const sellerObj = orderDetails?.seller as any;
+    const sellerProfile = sellerObj?.SellerProfile;
+    const sellerName = sellerProfile?.businessName || sellerObj?.phone_number || "N/A";
+    const sellerEmail = sellerObj?.email || "N/A";
+    const sellerPhone = sellerProfile?.phone || sellerObj?.phone_number || "N/A";
+
+    await sendDelivarOrderFailureEmail({
+      orderId: orderIdStr,
+      errorMsg: errorMsgStr,
+      errorType: errorTypeStr,
+      sellerName,
+      sellerEmail,
+      sellerPhone,
+      buyerName,
+      buyerPhone,
+      totalAmount: orderDetails?.total,
+      status: orderDetails?.status,
+      deliveryAddress,
+      pickupAddressId: orderDetails?.buyerPickupAddressId || sellerProfile?.pickup_address_id || null,
+      timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+      extraInfo: Object.keys(extraData).length > 0 ? extraData : undefined,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Delivar failure alert email sent successfully to administrators",
+      data: {
+        orderId: orderIdStr,
+        errorType: errorTypeStr,
+        errorMsg: errorMsgStr,
+      },
+    });
+  } catch (err: unknown) {
+    return handleControllerError(res, err);
+  }
+};
+
 
 

@@ -1,6 +1,9 @@
 import dotenv from "dotenv";
 import { Sequelize } from "sequelize";
 
+if (process.env.NODE_ENV) {
+	dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
+}
 dotenv.config();
 
 const DB_NAME = process.env.DB_NAME as string;

@@ -4,7 +4,7 @@ import {
   OrderItem,
   User,
 } from "../../model/relations.js";
-import { Op, fn, col } from "sequelize";
+import { Op, fn, col, Sequelize } from "sequelize";
 import { jiffy } from "../../config/sequelize.js";
 
 /**
@@ -42,22 +42,32 @@ export const getSellerStats = async (sellerId: number) => {
     return acc;
   }, {});
 
-  // Total revenue (sum of all order totals)
+  // Total revenue (sum of all order totals excluding delivery fee)
   const revenueResult = await Order.findAll({
     where: { sellerId, status: { [Op.ne]: "cancelled" } },
     attributes: [
-      [fn("SUM", col("total")), "totalRevenue"],
+      [
+        Sequelize.literal(
+          "SUM(GREATEST(0, total - CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryFee')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryCharge')), 'null'), 0) AS DECIMAL(10, 2))))"
+        ),
+        "totalRevenue",
+      ],
     ],
     raw: true,
   });
 
   const totalRevenue = (revenueResult[0] as any)?.totalRevenue || 0;
 
-  // Total refund amount (sum of refunded order totals)
+  // Total refund amount (sum of refunded order totals excluding delivery fee)
   const refundResult = await Order.findAll({
     where: { sellerId, status: "Refund Successful" },
     attributes: [
-      [fn("SUM", col("total")), "totalRefund"],
+      [
+        Sequelize.literal(
+          "SUM(GREATEST(0, total - CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryFee')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryCharge')), 'null'), 0) AS DECIMAL(10, 2))))"
+        ),
+        "totalRefund",
+      ],
     ],
     raw: true,
   });
@@ -100,13 +110,21 @@ export const getSellerStats = async (sellerId: number) => {
       totalRefundAmount: parseFloat(totalRefundAmount as any) || 0,
     },
     ordersByStatus,
-    recentOrders: recentOrders.map((order: any) => ({
-      id: order.id,
-      total: order.total,
-      status: order.status,
-      createdAt: order.createdAt,
-      buyer: order.buyer,
-    })),
+    recentOrders: recentOrders.map((order: any) => {
+      const paymentInfo = typeof order.paymentInfo === "string"
+        ? (() => { try { return JSON.parse(order.paymentInfo); } catch { return {}; } })()
+        : (order.paymentInfo || {});
+      const deliveryFee = Number(paymentInfo?.deliveryFee ?? paymentInfo?.deliveryCharge ?? 0) || 0;
+      const totalWithoutDelivery = Math.max(0, Number((Number(order.total || 0) - deliveryFee).toFixed(2)));
+
+      return {
+        id: order.id,
+        total: totalWithoutDelivery,
+        status: order.status,
+        createdAt: order.createdAt,
+        buyer: order.buyer,
+      };
+    }),
     lowStockProducts: lowStockProducts.map((product: any) => ({
       id: product.id,
       name: product.name,
@@ -142,7 +160,12 @@ export const getSellerMonthlyRevenue = async (sellerId: number, year?: number) =
     attributes: [
       [fn("YEAR", col("createdAt")), "year"],
       [fn("MONTH", col("createdAt")), "month"],
-      [fn("SUM", col("total")), "revenue"],
+      [
+        Sequelize.literal(
+          "SUM(GREATEST(0, total - CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryFee')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(paymentInfo, '$.deliveryCharge')), 'null'), 0) AS DECIMAL(10, 2))))"
+        ),
+        "revenue",
+      ],
       [fn("COUNT", col("id")), "orderCount"],
     ],
     group: [
@@ -199,8 +222,18 @@ export const getRefundedOrders = async (
     distinct: true,
   });
 
+  const sanitizedRows = orders.rows.map((row: any) => {
+    const orderObj = typeof row.toJSON === "function" ? row.toJSON() : { ...row };
+    const paymentInfo = typeof orderObj.paymentInfo === "string"
+      ? (() => { try { return JSON.parse(orderObj.paymentInfo); } catch { return {}; } })()
+      : (orderObj.paymentInfo || {});
+    const deliveryFee = Number(paymentInfo?.deliveryFee ?? paymentInfo?.deliveryCharge ?? 0) || 0;
+    orderObj.total = Math.max(0, Number((Number(orderObj.total || 0) - deliveryFee).toFixed(2)));
+    return orderObj;
+  });
+
   return {
-    items: orders.rows,
+    items: sanitizedRows,
     total: orders.count,
     page,
     limit,

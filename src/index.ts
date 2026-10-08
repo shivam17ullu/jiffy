@@ -28,8 +28,10 @@ import { globalErrorHandler } from './middleware/errorHandler.js';
 
 
 
-// Increase body size limits for JSON and URL-encoded data
 // Load environment variables first
+if (process.env.NODE_ENV) {
+	dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
+}
 dotenv.config();
 
 app.use(bodyParser.json({

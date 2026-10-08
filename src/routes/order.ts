@@ -33,5 +33,9 @@ orderRouter.post('/:id/booking-details', authenticate, ctrl.updateTrackingDetail
 orderRouter.patch('/:id/booking-details', authenticate, ctrl.updateTrackingDetails);
 orderRouter.put('/:id/booking-details', authenticate, ctrl.updateTrackingDetails);
 
+// Alert admins when Delivar create order API fails
+orderRouter.post('/delivar-failure-alert', ctrl.sendDelivarFailureAlert);
+orderRouter.post('/delivar-error-notify', ctrl.sendDelivarFailureAlert);
+
 export default orderRouter;
 
