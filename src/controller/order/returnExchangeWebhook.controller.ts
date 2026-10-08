@@ -62,9 +62,49 @@ import { processReturnExchangeWebhook } from "../../services/order/returnExchang
  */
 export const handleReturnExchangeWebhook = async (req: any, res: Response) => {
   try {
+    // 1. Resolve body if received as text/plain or raw buffer from Delivar portal
+    let payload = req.body;
+    if ((!payload || Object.keys(payload).length === 0) && req.rawBody) {
+      try {
+        const rawStr = req.rawBody.toString("utf-8");
+        payload = JSON.parse(rawStr);
+      } catch {
+        // Not a JSON string
+      }
+    }
+
+    const {
+      booking_id,
+      booking_order_id,
+      request_id,
+      order_id,
+      new_status,
+      status,
+      event,
+    } = payload || {};
+
+    const identifier = booking_id || booking_order_id || request_id || order_id;
+    const resolvedStatus = new_status || status;
+
+    // 2. Handle "Test URL" / Healthcheck ping from Delivar Dashboard
+    const isDashboardPing =
+      req.headers["origin"]?.includes("delivar.in") ||
+      req.headers["sec-fetch-mode"] === "no-cors" ||
+      event === "test" ||
+      payload?.type === "test" ||
+      (!identifier && !resolvedStatus);
+
+    if (isDashboardPing) {
+      console.log("[Return/Exchange Webhook] Test / Reachability ping acknowledged from Delivar Portal. Responding 200 OK.");
+      return res.status(200).json({
+        success: true,
+        message: "Return/Exchange webhook test successful",
+      });
+    }
+
+    // 3. Extract Secret Key from headers, query params, or body for real event payloads
     const configuredSecret = process.env.DELIVAR_WEBHOOK_SECRET?.trim();
 
-    // 1. Extract Secret Key from headers, query params, or body
     const secretKeyCandidate = (
       req.headers["secret-key"] ||
       req.headers["secret_key"] ||
@@ -84,10 +124,10 @@ export const handleReturnExchangeWebhook = async (req: any, res: Response) => {
       req.query?.secretKey ||
       req.query?.secret ||
       req.query?.token ||
-      req.body?.secret_key ||
-      req.body?.secretKey ||
-      req.body?.secret ||
-      req.body?.webhook_secret
+      payload?.secret_key ||
+      payload?.secretKey ||
+      payload?.secret ||
+      payload?.webhook_secret
     )?.toString().trim();
 
     // Extract Signature from headers, query params, or body
@@ -101,14 +141,14 @@ export const handleReturnExchangeWebhook = async (req: any, res: Response) => {
       req.headers["x-hub-signature-256"]?.replace(/^sha256=/i, "") ||
       req.headers["x-hub-signature"]?.replace(/^sha1=/i, "") ||
       req.query?.signature ||
-      req.body?.signature
+      payload?.signature
     )?.toString().trim();
 
     if (configuredSecret) {
       const isHeaderKeyValid = secretKeyCandidate && secretKeyCandidate === configuredSecret;
       let isSignatureValid = false;
 
-      const rawPayload = req.rawBody || (typeof req.body === "string" ? req.body : JSON.stringify(req.body));
+      const rawPayload = req.rawBody || (typeof payload === "string" ? payload : JSON.stringify(payload));
       if (signatureCandidate && rawPayload) {
         const hash = crypto
           .createHmac("sha256", configuredSecret)
@@ -128,32 +168,11 @@ export const handleReturnExchangeWebhook = async (req: any, res: Response) => {
           `[Return/Exchange Webhook] Unauthorized request received - Invalid Secret/Signature.`
         );
         console.warn("[Return/Exchange Webhook Received Headers]:", JSON.stringify(req.headers, null, 2));
-        console.warn("[Return/Exchange Webhook Received Body]:", JSON.stringify(req.body, null, 2));
+        console.warn("[Return/Exchange Webhook Received Body]:", JSON.stringify(payload, null, 2));
         return res
           .status(401)
           .json({ success: false, message: "Invalid secret key or signature" });
       }
-    }
-
-    const {
-      booking_id,
-      booking_order_id,
-      request_id,
-      order_id,
-      new_status,
-      status,
-      event,
-    } = req.body;
-
-    const identifier = booking_id || booking_order_id || request_id || order_id;
-    const resolvedStatus = new_status || status;
-
-    // Handle "Test URL" ping from Webhook Dashboard
-    if (!identifier && (event === "test" || !resolvedStatus)) {
-      return res.status(200).json({
-        success: true,
-        message: "Return/Exchange webhook test successful",
-      });
     }
 
     if (!identifier || !resolvedStatus) {

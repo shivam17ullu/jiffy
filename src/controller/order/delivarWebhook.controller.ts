@@ -11,9 +11,45 @@ import { processReturnExchangeWebhook } from "../../services/order/returnExchang
  */
 export const handleDelivarWebhook = async (req: any, res: Response) => {
   try {
+    // 1. Resolve body if received as text/plain or raw buffer from Delivar portal
+    let payload = req.body;
+    if ((!payload || Object.keys(payload).length === 0) && req.rawBody) {
+      try {
+        const rawStr = req.rawBody.toString("utf-8");
+        payload = JSON.parse(rawStr);
+      } catch {
+        // Not a JSON string
+      }
+    }
+
+    const {
+      booking_id,
+      booking_order_id,
+      new_status,
+      old_status,
+      changed_at,
+      public_tracking_id,
+      event,
+    } = payload || {};
+
+    // 2. Handle "Test URL" / Healthcheck ping from Delivar Dashboard
+    const isDashboardPing =
+      req.headers["origin"]?.includes("delivar.in") ||
+      req.headers["sec-fetch-mode"] === "no-cors" ||
+      event === "test" ||
+      payload?.type === "test" ||
+      (!booking_id && !booking_order_id && !new_status);
+
+    if (isDashboardPing) {
+      console.log("[Delivar Webhook] Test / Reachability ping acknowledged from Delivar Portal. Responding 200 OK.");
+      return res
+        .status(200)
+        .json({ success: true, message: "Delivar webhook test successful" });
+    }
+
+    // 3. Extract Secret Key from headers, query params, or body for real event payloads
     const configuredSecret = process.env.DELIVAR_WEBHOOK_SECRET?.trim();
 
-    // 1. Extract Secret Key from headers, query params, or body
     const secretKeyCandidate = (
       req.headers["secret-key"] ||
       req.headers["secret_key"] ||
@@ -33,10 +69,10 @@ export const handleDelivarWebhook = async (req: any, res: Response) => {
       req.query?.secretKey ||
       req.query?.secret ||
       req.query?.token ||
-      req.body?.secret_key ||
-      req.body?.secretKey ||
-      req.body?.secret ||
-      req.body?.webhook_secret
+      payload?.secret_key ||
+      payload?.secretKey ||
+      payload?.secret ||
+      payload?.webhook_secret
     )?.toString().trim();
 
     // Extract Signature from headers, query params, or body
@@ -50,14 +86,14 @@ export const handleDelivarWebhook = async (req: any, res: Response) => {
       req.headers["x-hub-signature-256"]?.replace(/^sha256=/i, "") ||
       req.headers["x-hub-signature"]?.replace(/^sha1=/i, "") ||
       req.query?.signature ||
-      req.body?.signature
+      payload?.signature
     )?.toString().trim();
 
     if (configuredSecret) {
       const isHeaderKeyValid = secretKeyCandidate && secretKeyCandidate === configuredSecret;
       let isSignatureValid = false;
 
-      const rawPayload = req.rawBody || (typeof req.body === "string" ? req.body : JSON.stringify(req.body));
+      const rawPayload = req.rawBody || (typeof payload === "string" ? payload : JSON.stringify(payload));
       if (signatureCandidate && rawPayload) {
         const hash = crypto
           .createHmac("sha256", configuredSecret)
@@ -77,26 +113,11 @@ export const handleDelivarWebhook = async (req: any, res: Response) => {
           `[Delivar Webhook] Unauthorized request received - Invalid Secret/Signature.`
         );
         console.warn("[Delivar Webhook Received Headers]:", JSON.stringify(req.headers, null, 2));
-        console.warn("[Delivar Webhook Received Body]:", JSON.stringify(req.body, null, 2));
+        console.warn("[Delivar Webhook Received Body]:", JSON.stringify(payload, null, 2));
         return res
           .status(401)
           .json({ success: false, message: "Invalid secret key or signature" });
       }
-    }
-
-    const {
-      booking_id,
-      new_status,
-      old_status,
-      changed_at,
-      public_tracking_id,
-    } = req.body;
-
-    // Handle "Test URL" ping from Delivar Dashboard
-    if (!booking_id && (req.body?.event === "test" || !new_status)) {
-      return res
-        .status(200)
-        .json({ success: true, message: "Delivar webhook test successful" });
     }
 
     if (!booking_id || !new_status) {
@@ -125,7 +146,7 @@ export const handleDelivarWebhook = async (req: any, res: Response) => {
             console.log(
               `[Delivar Webhook] Found ReturnExchangeRequest #${returnReq.id} for booking_id: ${booking_id}`
             );
-            await processReturnExchangeWebhook(req.body);
+            await processReturnExchangeWebhook(payload);
             return;
           }
 
@@ -135,34 +156,54 @@ export const handleDelivarWebhook = async (req: any, res: Response) => {
           return;
         }
 
-        // Map Delivar rider status to your internal order status
+        // Map Delivar rider status / event types (from snapshot) to internal order status
         let targetStatus = order.status;
-        const normalized = String(new_status).toLowerCase().trim();
+        const normalized = String(new_status || event || "").toLowerCase().trim();
 
         if (
           normalized === "assigned" ||
           normalized === "rider.assigned" ||
-          normalized === "rider_assigned"
+          normalized === "rider_assigned" ||
+          normalized === "rider.arrived_pickup" ||
+          normalized === "rider_arrived_pickup" ||
+          normalized === "booking.created" ||
+          normalized === "booking_created"
         ) {
           targetStatus = "Confirmed";
         } else if (
           normalized === "picked up" ||
           normalized === "order.picked_up" ||
+          normalized === "order_picked_up" ||
           normalized === "in_transit" ||
           normalized === "in transit" ||
+          normalized === "order.in_transit" ||
+          normalized === "order_in_transit" ||
+          normalized === "rider.arrived_drop" ||
+          normalized === "rider_arrived_drop" ||
           normalized === "out for delivery"
         ) {
           targetStatus = "Out For Delivery";
         } else if (
           normalized === "delivered" ||
-          normalized === "order.delivered"
+          normalized === "order.delivered" ||
+          normalized === "order_delivered"
         ) {
           targetStatus = "Delivered";
         } else if (
           normalized === "cancelled" ||
-          normalized === "order.cancelled"
+          normalized === "order.cancelled" ||
+          normalized === "order_cancelled" ||
+          normalized === "failed" ||
+          normalized === "order.failed" ||
+          normalized === "order_failed"
         ) {
           targetStatus = "Cancelled";
+        } else if (
+          normalized === "rto" ||
+          normalized === "order.rto" ||
+          normalized === "order_rto"
+        ) {
+          targetStatus = "RTO";
         }
 
         // Save public tracking UUID if provided
