@@ -11,6 +11,7 @@
 		"start:development": "cross-env NODE_ENV=development nodemon --watch src --ext ts --exec \"node --loader ts-node/esm src/index.ts\"",
 		"start:staging": "cross-env NODE_ENV=staging node dist/index.js",
 		"start:production": "cross-env NODE_ENV=production node dist/index.js",
+		"dev:production": "cross-env NODE_ENV=production nodemon --watch src --ext ts --exec \"node --loader ts-node/esm src/index.ts\"",
 		"start:qa": "cross-env NODE_ENV=qa node dist/index.js",
 		"pm2:start": "pm2 start dist/index.js --name 'my-app' --watch --ignore-watch='uploads'",
 		"pm2:start:development": "cross-env NODE_ENV=development pm2 start dist/index.js --name 'my-app-dev' --watch --ignore-watch='uploads'",

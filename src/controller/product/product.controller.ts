@@ -206,13 +206,33 @@ export const create = async (req: any, res: any) => {
  *       - in: query
  *         name: categoryId
  *         schema:
- *           type: integer
- *         description: Filter by category ID (includes subcategories and sub-subcategories)
+ *           type: string
+ *         description: "Filter by category ID or multiple IDs (e.g. 40, '40,44', or [40,44]; includes all child subcategories)"
+ *       - in: query
+ *         name: brandName
+ *         schema:
+ *           type: string
+ *         description: "Filter by brand name (e.g. 'Levis', 'H&M', or comma-separated 'Levis,H&M')"
  *       - in: query
  *         name: brand
  *         schema:
  *           type: string
- *         description: Filter by brand name
+ *         description: "Alias for brandName"
+ *       - in: query
+ *         name: size
+ *         schema:
+ *           type: string
+ *         description: "Filter by size (e.g. 'M', 'L', 'XL', or comma-separated 'M,L')"
+ *       - in: query
+ *         name: color
+ *         schema:
+ *           type: string
+ *         description: "Filter by color (e.g. 'Red', 'Black', 'Blue', or comma-separated 'Black,Blue')"
+ *       - in: query
+ *         name: priceRange
+ *         schema:
+ *           type: string
+ *         description: "Filter by price range label (e.g. 'Under ₹500', '₹500 - ₹1,000', '₹1,000 - ₹2,500', '₹2,500 - ₹5,000', '₹5,000 & Above', or '500-1000')"
  *       - in: query
  *         name: minPrice
  *         schema:
@@ -227,8 +247,7 @@ export const create = async (req: any, res: any) => {
  *         name: sort
  *         schema:
  *           type: string
- *           enum: [price:ASC, price:DESC, name:ASC, name:DESC, createdAt:DESC, createdAt:ASC]
- *         description: Sort field and direction (format: field:direction)
+ *         description: "Sort products by option: 'Recommended / Relevance' (relevance), 'Price: Low to High' (price_asc), 'Price: High to Low' (price_desc), 'Newest Arrivals' (newest), 'Discount: High to Low' (discount_desc), or 'field:direction' (e.g. price:ASC, createdAt:DESC)"
  *       - in: query
  *         name: filter
  *         schema:
@@ -271,15 +290,31 @@ export const list = async (req: any, res: Response) => {
   const rawLat = req.query.lat ?? req.query.latitude;
   const rawLng = req.query.lng ?? req.query.longitude ?? req.query.long;
 
+  const rawSort = req.query.sort ?? req.query.sortBy ?? req.query.sort_by;
+  const filterVal = req.query.filter;
+  const isFilterNumeric = filterVal !== undefined && filterVal !== null && filterVal !== '' && !isNaN(Number(filterVal));
+
+  const categoryParam = req.query.categoryId ?? req.query.categoryIds ?? req.query.category ?? (isFilterNumeric ? filterVal : undefined);
+  const brandParam = req.query.brandName ?? req.query.brand_name ?? req.query.brand ?? req.query.brands;
+  const sizeParam = req.query.size ?? req.query.sizes;
+  const colorParam = req.query.color ?? req.query.colors;
+  const priceRangeParam = req.query.priceRange ?? req.query.price_range ?? req.query.price;
+
+  const sortParam = rawSort ?? (!isFilterNumeric && typeof filterVal === 'string' && filterVal.trim() !== '' ? filterVal : undefined);
+
   const params = {
     page: parseInt(req.query.page) || 1,
     limit: parseInt(req.query.limit) || 20,
     q: req.query.q,
-    categoryId: req.query.categoryId ? +req.query.categoryId : (req.query.filter ? +req.query.filter : undefined),
-    brand: req.query.brand,
+    categoryId: categoryParam,
+    brandName: brandParam,
+    brand: brandParam,
+    size: sizeParam,
+    color: colorParam,
+    priceRange: priceRangeParam,
     minPrice: req.query.minPrice,
     maxPrice: req.query.maxPrice,
-    sort: req.query.sort,
+    sort: sortParam,
     storeName: req.query.storeName,
     storeCategory: req.query.storeCategory || req.query.store_category,
     userId: req.userId || undefined, // Include userId if authenticated
@@ -318,6 +353,31 @@ export const list = async (req: any, res: Response) => {
  *           type: string
  *         description: Search query
  *       - in: query
+ *         name: categoryId
+ *         schema:
+ *           type: string
+ *         description: Filter by category ID or multiple IDs
+ *       - in: query
+ *         name: brandName
+ *         schema:
+ *           type: string
+ *         description: Filter by brand name
+ *       - in: query
+ *         name: size
+ *         schema:
+ *           type: string
+ *         description: Filter by variant size
+ *       - in: query
+ *         name: color
+ *         schema:
+ *           type: string
+ *         description: Filter by variant color
+ *       - in: query
+ *         name: priceRange
+ *         schema:
+ *           type: string
+ *         description: Filter by price range
+ *       - in: query
  *         name: sort
  *         schema:
  *           type: string
@@ -334,15 +394,31 @@ export const list = async (req: any, res: Response) => {
 export const getSellerProducts = async (req: any, res: Response) => {
   try {
     const sellerId = req.userId;
+    const rawSort = req.query.sort ?? req.query.sortBy ?? req.query.sort_by;
+    const filterVal = req.query.filter;
+    const isFilterNumeric = filterVal !== undefined && filterVal !== null && filterVal !== '' && !isNaN(Number(filterVal));
+
+    const categoryParam = req.query.categoryId ?? req.query.categoryIds ?? req.query.category ?? (isFilterNumeric ? filterVal : undefined);
+    const brandParam = req.query.brandName ?? req.query.brand_name ?? req.query.brand ?? req.query.brands;
+    const sizeParam = req.query.size ?? req.query.sizes;
+    const colorParam = req.query.color ?? req.query.colors;
+    const priceRangeParam = req.query.priceRange ?? req.query.price_range ?? req.query.price;
+
+    const sortParam = rawSort ?? (!isFilterNumeric && typeof filterVal === 'string' && filterVal.trim() !== '' ? filterVal : undefined);
+
     const params = {
       page: parseInt(req.query.page) || 1,
       limit: parseInt(req.query.limit) || 20,
       q: req.query.q,
-      categoryId: req.query.categoryId ? +req.query.categoryId : (req.query.filter ? +req.query.filter : undefined),
-      brand: req.query.brand,
+      categoryId: categoryParam,
+      brandName: brandParam,
+      brand: brandParam,
+      size: sizeParam,
+      color: colorParam,
+      priceRange: priceRangeParam,
       minPrice: req.query.minPrice,
       maxPrice: req.query.maxPrice,
-      sort: req.query.sort
+      sort: sortParam,
     };
     const result = await service.listSellerProducts(sellerId, params);
     res.json({ success: true, ...result });
@@ -846,4 +922,6 @@ export const updateReturnExchange = async (req: any, res: Response) => {
     return handleControllerError(res, err);
   }
 };
+
+export { getBrands } from "./brand.controller.js";
 

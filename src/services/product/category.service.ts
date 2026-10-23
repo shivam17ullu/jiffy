@@ -47,3 +47,23 @@ export const updateCategory = async (id: number, payload: Partial<any>) =>
   );
 export const deleteCategory = async (id: number) =>
   Category.destroy({ where: { id } });
+
+/**
+ * Get all descendant category IDs (children and grandchildren) recursively
+ */
+export const getCategoryDescendants = async (categoryId: number): Promise<number[]> => {
+  const categoryIds = [categoryId];
+  const children = await Category.findAll({
+    where: { parentId: categoryId, isActive: true },
+    attributes: ["id"],
+    raw: true,
+  });
+
+  for (const child of children) {
+    const grandChildren = await getCategoryDescendants(child.id);
+    categoryIds.push(...grandChildren);
+  }
+
+  return categoryIds;
+};
+
