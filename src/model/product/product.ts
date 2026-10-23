@@ -64,6 +64,9 @@ Product.init(
         unique: true,
         fields: ["slug"],
       },
+      {
+        fields: ["brand"],
+      },
     ],
   }
 );

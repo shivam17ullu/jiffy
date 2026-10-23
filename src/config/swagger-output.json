@@ -825,6 +825,16 @@
         }
       }
     },
+    "/api/brands/": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/cart/": {
       "get": {
         "description": "",
@@ -946,6 +956,96 @@
             "type": "string"
           },
           {
+            "name": "sort",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "categoryId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "categoryIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "brandName",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "brand_name",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "brands",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "sizes",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "color",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "colors",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "priceRange",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "price_range",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "price",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "page",
             "in": "query",
             "type": "string"
@@ -961,32 +1061,12 @@
             "type": "string"
           },
           {
-            "name": "categoryId",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "filter",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "brand",
-            "in": "query",
-            "type": "string"
-          },
-          {
             "name": "minPrice",
             "in": "query",
             "type": "string"
           },
           {
             "name": "maxPrice",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "sort",
             "in": "query",
             "type": "string"
           },
@@ -1021,6 +1101,16 @@
             "type": "string"
           }
         ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/products/brands": {
+      "get": {
+        "description": "",
         "responses": {
           "200": {
             "description": "OK"
@@ -1155,6 +1245,96 @@
             "type": "string"
           },
           {
+            "name": "sort",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "categoryId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "categoryIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "brandName",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "brand_name",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "brands",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "sizes",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "color",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "colors",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "priceRange",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "price_range",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "price",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "page",
             "in": "query",
             "type": "string"
@@ -1170,32 +1350,12 @@
             "type": "string"
           },
           {
-            "name": "categoryId",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "filter",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "brand",
-            "in": "query",
-            "type": "string"
-          },
-          {
             "name": "minPrice",
             "in": "query",
             "type": "string"
           },
           {
             "name": "maxPrice",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "sort",
             "in": "query",
             "type": "string"
           }
@@ -1332,7 +1492,27 @@
         "description": "",
         "parameters": [
           {
+            "name": "origin",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "sec-fetch-mode",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "secret_key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "secretkey",
             "in": "header",
             "type": "string"
           },
@@ -1342,12 +1522,92 @@
             "type": "string"
           },
           {
+            "name": "x-secret",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "secret",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "x-delivar-secret-key",
             "in": "header",
             "type": "string"
           },
           {
+            "name": "x-delivar-secret",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "api-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "apikey",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-apikey",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-auth-token",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "x-delivar-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "delivar-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-webhook-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "webhook-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-hub-signature-256",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-hub-signature",
             "in": "header",
             "type": "string"
           },
@@ -1360,6 +1620,9 @@
                 "booking_id": {
                   "example": "any"
                 },
+                "booking_order_id": {
+                  "example": "any"
+                },
                 "new_status": {
                   "example": "any"
                 },
@@ -1370,6 +1633,9 @@
                   "example": "any"
                 },
                 "public_tracking_id": {
+                  "example": "any"
+                },
+                "event": {
                   "example": "any"
                 }
               }
@@ -1931,6 +2197,72 @@
                   "example": "any"
                 },
                 "publicTrackingId": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/orders/delivar-failure-alert": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "orderId": {
+                  "example": "any"
+                },
+                "errorMsg": {
+                  "example": "any"
+                },
+                "errorType": {
+                  "example": "any"
+                },
+                "extraData": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/orders/delivar-error-notify": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "orderId": {
+                  "example": "any"
+                },
+                "errorMsg": {
+                  "example": "any"
+                },
+                "errorType": {
+                  "example": "any"
+                },
+                "extraData": {
                   "example": "any"
                 }
               }
@@ -3226,7 +3558,27 @@
         "description": "",
         "parameters": [
           {
+            "name": "origin",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "sec-fetch-mode",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "secret_key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "secretkey",
             "in": "header",
             "type": "string"
           },
@@ -3236,12 +3588,92 @@
             "type": "string"
           },
           {
+            "name": "x-secret",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "secret",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "x-delivar-secret-key",
             "in": "header",
             "type": "string"
           },
           {
+            "name": "x-delivar-secret",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "api-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "apikey",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-apikey",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-auth-token",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "x-delivar-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "delivar-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-webhook-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "webhook-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-hub-signature-256",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-hub-signature",
             "in": "header",
             "type": "string"
           },
@@ -3294,7 +3726,27 @@
         "description": "",
         "parameters": [
           {
+            "name": "origin",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "sec-fetch-mode",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "secret-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "secret_key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "secretkey",
             "in": "header",
             "type": "string"
           },
@@ -3304,12 +3756,92 @@
             "type": "string"
           },
           {
+            "name": "x-secret",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "secret",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "x-delivar-secret-key",
             "in": "header",
             "type": "string"
           },
           {
+            "name": "x-delivar-secret",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "api-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "apikey",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-apikey",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-auth-token",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "x-delivar-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "delivar-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-webhook-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "webhook-signature",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-hub-signature-256",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "x-hub-signature",
             "in": "header",
             "type": "string"
           },

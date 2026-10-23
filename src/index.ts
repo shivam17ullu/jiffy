@@ -23,6 +23,7 @@ import notificationRouter from './routes/notification.js';
 import walletRouter from './routes/wallet.js';
 import returnExchangeRouter from './routes/returnExchange.js';
 import couponRouter from './routes/coupon.js';
+import brandRouter from './routes/brand.js';
 import { globalErrorHandler } from './middleware/errorHandler.js';
 
 
@@ -72,6 +73,7 @@ app.use('/api/auth', authRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/stores", storeRouter);
 app.use('/api/categories', categoryRouter)
+app.use('/api/brands', brandRouter)
 app.use("/api/cart", cartRouter)
 app.use("/api/products", productRouter)
 app.use("/api/orders", orderRouter)
@@ -90,17 +92,49 @@ app.use(globalErrorHandler);
 
 const startServer = async () => {
 	try {
+		console.log('Connecting to database...');
 		await jiffy.authenticate();
-		await jiffy.sync({ alter: true });
-		console.log('Connection to both databases has been established successfully.');
-		const port = process.env.PORT || 3000;
+		console.log('Database connected successfully.');
+
+		if (process.env.NODE_ENV !== 'production' && process.env.DB_SYNC === 'true') {
+			console.log('Syncing database schema...');
+			await jiffy.sync({ alter: true });
+			console.log('Database schema synced successfully.');
+		}
+
+		const portArgIndex = process.argv.findIndex(arg => arg === '--port' || arg.startsWith('--port='));
+		let cliPort: number | undefined;
+		if (portArgIndex !== -1) {
+			const arg = process.argv[portArgIndex];
+			if (arg.startsWith('--port=')) {
+				cliPort = Number(arg.split('=')[1]);
+			} else if (process.argv[portArgIndex + 1]) {
+				cliPort = Number(process.argv[portArgIndex + 1]);
+			}
+		}
+		const port = cliPort || Number(process.env.PORT) || 3000;
+		const hostArgIndex = process.argv.findIndex(arg => arg === '--host' || arg.startsWith('--host='));
+		let host = process.env.HOST || '0.0.0.0';
+		if (hostArgIndex !== -1) {
+			const arg = process.argv[hostArgIndex];
+			if (arg.startsWith('--host=')) {
+				host = arg.split('=')[1];
+			} else if (process.argv[hostArgIndex + 1]) {
+				host = process.argv[hostArgIndex + 1];
+			}
+		}
+
 		const server = createServer(app);
 		server.keepAliveTimeout = 65000;
 		server.headersTimeout = 66000;
 		server.requestTimeout = 300000; // 5 minutes timeout for large mobile uploads
 		initSocket(server);
-		server.listen(port, () => {
-			console.log(`PORT is running on ${port} with WebSockets enabled`);
+		server.listen(port, host, () => {
+			console.log(`Server is running with WebSockets enabled:`);
+			console.log(`- Local:   http://localhost:${port}`);
+			if (host !== 'localhost' && host !== '127.0.0.1') {
+				console.log(`- Network: http://${host === '0.0.0.0' ? '192.168.29.177' : host}:${port}`);
+			}
 		});
 	} catch (error) {
 		console.error('Unable to connect to the databases:', error);

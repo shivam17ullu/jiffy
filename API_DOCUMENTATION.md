@@ -802,6 +802,33 @@ Get all categories with optional filters.
 
 ---
 
+## 🏷️ Brand APIs
+
+### 1. List All Brands (Public)
+
+**GET** `/api/brands` (Alias: `GET /api/products/brands`)
+
+Get a simple, optimized list of all distinct brands. Guarantees zero duplicate entries (never repeated twice) using database-level `DISTINCT` + `TRIM` and case-insensitive deduplication.
+
+**Query Parameters:**
+None (returns all brands directly).
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "total": 3,
+  "data": [
+    "Adidas",
+    "Levis",
+    "Nike"
+  ]
+}
+```
+
+---
+
 ## 🛒 Cart APIs
 
 All cart APIs require authentication.

@@ -7,6 +7,7 @@ const productRouter = Router();
 
 // Public routes (with optional authentication for wishlist status)
 productRouter.get('/', optionalAuthenticate, ctrl.list); // Optional auth - will use userId if authenticated
+productRouter.get('/brands', ctrl.getBrands);
 productRouter.get('/search-all', optionalAuthenticate, ctrl.searchAll);
 productRouter.get('/:id', optionalAuthenticate, ctrl.get); // Optional auth - will use userId if authenticated
 
