@@ -603,19 +603,67 @@ export const getBookingDetailsForOrder = async (order: any) => {
     }
   }
 
-  const dropAddress =
-    shippingAddr?.address ||
+  // Fallback: Check Location database table if lat/lng or address parts are missing
+  let dbLocation = null;
+  const addressId = shippingAddr?.id || shippingAddr?.locationId || shippingAddr?.addressId;
+  if (addressId) {
+    dbLocation = await Location.findByPk(addressId);
+  }
+  if (!dbLocation && order.userId) {
+    dbLocation =
+      (await Location.findOne({
+        where: { userId: order.userId, isDefault: true },
+      })) ||
+      (await Location.findOne({
+        where: { userId: order.userId },
+        order: [["createdAt", "DESC"]],
+      }));
+  }
+
+  const addressLine1 =
     shippingAddr?.addressLine1 ||
-    [
-      shippingAddr?.addressLine1,
-      shippingAddr?.addressLine2,
-      shippingAddr?.city,
-      shippingAddr?.state,
-      shippingAddr?.pincode || shippingAddr?.zipCode,
-    ]
-      .filter(Boolean)
-      .join(", ") ||
+    shippingAddr?.address ||
+    dbLocation?.addressLine1 ||
     "";
+  const addressLine2 =
+    shippingAddr?.addressLine2 || dbLocation?.addressLine2 || "";
+  const city =
+    shippingAddr?.city ||
+    shippingAddr?.city_name ||
+    shippingAddr?.drop_address_details?.city_name ||
+    dbLocation?.city ||
+    "";
+  const state =
+    shippingAddr?.state ||
+    shippingAddr?.state_name ||
+    shippingAddr?.drop_address_details?.state_name ||
+    dbLocation?.state ||
+    "";
+  const pincode = String(
+    shippingAddr?.pincode ||
+      shippingAddr?.zipCode ||
+      shippingAddr?.postalCode ||
+      shippingAddr?.drop_address_details?.pincode ||
+      dbLocation?.pincode ||
+      ""
+  );
+  const country = shippingAddr?.country || dbLocation?.country || "India";
+
+  const dropAddressParts = [
+    addressLine1,
+    addressLine2,
+    city,
+    state,
+    pincode,
+    country,
+  ]
+    .map((part) => (typeof part === "string" ? part.trim() : part))
+    .filter(Boolean);
+
+  const dropAddress =
+    dropAddressParts.length > 0
+      ? dropAddressParts.join(", ")
+      : shippingAddr?.address || "";
 
   const dropContactName =
     shippingAddr?.fullName ||
@@ -665,22 +713,6 @@ export const getBookingDetailsForOrder = async (order: any) => {
   let lat = rawLat !== null && rawLat !== undefined && !isNaN(Number(rawLat)) ? Number(rawLat) : 0;
   let lng = rawLng !== null && rawLng !== undefined && !isNaN(Number(rawLng)) ? Number(rawLng) : 0;
 
-  // Fallback: Check Location database table if lat/lng are 0 or missing
-  let dbLocation = null;
-  const addressId = shippingAddr?.id || shippingAddr?.locationId || shippingAddr?.addressId;
-  if (addressId) {
-    dbLocation = await Location.findByPk(addressId);
-  }
-  if (!dbLocation && order.userId) {
-    dbLocation =
-      (await Location.findOne({
-        where: { userId: order.userId, isDefault: true },
-      })) ||
-      (await Location.findOne({
-        where: { userId: order.userId },
-        order: [["createdAt", "DESC"]],
-      }));
-  }
   if (dbLocation) {
     if (lat === 0 && dbLocation.latitude && !isNaN(Number(dbLocation.latitude))) {
       lat = Number(dbLocation.latitude);
@@ -696,36 +728,19 @@ export const getBookingDetailsForOrder = async (order: any) => {
   };
 
   const drop_address_details = {
-    city_name:
-      shippingAddr?.city ||
-      shippingAddr?.city_name ||
-      shippingAddr?.drop_address_details?.city_name ||
-      dbLocation?.city ||
-      "",
-    state_name:
-      shippingAddr?.state ||
-      shippingAddr?.state_name ||
-      shippingAddr?.drop_address_details?.state_name ||
-      dbLocation?.state ||
-      "",
-    pincode: String(
-      shippingAddr?.pincode ||
-      shippingAddr?.zipCode ||
-      shippingAddr?.postalCode ||
-      shippingAddr?.drop_address_details?.pincode ||
-      dbLocation?.pincode ||
-      ""
-    ),
+    city_name: city,
+    state_name: state,
+    pincode: pincode,
   };
 
   const buyerLocation = {
     address: dropAddress,
-    addressLine1: shippingAddr?.addressLine1 || shippingAddr?.address || dbLocation?.addressLine1 || "",
-    addressLine2: shippingAddr?.addressLine2 || dbLocation?.addressLine2 || "",
+    addressLine1,
+    addressLine2,
     city: drop_address_details.city_name,
     state: drop_address_details.state_name,
     pincode: drop_address_details.pincode,
-    country: shippingAddr?.country || dbLocation?.country || "India",
+    country,
     lat,
     lng,
   };

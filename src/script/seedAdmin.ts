@@ -5,6 +5,9 @@ import { fileURLToPath } from "url";
 import { jiffy } from "../config/sequelize.js";
 import { Role, User } from "../model/relations.js";
 
+if (process.env.NODE_ENV) {
+	dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
+}
 dotenv.config();
 
 async function seedAdmin() {
