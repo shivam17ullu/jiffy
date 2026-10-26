@@ -18,6 +18,14 @@ import {
 	BuyerProfile,
 	OtpLogin,
 	Wallet,
+	WalletTransaction,
+	Cart,
+	UserDevice,
+	Notification,
+	ReturnExchangeRequest,
+	ReturnExchangeItem,
+	CouponUsage,
+	EmailOtp,
 } from "../model/relations.js";
 import { Op, Sequelize } from "sequelize";
 import { jiffy } from "../config/sequelize.js";
@@ -221,6 +229,10 @@ export default class AdminService {
 		const userId = sellerProfile.userId;
 		const user = (sellerProfile as any).User;
 		const phone_number = user?.phone_number;
+		const email = user?.email;
+
+		const buyerProfile = await BuyerProfile.findOne({ where: { userId } });
+		const buyerProfileId = buyerProfile?.id;
 
 		// 1. Find all product IDs for the seller
 		const products = await Product.findAll({
@@ -239,45 +251,101 @@ export default class AdminService {
 			variantIds = variants.map((v) => v.id);
 		}
 
-		// 3. Find all orders for this seller
+		// 3. Find all orders associated with this seller (either as seller or as buyer)
 		const orders = await Order.findAll({
-			where: { sellerId: userId },
+			where: {
+				[Op.or]: [
+					{ sellerId: userId },
+					{ userId: userId }
+				]
+			},
 			attributes: ["id"]
 		});
 		const orderIds = orders.map((o) => o.id);
 
+		// 4. Find all order item IDs referencing these orders or products
+		const orderItemConditions: any[] = [];
+		if (orderIds.length > 0) {
+			orderItemConditions.push({ orderId: { [Op.in]: orderIds } });
+		}
+		if (productIds.length > 0) {
+			orderItemConditions.push({ productId: { [Op.in]: productIds } });
+		}
+		let orderItemIds: number[] = [];
+		if (orderItemConditions.length > 0) {
+			const orderItems = await OrderItem.findAll({
+				where: { [Op.or]: orderItemConditions },
+				attributes: ["id"]
+			});
+			orderItemIds = orderItems.map((oi) => oi.id);
+		}
+
+		// 5. Find all return/exchange requests referencing these orders, or sellerId/userId
+		const returnRequestConditions: any[] = [
+			{ sellerId: userId },
+			{ userId: userId }
+		];
+		if (orderIds.length > 0) {
+			returnRequestConditions.push({ orderId: { [Op.in]: orderIds } });
+		}
+		const returnRequests = await ReturnExchangeRequest.findAll({
+			where: { [Op.or]: returnRequestConditions },
+			attributes: ["id"]
+		});
+		const returnRequestIds = returnRequests.map((r) => r.id);
+
+		// 6. Find all carts for this user
+		const carts = await Cart.findAll({
+			where: { userId },
+			attributes: ["id"]
+		});
+		const cartIds = carts.map((c) => c.id);
+
+		// 7. Find wallet for this user
+		const wallet = await Wallet.findOne({ where: { userId } });
+		const walletId = wallet?.id;
+
 		const transaction = await jiffy.transaction();
 		try {
-			// Delete CartItem referencing the product IDs or variant IDs
+			// A. Delete ReturnExchangeItem records
+			const returnItemConditions: any[] = [];
+			if (returnRequestIds.length > 0) {
+				returnItemConditions.push({ requestId: { [Op.in]: returnRequestIds } });
+			}
+			if (orderItemIds.length > 0) {
+				returnItemConditions.push({ orderItemId: { [Op.in]: orderItemIds } });
+			}
 			if (productIds.length > 0) {
-				const cartItemConditions: any = {
-					[Op.or]: [
-						{ productId: { [Op.in]: productIds } }
-					]
-				};
-				if (variantIds.length > 0) {
-					cartItemConditions[Op.or].push({ variantId: { [Op.in]: variantIds } });
-				}
-				await CartItem.destroy({
-					where: cartItemConditions,
-					transaction
-				});
-
-				// Delete Wishlist referencing the product IDs
-				await Wishlist.destroy({
-					where: { productId: { [Op.in]: productIds } },
+				returnItemConditions.push({ productId: { [Op.in]: productIds } });
+			}
+			if (variantIds.length > 0) {
+				returnItemConditions.push({ variantId: { [Op.in]: variantIds } });
+				returnItemConditions.push({ exchangeVariantId: { [Op.in]: variantIds } });
+			}
+			if (returnItemConditions.length > 0) {
+				await ReturnExchangeItem.destroy({
+					where: { [Op.or]: returnItemConditions },
 					transaction
 				});
 			}
 
-			// Delete OrderItem records referencing our products or our orders
-			const orderItemConditions: any[] = [];
-			if (productIds.length > 0) {
-				orderItemConditions.push({ productId: { [Op.in]: productIds } });
-			}
+			// B. Delete ReturnExchangeRequest records
+			await ReturnExchangeRequest.destroy({
+				where: { [Op.or]: returnRequestConditions },
+				transaction
+			});
+
+			// C. Delete CouponUsage records referencing user or orders
+			const couponUsageConditions: any[] = [{ user_id: userId }];
 			if (orderIds.length > 0) {
-				orderItemConditions.push({ orderId: { [Op.in]: orderIds } });
+				couponUsageConditions.push({ order_id: { [Op.in]: orderIds } });
 			}
+			await CouponUsage.destroy({
+				where: { [Op.or]: couponUsageConditions },
+				transaction
+			});
+
+			// D. Delete OrderItem records
 			if (orderItemConditions.length > 0) {
 				await OrderItem.destroy({
 					where: { [Op.or]: orderItemConditions },
@@ -285,33 +353,86 @@ export default class AdminService {
 				});
 			}
 
-			// Delete Order records
-			await Order.destroy({
-				where: { sellerId: userId },
+			// E. Delete Order records
+			if (orderIds.length > 0) {
+				await Order.destroy({
+					where: { id: { [Op.in]: orderIds } },
+					transaction
+				});
+			}
+
+			// F. Delete CartItem records (referencing seller's products/variants or user's carts)
+			const cartItemConditions: any[] = [];
+			if (cartIds.length > 0) {
+				cartItemConditions.push({ cartId: { [Op.in]: cartIds } });
+			}
+			if (productIds.length > 0) {
+				cartItemConditions.push({ productId: { [Op.in]: productIds } });
+			}
+			if (variantIds.length > 0) {
+				cartItemConditions.push({ variantId: { [Op.in]: variantIds } });
+			}
+			if (cartItemConditions.length > 0) {
+				await CartItem.destroy({
+					where: { [Op.or]: cartItemConditions },
+					transaction
+				});
+			}
+
+			// G. Delete Carts
+			await Cart.destroy({
+				where: { userId },
 				transaction
 			});
 
+			// H. Delete Wishlist records (for user or for seller's products)
+			const wishlistConditions: any[] = [{ userId }];
 			if (productIds.length > 0) {
-				// Delete ProductCategory join records
+				wishlistConditions.push({ productId: { [Op.in]: productIds } });
+			}
+			await Wishlist.destroy({
+				where: { [Op.or]: wishlistConditions },
+				transaction
+			});
+
+			// I. Delete ProductCategory & ProductVariant records
+			if (productIds.length > 0) {
 				await ProductCategory.destroy({
 					where: { productId: { [Op.in]: productIds } },
 					transaction
 				});
 
-				// Delete ProductVariant records
 				await ProductVariant.destroy({
 					where: { productId: { [Op.in]: productIds } },
 					transaction
 				});
 			}
 
-			// Delete Product records
+			// J. Delete Product records
 			await Product.destroy({
 				where: { sellerId: userId },
 				transaction
 			});
 
-			// Delete Store, Document, BankDetail, VerifiedSellers
+			// K. Delete WalletTransaction records
+			const walletTxConditions: any[] = [{ userId }];
+			if (walletId) {
+				walletTxConditions.push({ walletId });
+			}
+			await WalletTransaction.destroy({
+				where: { [Op.or]: walletTxConditions },
+				transaction
+			});
+
+			// L. Delete Wallet
+			if (walletId) {
+				await Wallet.destroy({
+					where: { id: walletId },
+					transaction
+				});
+			}
+
+			// M. Delete Store, Document, BankDetail, VerifiedSellers
 			await Store.destroy({
 				where: { sellerId: sellerProfileId },
 				transaction
@@ -332,50 +453,70 @@ export default class AdminService {
 				transaction
 			});
 
-			// Delete Locations referencing sellerId or userId
+			// N. Delete Locations (referencing sellerProfileId, userId, or buyerProfileId)
+			const locationConditions: any[] = [
+				{ sellerId: sellerProfileId },
+				{ userId: userId }
+			];
+			if (buyerProfileId) {
+				locationConditions.push({ buyerId: buyerProfileId });
+			}
 			await Location.destroy({
-				where: {
-					[Op.or]: [
-						{ sellerId: sellerProfileId },
-						{ userId: userId }
-					]
-				},
+				where: { [Op.or]: locationConditions },
 				transaction
 			});
 
-			// Delete RefreshTokens
+			// O. Delete Notifications
+			await Notification.destroy({
+				where: { userId },
+				transaction
+			});
+
+			// P. Delete UserDevices
+			await UserDevice.destroy({
+				where: { userId },
+				transaction
+			});
+
+			// Q. Delete RefreshTokens
 			await RefreshToken.destroy({
 				where: { user_id: userId },
 				transaction
 			});
 
-			// Delete UserRoles
+			// R. Delete UserRoles
 			await UserRole.destroy({
 				where: { user_id: userId },
 				transaction
 			});
 
-			// Delete BuyerProfile if any (just in case they have one, to avoid orphans/constraints)
+			// S. Delete BuyerProfile if any
 			await BuyerProfile.destroy({
-				where: { userId: userId },
+				where: { userId },
 				transaction
 			});
 
-			// Delete OtpLogin records
+			// T. Delete OtpLogin records & EmailOtp
 			if (phone_number) {
 				await OtpLogin.destroy({
 					where: { phone_number },
 					transaction
 				});
 			}
+			if (email) {
+				await EmailOtp.destroy({
+					where: { email },
+					transaction
+				});
+			}
 
-			// Delete SellerProfile
+			// U. Delete SellerProfile
 			await SellerProfile.destroy({
 				where: { id: sellerProfileId },
 				transaction
 			});
 
-			// Delete User
+			// V. Delete User
 			await User.destroy({
 				where: { id: userId },
 				transaction

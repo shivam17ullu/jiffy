@@ -175,21 +175,51 @@ export const enrichReturnExchangeDetails = async (request: any) => {
       }));
   }
 
-  const dropAddress =
-    shippingAddr?.address ||
+  const addressLine1 =
     shippingAddr?.addressLine1 ||
-    [
-      shippingAddr?.addressLine1,
-      shippingAddr?.addressLine2,
-      shippingAddr?.city,
-      shippingAddr?.state,
-      shippingAddr?.pincode || shippingAddr?.zipCode,
-    ]
-      .filter(Boolean)
-      .join(", ") ||
+    shippingAddr?.address ||
     buyerLocationDb?.addressLine1 ||
     buyerProfile?.address ||
     "";
+  const addressLine2 =
+    shippingAddr?.addressLine2 || buyerLocationDb?.addressLine2 || "";
+  const city =
+    shippingAddr?.city ||
+    shippingAddr?.city_name ||
+    buyerLocationDb?.city ||
+    buyerProfile?.city ||
+    "";
+  const state =
+    shippingAddr?.state ||
+    shippingAddr?.state_name ||
+    buyerLocationDb?.state ||
+    buyerProfile?.state ||
+    "";
+  const pincode = String(
+    shippingAddr?.pincode ||
+      shippingAddr?.zipCode ||
+      buyerLocationDb?.pincode ||
+      buyerProfile?.zipCode ||
+      ""
+  );
+  const country =
+    shippingAddr?.country || buyerLocationDb?.country || "India";
+
+  const dropAddressParts = [
+    addressLine1,
+    addressLine2,
+    city,
+    state,
+    pincode,
+    country,
+  ]
+    .map((part) => (typeof part === "string" ? part.trim() : part))
+    .filter(Boolean);
+
+  const dropAddress =
+    dropAddressParts.length > 0
+      ? dropAddressParts.join(", ")
+      : shippingAddr?.address || buyerProfile?.address || "";
 
   const buyerName =
     shippingAddr?.fullName ||
@@ -258,12 +288,12 @@ export const enrichReturnExchangeDetails = async (request: any) => {
 
   const buyerLocation = {
     address: dropAddress,
-    addressLine1: shippingAddr?.addressLine1 || shippingAddr?.address || buyerLocationDb?.addressLine1 || buyerProfile?.address || "",
-    addressLine2: shippingAddr?.addressLine2 || buyerLocationDb?.addressLine2 || "",
-    city: shippingAddr?.city || shippingAddr?.city_name || buyerLocationDb?.city || buyerProfile?.city || "",
-    state: shippingAddr?.state || shippingAddr?.state_name || buyerLocationDb?.state || buyerProfile?.state || "",
-    pincode: String(shippingAddr?.pincode || shippingAddr?.zipCode || buyerLocationDb?.pincode || buyerProfile?.zipCode || ""),
-    country: shippingAddr?.country || buyerLocationDb?.country || "India",
+    addressLine1,
+    addressLine2,
+    city,
+    state,
+    pincode,
+    country,
     lat: buyerLat,
     lng: buyerLng,
   };

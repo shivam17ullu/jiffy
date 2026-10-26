@@ -15,6 +15,7 @@ import {
 	ProductCategory
 } from "../../model/relations.js";
 import { parseSearchQuery } from "../../utils/searchQueryParser.js";
+import { expandSearchQuery } from "../../utils/searchEnhancer.js";
 
 
 // Helper function to generate a unique slug
@@ -69,15 +70,35 @@ export const buildProductSortOrder = (sort?: string, q?: string): any[] => {
 		normalized.includes("relev")
 	) {
 		if (q && q.trim()) {
-			const sanitizedQ = q.trim().replace(/'/g, "\\'");
+			const expanded = expandSearchQuery(q.trim());
+			const cleanSanitized = (expanded.cleanQuery || q.trim()).replace(/'/g, "\\'");
+			const correctedSanitized = (expanded.correctedQuery || "").replace(/'/g, "\\'");
+			const firstSynonym = (expanded.synonyms[0] || "").replace(/'/g, "\\'");
+
+			let caseClauses = `
+				WHEN \`Product\`.\`name\` = '${cleanSanitized}' THEN 1
+				WHEN \`Product\`.\`name\` LIKE '${cleanSanitized}%' THEN 2
+				WHEN \`Product\`.\`name\` LIKE '%${cleanSanitized}%' THEN 3
+			`;
+
+			if (expanded.isFuzzyCorrected && correctedSanitized) {
+				caseClauses += `
+					WHEN \`Product\`.\`name\` LIKE '${correctedSanitized}%' THEN 4
+					WHEN \`Product\`.\`name\` LIKE '%${correctedSanitized}%' THEN 5
+				`;
+			}
+
+			if (firstSynonym) {
+				caseClauses += `
+					WHEN \`Product\`.\`name\` LIKE '%${firstSynonym}%' THEN 6
+				`;
+			}
+
+			caseClauses += `ELSE 7`;
+
 			return [
 				[
-					Sequelize.literal(`CASE 
-						WHEN \`Product\`.\`name\` = '${sanitizedQ}' THEN 1
-						WHEN \`Product\`.\`name\` LIKE '${sanitizedQ}%' THEN 2
-						WHEN \`Product\`.\`name\` LIKE '%${sanitizedQ}%' THEN 3
-						ELSE 4
-					END`),
+					Sequelize.literal(`CASE ${caseClauses} END`),
 					"ASC",
 				],
 				["createdAt", "DESC"],
@@ -675,13 +696,56 @@ export const listProducts = async (opts: any) => {
 		where.sellerId = { [Op.in]: candidateSellerIds };
 	}
 
-	// 3. Search query filters
+	// 5. Variant level filters: price range, size, color
+	const sizeList = parseArrayParam(size || sizes);
+	const colorList = parseArrayParam(color || colors);
+	const { minPrice: finalMinPrice, maxPrice: finalMaxPrice } = parsePriceRange(
+		priceRange,
+		minPrice,
+		maxPrice
+	);
+
+	// 3. Search query filters & natural language intent extraction (Fuzzy + Substring + Synonyms)
+	let effectiveQ = q;
+	let queryMinPrice = finalMinPrice;
+	let queryMaxPrice = finalMaxPrice;
+
 	if (q) {
-		const orConditions: any[] = [
-			{ name: { [Op.like]: `%${q}%` } },
-			{ description: { [Op.like]: `%${q}%` } },
-			{ brand: { [Op.like]: `%${q}%` } },
-		];
+		const expanded = expandSearchQuery(q);
+		if (expanded.cleanQuery) {
+			effectiveQ = expanded.cleanQuery;
+		}
+		if (expanded.maxPrice !== undefined && queryMaxPrice === undefined) {
+			queryMaxPrice = expanded.maxPrice;
+		}
+		if (expanded.minPrice !== undefined && queryMinPrice === undefined) {
+			queryMinPrice = expanded.minPrice;
+		}
+		if (expanded.detectedColors.length > 0 && colorList.length === 0) {
+			colorList.push(...expanded.detectedColors);
+		}
+
+		// Collect terms for substring search:
+		// 1) Primary query terms
+		const primaryTerms = [effectiveQ];
+		if (expanded.isFuzzyCorrected && expanded.correctedQuery && !primaryTerms.includes(expanded.correctedQuery)) {
+			primaryTerms.push(expanded.correctedQuery);
+		}
+		for (const t of expanded.correctedTokens) {
+			if (t.length >= 3 && !primaryTerms.includes(t)) {
+				primaryTerms.push(t);
+			}
+		}
+
+		// 2) Top product synonyms (up to 4 synonyms)
+		const searchTerms = Array.from(new Set([...primaryTerms, ...expanded.synonyms.slice(0, 4)]));
+
+		const orConditions: any[] = [];
+		for (const term of searchTerms) {
+			orConditions.push({ name: { [Op.like]: `%${term}%` } });
+			orConditions.push({ description: { [Op.like]: `%${term}%` } });
+			orConditions.push({ brand: { [Op.like]: `%${term}%` } });
+		}
 		if (qSellerIds.length > 0) {
 			orConditions.push({ sellerId: { [Op.in]: qSellerIds } });
 		}
@@ -696,22 +760,13 @@ export const listProducts = async (opts: any) => {
 		};
 	}
 
-	// 5. Variant level filters: price range, size, color
-	const sizeList = parseArrayParam(size || sizes);
-	const colorList = parseArrayParam(color || colors);
-	const { minPrice: finalMinPrice, maxPrice: finalMaxPrice } = parsePriceRange(
-		priceRange,
-		minPrice,
-		maxPrice
-	);
-
 	const variantWhere: any = { isActive: true };
 	let hasVariantFilter = false;
 
-	if (finalMinPrice !== undefined || finalMaxPrice !== undefined) {
+	if (queryMinPrice !== undefined || queryMaxPrice !== undefined) {
 		variantWhere.price = {};
-		if (finalMinPrice !== undefined) variantWhere.price[Op.gte] = finalMinPrice;
-		if (finalMaxPrice !== undefined) variantWhere.price[Op.lte] = finalMaxPrice;
+		if (queryMinPrice !== undefined) variantWhere.price[Op.gte] = queryMinPrice;
+		if (queryMaxPrice !== undefined) variantWhere.price[Op.lte] = queryMaxPrice;
 		hasVariantFilter = true;
 	}
 
@@ -1439,460 +1494,440 @@ export const setDefaultVariant = async (productId: number, variantId: number, se
 	}
 };
 
-export const searchAll = async (q: string, lat?: number, lng?: number) => {
+export interface SearchSuggestionItem {
+	id: string | number;
+	name: string;
+	keyword: string;
+	subtitle?: string | null;
+	type: "product";
+	image: string | null;
+	targetQuery: string;
+	categoryId?: number | null;
+	categoryName?: string | null;
+	minPrice?: number | null;
+	maxPrice?: number | null;
+	isSellerOpen?: boolean | null;
+}
+
+// OPTIMIZATION: In-memory TTL cache for auto-suggest (60s TTL, max 500 entries)
+interface SuggestionCacheEntry {
+	timestamp: number;
+	data: SearchSuggestionItem[];
+}
+const SUGGESTIONS_CACHE_TTL_MS = 60_000;
+const MAX_SUGGESTIONS_CACHE_SIZE = 500;
+const suggestionsCache = new Map<string, SuggestionCacheEntry>();
+
+function setSuggestionsCache(key: string, data: SearchSuggestionItem[]) {
+	if (suggestionsCache.size >= MAX_SUGGESTIONS_CACHE_SIZE) {
+		const oldest = suggestionsCache.keys().next().value;
+		if (oldest !== undefined) suggestionsCache.delete(oldest);
+	}
+	suggestionsCache.set(key, { timestamp: Date.now(), data });
+}
+
+export const searchAll = async (q: string, lat?: number, lng?: number): Promise<SearchSuggestionItem[]> => {
 	const rawQuery = String(q || '').trim();
 	if (!rawQuery) {
 		return [];
 	}
 
-	const parsed = parseSearchQuery(rawQuery);
-	const tokens = parsed.tokens;
-	const fullTerm = `%${rawQuery}%`;
+	const hasGeo = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+	const cacheKey = `${rawQuery.toLowerCase()}#${hasGeo ? `${lat.toFixed(3)},${lng.toFixed(3)}` : 'global'}`;
+	const cached = suggestionsCache.get(cacheKey);
+	const now = Date.now();
+	if (cached && (now - cached.timestamp) < SUGGESTIONS_CACHE_TTL_MS) {
+		return cached.data;
+	}
+
+	// 1. Fully expand query with memoized fuzzy correction, synonyms, and intent
+	const expanded = expandSearchQuery(rawQuery);
+	const cleanQ = expanded.cleanQuery;
+	const isFuzzyCorrected = expanded.isFuzzyCorrected;
+	const correctedQuery = expanded.correctedQuery;
+	const effectiveTerm = isFuzzyCorrected ? correctedQuery : cleanQ;
+	const substringTerms = expanded.substringTerms;
+	const synonyms = expanded.synonyms;
 
 	const radiusKm = Number(process.env.DEFAULT_SEARCH_RADIUS_KM) || 10;
 	const radiusM = radiusKm * 1000;
-	const hasGeo = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
 
-	let nearbySellerIds: number[] | null = null;
-	if (hasGeo) {
-		const nearbyStores = await Store.findAll({
+	// 2. OPTIMIZATION: Concurrently run nearby seller search & category matching in parallel
+	const nearbyStoresPromise: Promise<number[] | null> = hasGeo
+		? Store.findAll({
 			attributes: ['id'],
 			include: [{
 				model: SellerProfile,
 				attributes: ['userId'],
 				required: true,
+				include: [{
+					model: VerifiedSellers,
+					where: { is_active: true, status: "approved" },
+					attributes: ['id'],
+					required: true,
+				}]
 			}],
 			where: Sequelize.where(
 				Sequelize.literal(`ST_Distance_Sphere(POINT(longitude, latitude), POINT(${lng}, ${lat}))`),
 				{ [Op.lte]: radiusM }
 			),
-		});
-		nearbySellerIds = nearbyStores.map((s: any) => s.SellerProfile?.userId).filter(Boolean);
-	}
+			raw: true,
+		}).then((stores: any[]) => stores.map((s: any) => s['SellerProfile.userId'] || s.SellerProfile?.userId).filter(Boolean))
+		: Promise.resolve(null);
 
-	// 1. Price constraint on Product Variants
-	let priceMatchedProductIds: number[] | null = null;
-	if (parsed.maxPrice !== undefined || parsed.minPrice !== undefined) {
-		const variantPriceWhere: any = { isActive: true };
-		if (parsed.maxPrice !== undefined && parsed.minPrice !== undefined) {
-			variantPriceWhere.price = { [Op.between]: [parsed.minPrice, parsed.maxPrice] };
-		} else if (parsed.maxPrice !== undefined) {
-			variantPriceWhere.price = { [Op.lte]: parsed.maxPrice };
-		} else if (parsed.minPrice !== undefined) {
-			variantPriceWhere.price = { [Op.gte]: parsed.minPrice };
-		}
+	const categoryWhere: any = {
+		isActive: true,
+		[Op.or]: substringTerms.map(term => ({ name: { [Op.like]: `%${term}%` } }))
+	};
 
-		const priceVariants = await ProductVariant.findAll({
-			where: variantPriceWhere,
-			attributes: ['productId'],
-			group: ['productId']
-		});
-		priceMatchedProductIds = priceVariants.map((v: any) => v.productId);
-	}
+	const matchingCategoriesPromise = Category.findAll({
+		where: categoryWhere,
+		attributes: ['id', 'name'],
+		limit: 6,
+		raw: true,
+	});
 
-	// 2. Pre-fetch multi-field lookups per token to enable order-independent cross-attribute matching
-	const tokenConditionsMap = new Map<string, any[]>();
-	for (const token of tokens) {
-		const tokenLike = `%${token}%`;
+	const [nearbySellerIds, matchingCategories] = await Promise.all([
+		nearbyStoresPromise,
+		matchingCategoriesPromise
+	]);
 
-		// Sellers whose store or business name matches the token
-		const matchingProfiles = await SellerProfile.findAll({
-			where: {
-				[Op.or]: [
-					{ businessName: { [Op.like]: tokenLike } },
-					{ '$Stores.storeName$': { [Op.like]: tokenLike } }
-				]
-			},
-			include: [{ model: Store, required: false, attributes: [] }],
-			attributes: ['userId']
-		});
-		const sellerIds = matchingProfiles.map((p: any) => p.userId).filter(Boolean);
-
-		// Categories matching the token
-		const matchingCats = await Category.findAll({
-			where: { name: { [Op.like]: tokenLike }, isActive: true },
-			attributes: ['id']
-		});
-		let catProductIds: number[] = [];
-		if (matchingCats.length > 0) {
-			const catIds = matchingCats.map((c: any) => c.id);
-			const prodCats = await ProductCategory.findAll({
-				where: { categoryId: { [Op.in]: catIds } },
-				attributes: ['productId']
-			});
-			catProductIds = prodCats.map((pc: any) => pc.productId).filter(Boolean);
-		}
-
-		// Variants matching color or sku
-		const matchingVars = await ProductVariant.findAll({
-			where: {
-				isActive: true,
-				[Op.or]: [
-					{ color: { [Op.like]: tokenLike } },
-					{ sku: { [Op.like]: tokenLike } }
-				]
-			},
-			attributes: ['productId']
-		});
-		const varProductIds = matchingVars.map((v: any) => v.productId).filter(Boolean);
-
-		const orClauses: any[] = [
-			{ name: { [Op.like]: tokenLike } },
-			{ brand: { [Op.like]: tokenLike } },
-			{ description: { [Op.like]: tokenLike } }
-		];
-		if (sellerIds.length > 0) {
-			orClauses.push({ sellerId: { [Op.in]: sellerIds } });
-		}
-		if (catProductIds.length > 0) {
-			orClauses.push({ id: { [Op.in]: catProductIds } });
-		}
-		if (varProductIds.length > 0) {
-			orClauses.push({ id: { [Op.in]: varProductIds } });
-		}
-
-		tokenConditionsMap.set(token, orClauses);
-	}
-
-	// Build product query filter
-	const baseProductWhere: any = { isActive: true };
+	// 3. OPTIMIZATION: Fast, index-friendly candidate product query
+	// Exclude heavy 'description' TEXT column on auto-suggest keystrokes (searches 'name' & 'brand' only).
+	const productWhere: any = { isActive: true };
 	if (nearbySellerIds !== null) {
-		baseProductWhere.sellerId = { [Op.in]: nearbySellerIds };
-	}
-	if (priceMatchedProductIds !== null) {
-		baseProductWhere.id = { [Op.in]: priceMatchedProductIds };
+		productWhere.sellerId = { [Op.in]: nearbySellerIds };
 	}
 
-	let matchedProducts: any[] = [];
-	if (tokens.length > 0) {
-		// Strict AND across all tokens (all tokens must match across product attributes in any order)
-		const andClauses = tokens.map(t => ({ [Op.or]: tokenConditionsMap.get(t) || [] }));
-		const strictWhere = {
-			...baseProductWhere,
-			[Op.or]: [
-				{ name: { [Op.like]: fullTerm } },
-				{ brand: { [Op.like]: fullTerm } },
-				{ [Op.and]: andClauses }
-			]
-		};
-
-		matchedProducts = await Product.findAll({
-			where: strictWhere,
-			include: [
-				{
-					association: "seller",
-					required: true,
-					include: [
-						{
-							model: SellerProfile,
-							required: true,
-							include: [
-								{
-									model: Store,
-									required: false,
-									attributes: ["storeName", "isSellerOpen", "openingDays", "openingTime", "closingTime"],
-								},
-								{
-									model: VerifiedSellers,
-									where: { is_active: true, status: "approved" },
-									required: true,
-								}
-							]
-						}
-					]
-				},
-				{
-					association: "variants",
-					required: false
-				}
-			],
-			limit: 20
-		});
-
-		// Fallback: If strict conjunction returned 0 products, try OR conjunction across tokens
-		if (matchedProducts.length === 0 && tokens.length > 1) {
-			const orClauses = tokens.map(t => ({ [Op.or]: tokenConditionsMap.get(t) || [] }));
-			matchedProducts = await Product.findAll({
-				where: {
-					...baseProductWhere,
-					[Op.or]: orClauses
-				},
-				include: [
-					{
-						association: "seller",
-						required: true,
-						include: [
-							{
-								model: SellerProfile,
-								required: true,
-								include: [
-									{
-										model: Store,
-										required: false,
-										attributes: ["storeName", "isSellerOpen", "openingDays", "openingTime", "closingTime"],
-									},
-									{
-										model: VerifiedSellers,
-										where: { is_active: true, status: "approved" },
-										required: true,
-									}
-								]
-							}
-						]
-					},
-					{
-						association: "variants",
-						required: false
-					}
-				],
-				limit: 20
-			});
-		}
-	} else if (priceMatchedProductIds !== null) {
-		// Query with only price constraint (no text tokens)
-		matchedProducts = await Product.findAll({
-			where: baseProductWhere,
-			include: [
-				{
-					association: "seller",
-					required: true,
-					include: [
-						{
-							model: SellerProfile,
-							required: true,
-							include: [
-								{
-									model: Store,
-									required: false,
-									attributes: ["storeName", "isSellerOpen", "openingDays", "openingTime", "closingTime"],
-								},
-								{
-									model: VerifiedSellers,
-									where: { is_active: true, status: "approved" },
-									required: true,
-								}
-							]
-						}
-					]
-				},
-				{
-					association: "variants",
-					required: false
-				}
-			],
-			limit: 20
-		});
+	const productOrConditions: any[] = [];
+	for (let i = 0; i < substringTerms.length; i++) {
+		const term = substringTerms[i];
+		productOrConditions.push({ name: { [Op.like]: `%${term}%` } });
+		productOrConditions.push({ brand: { [Op.like]: `%${term}%` } });
 	}
+	productWhere[Op.or] = productOrConditions;
 
-	// Sort products by relevance: exact match > prefix match > multi-token match in name/brand > others
-	const lowerQ = rawQuery.toLowerCase();
-	matchedProducts.sort((a: any, b: any) => {
-		const aName = (a.name || '').toLowerCase();
-		const bName = (b.name || '').toLowerCase();
-		const aBrand = (a.brand || '').toLowerCase();
-		const bBrand = (b.brand || '').toLowerCase();
-
-		const scoreItem = (name: string, brand: string) => {
-			if (name === lowerQ || brand === lowerQ) return 100;
-			if (name.startsWith(lowerQ) || brand.startsWith(lowerQ)) return 80;
-			const allTokensInName = tokens.every(t => name.includes(t));
-			if (allTokensInName) return 60;
-			const allTokensInBrandOrName = tokens.every(t => name.includes(t) || brand.includes(t));
-			if (allTokensInBrandOrName) return 50;
-			return 10;
-		};
-
-		return scoreItem(bName, bBrand) - scoreItem(aName, aBrand);
-	});
-
-	const productResults = matchedProducts.map((p: any) => {
-		const sellerStores = (p as any).seller?.SellerProfile?.Stores || [];
-		const isSellerOpen = sellerStores.length > 0 ? sellerStores[0].isSellerOpen : true;
-		let openingDays = sellerStores.length > 0 ? sellerStores[0].openingDays : [];
-		if (typeof openingDays === "string") {
-			try {
-				openingDays = JSON.parse(openingDays);
-			} catch {
-				openingDays = [openingDays];
-			}
-		}
-		if (!Array.isArray(openingDays)) {
-			openingDays = openingDays ? [openingDays] : [];
-		}
-		const openingTime = sellerStores.length > 0 ? (sellerStores[0].openingTime ?? null) : null;
-		const closingTime = sellerStores.length > 0 ? (sellerStores[0].closingTime ?? null) : null;
-
-		// Prioritize variant matching detected color or price
-		let displayVariant = (p.variants || []).find((v: any) => {
-			if (parsed.detectedColors.length > 0) {
-				const vColor = (v.color || '').toLowerCase();
-				if (parsed.detectedColors.some(c => vColor.includes(c))) return true;
-			}
-			if (parsed.maxPrice !== undefined && v.price > parsed.maxPrice) return false;
-			if (parsed.minPrice !== undefined && v.price < parsed.minPrice) return false;
-			return v.isDefault;
-		});
-
-		if (!displayVariant && p.variants && p.variants.length > 0) {
-			displayVariant = p.variants.find((v: any) => {
-				if (parsed.maxPrice !== undefined && v.price > parsed.maxPrice) return false;
-				if (parsed.minPrice !== undefined && v.price < parsed.minPrice) return false;
-				return true;
-			}) || p.variants[0];
-		}
-
-		const image = (displayVariant?.images && displayVariant.images.length > 0) ? displayVariant.images[0] : null;
-
-		return {
-			id: p.id,
-			name: p.name,
-			type: "product",
-			image,
-			isSellerOpen,
-			openingDays,
-			openingTime,
-			closingTime,
-		};
-	});
-
-	// 2. Search stores (by storeName, businessName, or sellers of matched products)
-	const matchedProductSellerIds = Array.from(new Set(matchedProducts.map((p: any) => p.sellerId).filter(Boolean)));
-
-	const storeGeoWhere: any = { is_active: true };
-	if (hasGeo) {
-		storeGeoWhere[Op.and] = [
-			Sequelize.where(
-				Sequelize.literal(`ST_Distance_Sphere(POINT(longitude, latitude), POINT(${lng}, ${lat}))`),
-				{ [Op.lte]: radiusM }
-			)
-		];
-	}
-
-	const storeTextConditions: any[] = [
-		{ storeName: { [Op.like]: fullTerm } },
-		{ '$SellerProfile.businessName$': { [Op.like]: fullTerm } }
-	];
-	for (const t of tokens) {
-		storeTextConditions.push({ storeName: { [Op.like]: `%${t}%` } });
-		storeTextConditions.push({ '$SellerProfile.businessName$': { [Op.like]: `%${t}%` } });
-	}
-	if (matchedProductSellerIds.length > 0) {
-		storeTextConditions.push({ '$SellerProfile.userId$': { [Op.in]: matchedProductSellerIds } });
-	}
-
-	const matchedStores = await Store.findAll({
-		where: {
-			...storeGeoWhere,
-			[Op.or]: storeTextConditions
-		},
-		include: [
-			{
+	// If nearbySellerIds is already supplied, seller verification is already guaranteed by nearbyStores query!
+	// If not supplied, use minimal lean seller inclusion
+	const sellerInclude: any[] = nearbySellerIds !== null
+		? []
+		: [{
+			association: "seller",
+			required: true,
+			attributes: ['id'],
+			include: [{
 				model: SellerProfile,
 				required: true,
-				include: [
-					{
-						model: VerifiedSellers,
-						where: { is_active: true, status: "approved" },
-						required: true
-					},
-					{
-						model: Document,
-						attributes: ['storeImageUrl'],
-						required: false
-					}
-				]
-			}
-		],
-		limit: 20
-	});
+				attributes: ['userId'],
+				include: [{
+					model: VerifiedSellers,
+					where: { is_active: true, status: "approved" },
+					attributes: ['id'],
+					required: true,
+				}]
+			}]
+		}];
 
-	const storeResults = matchedStores.map((store: any) => {
-		let openingDays = store.openingDays || [];
-		if (typeof openingDays === "string") {
-			try {
-				openingDays = JSON.parse(openingDays);
-			} catch {
-				openingDays = [openingDays];
-			}
-		}
-		if (!Array.isArray(openingDays)) {
-			openingDays = openingDays ? [openingDays] : [];
-		}
-		return {
-			id: store.id,
-			name: store.storeName,
-			type: "store",
-			image: store.SellerProfile?.Document?.storeImageUrl || null,
-			isSellerOpen: store.isSellerOpen,
-			openingDays,
-			openingTime: store.openingTime || null,
-			closingTime: store.closingTime || null,
-		};
-	});
-
-	// 3. Search brands
-	const brandConditions: any[] = [
-		{ brand: { [Op.like]: fullTerm } }
-	];
-	for (const t of tokens) {
-		brandConditions.push({ brand: { [Op.like]: `%${t}%` } });
-	}
-
-	const brandWhere: any = {
-		isActive: true,
-		[Op.or]: brandConditions
-	};
-	if (nearbySellerIds !== null) {
-		brandWhere.sellerId = { [Op.in]: nearbySellerIds };
-	}
-
-	const productsWithBrands = await Product.findAll({
-		attributes: ['brand'],
-		where: brandWhere,
+	const candidateProducts = await Product.findAll({
+		where: productWhere,
+		attributes: ['id', 'name', 'brand', 'tags', 'sellerId'],
 		include: [
+			...sellerInclude,
 			{
-				association: "seller",
-				required: true,
-				include: [
-					{
-						model: SellerProfile,
-						required: true,
-						include: [
-							{
-								model: VerifiedSellers,
-								where: { is_active: true, status: "approved" },
-								required: true,
-							}
-						]
-					}
-				]
+				association: "categories",
+				attributes: ['id', 'name'],
+				through: { attributes: [] },
+				required: false
 			},
 			{
 				association: "variants",
+				attributes: ['id', 'productId', 'price', 'images', 'isDefault'],
+				where: { isActive: true },
 				required: false
 			}
 		],
-		limit: 100
+		limit: 25
 	});
 
-	const uniqueBrandsMap = new Map();
-	for (const p of productsWithBrands) {
-		const brandName = p.brand?.trim();
-		if (brandName) {
-			const lower = brandName.toLowerCase();
-			if (!uniqueBrandsMap.has(lower)) {
-				uniqueBrandsMap.set(lower, {
-					id: brandName,
-					name: brandName,
-					type: "brand",
-					image: ((p as any).variants && (p as any).variants.length > 0 && (p as any).variants[0].images && (p as any).variants[0].images.length > 0) ? (p as any).variants[0].images[0] : null,
-					isSellerOpen: null
+	// Helper to extract best display image from product
+	const getProductImage = (p: any): string | null => {
+		const variants = p.variants || [];
+		const defVariant = variants.find((v: any) => v.isDefault && v.images && v.images.length > 0);
+		if (defVariant && defVariant.images[0]) return defVariant.images[0];
+		const anyVariantWithImg = variants.find((v: any) => v.images && v.images.length > 0);
+		return anyVariantWithImg?.images?.[0] || null;
+	};
+
+	// Relevance ranker:
+	// Exact/prefix match on clean query > corrected query > synonym match > others
+	const lowerClean = cleanQ.toLowerCase();
+	const lowerCorrected = correctedQuery.toLowerCase();
+	const lowerSynonyms = synonyms.map(s => s.toLowerCase());
+
+	const scoreProductRelevance = (p: any): number => {
+		const name = (p.name || '').toLowerCase();
+		const brand = (p.brand || '').toLowerCase();
+
+		if (name === lowerClean || brand === lowerClean) return 100;
+		if (name.startsWith(lowerClean) || brand.startsWith(lowerClean)) return 90;
+		if (name.includes(lowerClean) || brand.includes(lowerClean)) return 80;
+
+		if (isFuzzyCorrected) {
+			if (name === lowerCorrected || brand === lowerCorrected) return 75;
+			if (name.startsWith(lowerCorrected) || brand.startsWith(lowerCorrected)) return 70;
+			if (name.includes(lowerCorrected) || brand.includes(lowerCorrected)) return 60;
+		}
+
+		for (let i = 0; i < lowerSynonyms.length; i++) {
+			const syn = lowerSynonyms[i];
+			if (name.includes(syn) || brand.includes(syn)) return 40;
+		}
+
+		return 10;
+	};
+
+	candidateProducts.sort((a, b) => scoreProductRelevance(b) - scoreProductRelevance(a));
+
+	const suggestionsMap = new Map<string, SearchSuggestionItem>();
+
+	const addSuggestion = (item: {
+		keyword: string;
+		subtitle?: string | null;
+		image?: string | null;
+		targetQuery?: string;
+		categoryId?: number | null;
+		categoryName?: string | null;
+		minPrice?: number | null;
+		maxPrice?: number | null;
+	}) => {
+		const cleanKeyword = item.keyword.trim();
+		const key = cleanKeyword.toLowerCase();
+		if (!key || suggestionsMap.has(key)) return;
+
+		suggestionsMap.set(key, {
+			id: `sug_${suggestionsMap.size + 1}`,
+			name: cleanKeyword,
+			keyword: cleanKeyword,
+			subtitle: item.subtitle || null,
+			type: "product",
+			image: item.image || null,
+			targetQuery: item.targetQuery || cleanKeyword,
+			categoryId: item.categoryId ?? null,
+			categoryName: item.categoryName ?? null,
+			minPrice: item.minPrice ?? null,
+			maxPrice: item.maxPrice ?? null,
+			isSellerOpen: true
+		});
+	};
+
+	const topFallbackImage = candidateProducts.length > 0 ? getProductImage(candidateProducts[0]) : null;
+
+	// A. FUZZY SPELLING / "DID YOU MEAN" SUGGESTION (Placed at top if user made a typo!)
+	if (isFuzzyCorrected) {
+		addSuggestion({
+			keyword: correctedQuery,
+			subtitle: `Did you mean: "${correctedQuery}"?`,
+			image: topFallbackImage,
+			targetQuery: correctedQuery
+		});
+	}
+
+	// B. CATEGORY CONTEXT SUGGESTIONS (Flipkart Top Row: e.g. "heel in Women's Footwear")
+	for (let i = 0; i < matchingCategories.length; i++) {
+		const cat = matchingCategories[i];
+		const relatedProd = candidateProducts.find((p: any) =>
+			(p.categories || []).some((c: any) => c.id === cat.id)
+		);
+		const catImage = relatedProd ? getProductImage(relatedProd) : topFallbackImage;
+
+		addSuggestion({
+			keyword: `${effectiveTerm} in ${cat.name}`,
+			subtitle: `in ${cat.name}`,
+			image: catImage,
+			targetQuery: effectiveTerm,
+			categoryId: cat.id,
+			categoryName: cat.name
+		});
+	}
+
+	// Also check categories attached to candidate products
+	for (let i = 0; i < candidateProducts.length; i++) {
+		const p = candidateProducts[i];
+		const cats = (p as any).categories || [];
+		for (let j = 0; j < cats.length; j++) {
+			const cat = cats[j];
+			const sugKey = `${effectiveTerm} in ${cat.name}`.toLowerCase();
+			if (!suggestionsMap.has(sugKey)) {
+				addSuggestion({
+					keyword: `${effectiveTerm} in ${cat.name}`,
+					subtitle: `in ${cat.name}`,
+					image: getProductImage(p) || topFallbackImage,
+					targetQuery: effectiveTerm,
+					categoryId: cat.id,
+					categoryName: cat.name
 				});
 			}
 		}
 	}
-	const brandResults = Array.from(uniqueBrandsMap.values());
 
-	return [...productResults, ...storeResults, ...brandResults];
+	// C. AUDIENCE & INTENT SUGGESTIONS (e.g. "heel for women", "shoes for men")
+	const audienceTerms = [
+		{ term: "women", label: "for women", subtitle: "Popular in Women" },
+		{ term: "men", label: "for men", subtitle: "Popular in Men" },
+		{ term: "kids", label: "for kids", subtitle: "Kids Collection" },
+		{ term: "girls", label: "for girls", subtitle: "Girls Collection" },
+		{ term: "boys", label: "for boys", subtitle: "Boys Collection" },
+	];
+
+	for (let i = 0; i < audienceTerms.length; i++) {
+		const audience = audienceTerms[i];
+		const matchedAudienceProd = candidateProducts.find((p: any) => {
+			const pName = (p.name || '').toLowerCase();
+			const pTags = Array.isArray(p.tags) ? p.tags.map((t: string) => String(t).toLowerCase()) : [];
+			const pCatNames = ((p as any).categories || []).map((c: any) => (c.name || '').toLowerCase());
+			return pName.includes(audience.term) || pTags.includes(audience.term) || pCatNames.some((cn: string) => cn.includes(audience.term));
+		});
+
+		if (matchedAudienceProd) {
+			addSuggestion({
+				keyword: `${effectiveTerm} ${audience.label}`,
+				subtitle: audience.subtitle,
+				image: getProductImage(matchedAudienceProd) || topFallbackImage,
+				targetQuery: `${effectiveTerm} ${audience.label}`
+			});
+		}
+	}
+
+	// D. PRODUCT SYNONYMS SUGGESTIONS (Flipkart related keyword discovery)
+	const topSynonyms = synonyms.slice(0, 3);
+	for (let i = 0; i < topSynonyms.length; i++) {
+		const syn = topSynonyms[i];
+		const matchedSynProd = candidateProducts.find((p: any) => {
+			const pName = (p.name || '').toLowerCase();
+			return pName.includes(syn);
+		});
+
+		addSuggestion({
+			keyword: syn,
+			subtitle: `Related to "${cleanQ}"`,
+			image: matchedSynProd ? getProductImage(matchedSynProd) : topFallbackImage,
+			targetQuery: syn
+		});
+	}
+
+	// E. BRAND-COMBINED SUGGESTIONS (e.g. "shoes puma", "heel bata")
+	for (let i = 0; i < candidateProducts.length; i++) {
+		const p = candidateProducts[i];
+		const brandName = p.brand?.trim();
+		if (brandName && brandName.toLowerCase() !== effectiveTerm.toLowerCase()) {
+			const brandKeyword = `${effectiveTerm} ${brandName.toLowerCase()}`;
+			addSuggestion({
+				keyword: brandKeyword,
+				subtitle: brandName,
+				image: getProductImage(p) || topFallbackImage,
+				targetQuery: brandKeyword
+			});
+		}
+	}
+
+	// F. DISTINCT PRODUCT TITLE / STYLE SUBSTRING SUGGESTIONS (e.g. "pencil heel", "block heel")
+	for (let i = 0; i < candidateProducts.length; i++) {
+		const p = candidateProducts[i];
+		const rawName = p.name?.trim();
+		if (rawName) {
+			const pImage = getProductImage(p) || topFallbackImage;
+			const pCatName = (p as any).categories?.[0]?.name;
+			const subtitle = p.brand ? p.brand : (pCatName ? `in ${pCatName}` : "Trending Now");
+
+			if (rawName.split(/\s+/).length <= 5) {
+				addSuggestion({
+					keyword: rawName,
+					subtitle,
+					image: pImage,
+					targetQuery: rawName
+				});
+			} else {
+				const words = rawName.split(/\s+/);
+				const shortName = words.slice(0, 4).join(" ");
+				addSuggestion({
+					keyword: shortName,
+					subtitle,
+					image: pImage,
+					targetQuery: shortName
+				});
+			}
+		}
+	}
+
+	// G. PRICE INTENT SUGGESTIONS (e.g. "heel under 500", "heel under 1000")
+	if (expanded.maxPrice !== undefined) {
+		addSuggestion({
+			keyword: `${effectiveTerm} under ${expanded.maxPrice}`,
+			subtitle: `Under ₹${expanded.maxPrice}`,
+			image: topFallbackImage,
+			targetQuery: `${effectiveTerm} under ${expanded.maxPrice}`,
+			maxPrice: expanded.maxPrice
+		});
+	} else {
+		let hasUnder500 = false;
+		let hasUnder1000 = false;
+		let under500Image: string | null = null;
+		let under1000Image: string | null = null;
+
+		for (let i = 0; i < candidateProducts.length; i++) {
+			const p = candidateProducts[i];
+			const pVars = (p as any).variants || [];
+			for (let j = 0; j < pVars.length; j++) {
+				const price = Number(pVars[j].price);
+				if (!isNaN(price)) {
+					if (price <= 500 && !hasUnder500) {
+						hasUnder500 = true;
+						under500Image = getProductImage(p);
+					}
+					if (price <= 1000 && !hasUnder1000) {
+						hasUnder1000 = true;
+						under1000Image = getProductImage(p);
+					}
+				}
+			}
+		}
+
+		if (hasUnder500) {
+			addSuggestion({
+				keyword: `${effectiveTerm} under 500`,
+				subtitle: "Budget Friendly (Under ₹500)",
+				image: under500Image || topFallbackImage,
+				targetQuery: `${effectiveTerm} under 500`,
+				maxPrice: 500
+			});
+		}
+		if (hasUnder1000) {
+			addSuggestion({
+				keyword: `${effectiveTerm} under 1000`,
+				subtitle: "Popular Choices Under ₹1000",
+				image: under1000Image || topFallbackImage,
+				targetQuery: `${effectiveTerm} under 1000`,
+				maxPrice: 1000
+			});
+		}
+	}
+
+	// H. ALWAYS ENSURE DIRECT QUERY KEYWORD IS PRESENT
+	if (!isFuzzyCorrected && !suggestionsMap.has(cleanQ.toLowerCase())) {
+		addSuggestion({
+			keyword: cleanQ,
+			subtitle: "Search in all products",
+			image: topFallbackImage,
+			targetQuery: cleanQ
+		});
+	}
+
+	// Cap at 12 high-quality suggestions
+	const finalResults = Array.from(suggestionsMap.values()).slice(0, 12);
+
+	// Cache the result
+	setSuggestionsCache(cacheKey, finalResults);
+
+	return finalResults;
 };
 

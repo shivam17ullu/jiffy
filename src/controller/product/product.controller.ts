@@ -744,8 +744,8 @@ export const toggleVariantStatus = async (req: any, res: Response) => {
  * @swagger
  * /api/products/search-all:
  *   get:
- *     summary: Global search for products, stores, and brands
- *     description: Retrieve list of search-related products, stores, and brands based on a query parameter.
+ *     summary: Flipkart-style search auto-complete & keyword suggestions
+ *     description: Retrieve list of search suggestions, keywords, and category matches for product discovery. Excludes raw store lists and supplies thumbnails and query targets.
  *     tags: [Products]
  *     parameters:
  *       - in: query
@@ -753,10 +753,20 @@ export const toggleVariantStatus = async (req: any, res: Response) => {
  *         schema:
  *           type: string
  *         required: true
- *         description: Search query string
+ *         description: Search query string (e.g., "heel", "shoes")
+ *       - in: query
+ *         name: lat
+ *         schema:
+ *           type: number
+ *         description: User latitude for delivery range
+ *       - in: query
+ *         name: lng
+ *         schema:
+ *           type: number
+ *         description: User longitude for delivery range
  *     responses:
  *       200:
- *         description: List of matched products, stores, and brands
+ *         description: List of search suggestions
  *         content:
  *           application/json:
  *             schema:
@@ -773,11 +783,30 @@ export const toggleVariantStatus = async (req: any, res: Response) => {
  *                         type: string
  *                       name:
  *                         type: string
+ *                       keyword:
+ *                         type: string
+ *                       subtitle:
+ *                         type: string
+ *                         nullable: true
  *                       type:
  *                         type: string
- *                         enum: [product, store, brand]
+ *                         enum: [product]
  *                       image:
  *                         type: string
+ *                         nullable: true
+ *                       targetQuery:
+ *                         type: string
+ *                       categoryId:
+ *                         type: integer
+ *                         nullable: true
+ *                       categoryName:
+ *                         type: string
+ *                         nullable: true
+ *                       minPrice:
+ *                         type: number
+ *                         nullable: true
+ *                       maxPrice:
+ *                         type: number
  *                         nullable: true
  *                       isSellerOpen:
  *                         type: boolean

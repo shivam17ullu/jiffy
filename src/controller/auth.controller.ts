@@ -701,7 +701,7 @@ export default class AuthController {
 			const ip = req.ip;
 
 			const { adminId, accessToken, refreshToken } = await AuthService.adminLogin(
-				email,
+				email.trim().toLowerCase(),
 				password,
 				deviceInfo,
 				ip
